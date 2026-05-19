@@ -55,6 +55,9 @@ enum ProjectCommands {
 
         #[arg(long)]
         full: bool,
+
+        #[arg(long, default_value = "other")]
+        r#type: String,
     },
     Info,
     Scan {
@@ -146,7 +149,7 @@ fn main() {
             core::output::Output::print_success("dectl v0.1.0", mode);
         }
         Some(Commands::Project { command }) => match command {
-            Some(ProjectCommands::Init { standard, full }) => {
+            Some(ProjectCommands::Init { standard, full, r#type }) => {
                 let level = if *full {
                     project::templates::InitLevel::Level3
                 } else if *standard {
@@ -155,7 +158,18 @@ fn main() {
                     project::templates::InitLevel::Level1
                 };
 
-                if let Err(e) = project::init::run(level, !cli.non_interactive) {
+                let project_type = project::templates::ProjectType::from_str(r#type);
+                if project_type.is_none() {
+                    core::output::Output::print_error(
+                        "Invalid project type. Use: api, cli, microservice, or other",
+                        None,
+                        mode,
+                    );
+                    std::process::exit(1);
+                }
+
+                if let Err(e) = project::init::run(level, project_type.unwrap(), !cli.non_interactive)
+                {
                     core::output::Output::print_error(&e.to_string(), None, mode);
                     std::process::exit(1);
                 }

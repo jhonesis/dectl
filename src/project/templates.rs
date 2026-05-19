@@ -7,6 +7,36 @@ pub enum InitLevel {
     Level3,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+pub enum ProjectType {
+    #[default]
+    Other,
+    Api,
+    Cli,
+    Microservice,
+}
+
+impl ProjectType {
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "api" => Some(Self::Api),
+            "cli" => Some(Self::Cli),
+            "microservice" => Some(Self::Microservice),
+            "other" | "" => Some(Self::Other),
+            _ => None,
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Other => "other",
+            Self::Api => "api",
+            Self::Cli => "cli",
+            Self::Microservice => "microservice",
+        }
+    }
+}
+
 pub struct Templates;
 
 impl Templates {
@@ -619,5 +649,376 @@ If `last_session.md` does not exist or `project.isa.md` is empty:
 4. Run `dectl memory add "Project initialized: [name] — [one line description]"`.
 
 Only after this is done, proceed with the requested task.
+"#;
+
+    pub fn workflows_for_type(project_type: ProjectType) -> Vec<(&'static str, &'static str)> {
+        match project_type {
+            ProjectType::Api => vec![
+                (
+                    ".dec/workflows/test_api.yaml",
+                    Self::WORKFLOW_TEST_API,
+                ),
+                (
+                    ".dec/workflows/document_endpoints.yaml",
+                    Self::WORKFLOW_DOCUMENT_ENDPOINTS,
+                ),
+                (
+                    ".dec/workflows/run_migrations.yaml",
+                    Self::WORKFLOW_RUN_MIGRATIONS,
+                ),
+            ],
+            ProjectType::Cli => vec![
+                (
+                    ".dec/workflows/build_release.yaml",
+                    Self::WORKFLOW_BUILD_RELEASE,
+                ),
+                (
+                    ".dec/workflows/document_args.yaml",
+                    Self::WORKFLOW_DOCUMENT_ARGS,
+                ),
+            ],
+            ProjectType::Microservice => vec![
+                (
+                    ".dec/workflows/service_discovery.yaml",
+                    Self::WORKFLOW_SERVICE_DISCOVERY,
+                ),
+                (
+                    ".dec/workflows/dockerize.yaml",
+                    Self::WORKFLOW_DOCKERIZE,
+                ),
+                (
+                    ".dec/workflows/inter_service_comm.yaml",
+                    Self::WORKFLOW_INTER_SERVICE_COMM,
+                ),
+            ],
+            ProjectType::Other => vec![],
+        }
+    }
+
+    pub fn system_prompt_for_type(project_type: ProjectType) -> Option<(&'static str, &'static str)> {
+        match project_type {
+            ProjectType::Api => Some((
+                ".dec/prompts/system/api.md",
+                Self::SYSTEM_PROMPT_API,
+            )),
+            ProjectType::Cli => Some((
+                ".dec/prompts/system/cli.md",
+                Self::SYSTEM_PROMPT_CLI,
+            )),
+            ProjectType::Microservice => Some((
+                ".dec/prompts/system/microservice.md",
+                Self::SYSTEM_PROMPT_MICROSERVICE,
+            )),
+            ProjectType::Other => None,
+        }
+    }
+
+    const WORKFLOW_TEST_API: &str = r#"name: test_api
+description: Test a REST API endpoint with proper validation
+inputs:
+  - name: method
+    description: HTTP method (GET, POST, PUT, DELETE)
+    required: true
+  - name: endpoint
+    description: API endpoint path
+    required: true
+  - name: body
+    description: Request body (JSON string)
+    required: false
+    default: "{}"
+  - name: expected_status
+    description: Expected HTTP status code
+    required: false
+    default: "200"
+
+steps:
+  - type: prompt
+    description: Load API context
+    content: |
+      Read .dec/config/project.toml to understand the API structure.
+      Check if there's OpenAPI/Swagger documentation.
+
+  - type: action
+    description: Execute API request
+    cmd: ["curl", "-X", "{{method}}", "{{endpoint}}", "-H", "Content-Type: application/json"{{#if body}}, "-d", "{{body}}"{{/if}}]
+
+  - type: prompt
+    description: Validate response
+    content: |
+      Validate the response matches expected status {{expected_status}}.
+      Check for proper error handling in the response.
+
+  - type: action
+    description: Log test result
+    cmd: ["dectl", "memory", "add", "API test: {{method}} {{endpoint}} - status {{expected_status}}"]
+"#;
+
+    const WORKFLOW_DOCUMENT_ENDPOINTS: &str = r#"name: document_endpoints
+description: Generate API documentation from code or schema
+inputs:
+  - name: format
+    description: Output format (openapi, swagger, markdown)
+    required: false
+    default: "markdown"
+
+steps:
+  - type: prompt
+    description: Analyze API structure
+    content: |
+      Scan the codebase for route handlers, controllers, or route definitions.
+      Identify: endpoints, methods, request/response schemas, auth requirements.
+
+  - type: prompt
+    description: Generate documentation
+    content: |
+      Generate {{format}} documentation based on the analysis.
+      Include: endpoint, method, path params, query params, request body, response codes.
+
+  - type: write
+    description: Save API docs
+    path: .dec/knowledge/api-docs.md
+    content: |
+      # API Documentation
+      (generated content)
+"#;
+
+    const WORKFLOW_RUN_MIGRATIONS: &str = r#"name: run_migrations
+description: Run database migrations safely
+inputs:
+  - name: direction
+    description: up or down
+    required: false
+    default: "up"
+  - name: name
+    description: Migration name (for down migrations)
+    required: false
+    default: ""
+
+steps:
+  - type: prompt
+    description: Check migration status
+    content: |
+      Check current migration state in the database.
+      Identify pending migrations.
+
+  - type: action
+    description: Run migrations
+    cmd: ["dectl", "exec-from-file", ".dec/workflows/run_migrations.yaml"]
+
+  - type: action
+    description: Verify migration
+    cmd: ["dectl", "memory", "add", "Database migration: {{direction}} - {{name}}"]
+"#;
+
+    const WORKFLOW_BUILD_RELEASE: &str = r#"name: build_release
+description: Build and release a CLI tool
+inputs:
+  - name: version
+    description: Semantic version (e.g., v1.0.0)
+    required: true
+  - name: target
+    description: Target platform (linux, macos, windows)
+    required: false
+    default: "all"
+
+steps:
+  - type: prompt
+    description: Load build configuration
+    content: |
+      Read .dec/config/project.toml for build targets and tools.
+      Check existing release artifacts.
+
+  - type: action
+    description: Run build
+    cmd: ["cargo", "build", "--release"]
+
+  - type: action
+    description: Create release
+    cmd: ["dectl", "memory", "add", "Release {{version}} built for {{target}}"]
+
+  - type: prompt
+    description: Update changelog
+    content: |
+      Generate release notes based on recent commits.
+      Update CHANGELOG.md if it exists.
+"#;
+
+    const WORKFLOW_DOCUMENT_ARGS: &str = r#"name: document_args
+description: Generate CLI argument documentation
+inputs:
+  - name: command
+    description: Command to document (or "all")
+    required: false
+    default: "all"
+
+steps:
+  - type: action
+    description: Get command help
+    cmd: ["{{binary_name}}", "--help"]
+
+  - type: prompt
+    description: Generate documentation
+    content: |
+      Parse the help output and generate markdown documentation.
+      Include: description, positional args, options, examples.
+
+  - type: write
+    description: Save CLI docs
+    path: .dec/knowledge/cli-commands.md
+    content: |
+      # CLI Commands
+      (generated content)
+"#;
+
+    const WORKFLOW_SERVICE_DISCOVERY: &str = r#"name: service_discovery
+description: Discover and register microservices
+inputs:
+  - name: service_name
+    description: Name of the service to register
+    required: true
+  - name: port
+    description: Port the service listens on
+    required: true
+
+steps:
+  - type: prompt
+    description: Analyze service topology
+    content: |
+      Map out the microservices architecture.
+      Identify: service dependencies, communication patterns, data flow.
+
+  - type: action
+    description: Register service
+    cmd: ["dectl", "memory", "add", "Service {{service_name}} registered on port {{port}}"]
+
+  - type: write
+    description: Document service registry
+    path: .dec/knowledge/service-registry.md
+    content: |
+      # Service Registry
+      (generated content)
+"#;
+
+    const WORKFLOW_DOCKERIZE: &str = r#"name: dockerize
+description: Containerize a microservice
+inputs:
+  - name: service_name
+    description: Name of the service
+    required: true
+
+steps:
+  - type: prompt
+    description: Analyze service requirements
+    content: |
+      Identify runtime dependencies, ports, environment variables.
+      Determine optimal base image.
+
+  - type: prompt
+    description: Generate Dockerfile
+    content: |
+      Create a Dockerfile with multi-stage build if needed.
+      Include: build stage, runtime stage, health checks.
+
+  - type: write
+    description: Save Docker config
+    path: .dec/docker/{{service_name}}/Dockerfile
+    content: |
+      # Generated Dockerfile
+"#;
+
+    const WORKFLOW_INTER_SERVICE_COMM: &str = r#"name: inter_service_comm
+description: Document inter-service communication patterns
+inputs:
+  - name: from_service
+    description: Source service
+    required: true
+  - name: to_service
+    description: Target service
+    required: true
+
+steps:
+  - type: prompt
+    description: Analyze communication
+    content: |
+      Identify: protocol (HTTP, gRPC, message queue), data format, auth mechanism.
+      Document: endpoints, contracts, error handling.
+
+  - type: write
+    description: Save communication docs
+    path: .dec/knowledge/service-communication.md
+    content: |
+      # Inter-Service Communication
+      (generated content)
+"#;
+
+    const SYSTEM_PROMPT_API: &str = r#"# System Prompt — API Project
+> **Instructions for the model**: You're working on an API server project.
+
+---
+
+## API-Specific Guidelines
+
+**Endpoint Design**:
+- RESTful conventions: resource-oriented URLs, proper HTTP methods
+- Consistent error response format
+- Proper status codes (200, 201, 400, 401, 404, 500)
+
+**Security**:
+- Validate all inputs
+- Authenticate and authorize appropriately
+- Never log sensitive data
+
+**Documentation**:
+- Document endpoints in .dec/knowledge/api-docs.md
+- Keep OpenAPI spec updated if applicable
+"#;
+
+    const SYSTEM_PROMPT_CLI: &str = r#"# System Prompt — CLI Project
+> **Instructions for the model**: You're working on a command-line tool project.
+
+---
+
+## CLI-Specific Guidelines
+
+**User Experience**:
+- Clear, helpful error messages
+- Consistent output format
+- Progress indicators for long operations
+
+**Arguments**:
+- Follow POSIX conventions for flags
+- Provide --help for every command
+- Use sensible defaults
+
+**Documentation**:
+- Document commands in .dec/knowledge/cli-commands.md
+- Include usage examples
+"#;
+
+    const SYSTEM_PROMPT_MICROSERVICE: &str = r#"# System Prompt — Microservice Project
+> **Instructions for the model**: You're working on a microservices architecture.
+
+---
+
+## Microservice-Specific Guidelines
+
+**Service Design**:
+- Single responsibility per service
+- Independent deployability
+- Stateless where possible
+
+**Communication**:
+- Document inter-service contracts
+- Handle failures gracefully (circuit breakers, retries)
+- Use appropriate protocols (HTTP, gRPC, messages)
+
+**Infrastructure**:
+- Configuration via environment variables
+- Health checks for all services
+- Logging aggregation
+
+**Documentation**:
+- Keep .dec/knowledge/service-registry.md updated
+- Document Docker setup in .dec/docker/
 "#;
 }

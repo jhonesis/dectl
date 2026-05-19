@@ -8,11 +8,11 @@ use super::auto_fill::{
     detect_stack, fill_project_files, is_project_empty, scan_docs_for_context, DetectedStack,
     OptionalContext,
 };
-use super::templates::{InitLevel, Templates};
+use super::templates::{InitLevel, ProjectType, Templates};
 
 const PROJECT_TYPES: &[&str] = &["api", "cli", "web", "library", "other"];
 
-pub fn run(level: InitLevel, _interactive: bool) -> Result<()> {
+pub fn run(level: InitLevel, project_type: ProjectType, _interactive: bool) -> Result<()> {
     let dec_path = Path::new(".dec");
 
     if dec_path.exists() {
@@ -22,7 +22,16 @@ pub fn run(level: InitLevel, _interactive: bool) -> Result<()> {
         );
     }
 
-    let files = Templates::files_for_level(level);
+    let mut files = Templates::files_for_level(level);
+
+    if level == InitLevel::Level2 || level == InitLevel::Level3 {
+        let type_workflows = Templates::workflows_for_type(project_type);
+        files.extend(type_workflows);
+
+        if let Some((path, content)) = Templates::system_prompt_for_type(project_type) {
+            files.push((path, content));
+        }
+    }
 
     for (path, _content) in &files {
         let full_path = Path::new(path);
@@ -53,7 +62,7 @@ pub fn run(level: InitLevel, _interactive: bool) -> Result<()> {
         println!("Auto-filled .dec/config/project.toml and .dec/isa/project.isa.md");
     }
 
-    print_next_steps(level);
+    print_next_steps(level, project_type);
 
     Ok(())
 }
@@ -158,15 +167,20 @@ fn prompt_with_default(prompt: &str, default: &str) -> Result<String> {
     }
 }
 
-fn print_next_steps(level: InitLevel) {
+fn print_next_steps(level: InitLevel, project_type: ProjectType) {
     let level_name = match level {
         InitLevel::Level1 => "level 1 (minimal)",
         InitLevel::Level2 => "level 2 (standard)",
         InitLevel::Level3 => "level 3 (full)",
     };
+    let type_info = match project_type {
+        ProjectType::Other => String::new(),
+        _ => format!(" [{}]", project_type.as_str()),
+    };
     println!(
-        "\nCreated .dec/ with {} ({} files)",
+        "\nCreated .dec/ with {}{} ({} files)",
         level_name,
+        type_info,
         Templates::files_for_level(level).len()
     );
     println!("\nNext steps:");
