@@ -41,6 +41,7 @@ pub fn run(level: InitLevel, interactive: bool) -> Result<()> {
     println!("  1. Edit .dec/config/project.toml with your project details");
     println!("  2. Edit .dec/isa/project.isa.md to define your vision");
     println!("  3. Run 'dectl project info' to verify the setup");
+    println!("  4. AGENTS.md was created in the project root — point your AI tool to it");
 
     if interactive {
         println!("\n⚠️  Review .dec/.gitignore before committing to git.");

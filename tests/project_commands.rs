@@ -115,3 +115,58 @@ fn test_global_non_interactive_flag() {
     let output = run_dectl(&["--non-interactive", "project", "info"], tmp.path());
     assert!(output.status.success());
 }
+
+#[test]
+fn test_project_context_text_output() {
+    let tmp = TempDir::new().unwrap();
+    run_dectl(&["project", "init", "--standard"], tmp.path());
+    let output = run_dectl(&["project", "context", "--format", "text"], tmp.path());
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("tokens:"));
+    assert!(stdout.contains("/4000") || stdout.contains("/100"));
+}
+
+#[test]
+fn test_project_context_json_output() {
+    let tmp = TempDir::new().unwrap();
+    run_dectl(&["project", "init", "--standard"], tmp.path());
+    let output = run_dectl(&["project", "context", "--format", "json"], tmp.path());
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).expect("Valid JSON output");
+    assert!(parsed.get("project").is_some());
+    assert!(parsed.get("tokens_used").is_some());
+    assert!(parsed.get("tokens_limit").is_some());
+    assert!(parsed.get("files").is_some());
+}
+
+#[test]
+fn test_project_context_max_tokens_truncate() {
+    let tmp = TempDir::new().unwrap();
+    run_dectl(&["project", "init", "--standard"], tmp.path());
+    let output = run_dectl(
+        &[
+            "project",
+            "context",
+            "--format",
+            "text",
+            "--max-tokens",
+            "100",
+        ],
+        tmp.path(),
+    );
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("/100"));
+}
+
+#[test]
+fn test_project_context_no_dec_directory() {
+    let tmp = TempDir::new().unwrap();
+    let output = run_dectl(&["project", "context"], tmp.path());
+    assert!(!output.status.success());
+    assert_eq!(output.status.code().unwrap(), 1);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains(".dec") || stderr.contains("not found"));
+}

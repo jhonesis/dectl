@@ -107,7 +107,7 @@ pub fn run(max_tokens: Option<usize>, format: String, mode: OutputMode) -> Resul
             }
             recent_decisions.sort_by(|a, b| b.0.cmp(&a.0));
             for (name, content) in recent_decisions.iter().take(3) {
-let tokens = count_tokens(content);
+                let tokens = count_tokens(content);
                 all_content.push_str(&format!("\n## Decision: {}\n\n{}\n", name, content));
                 files_data.push(FileContent {
                     path: format!("decisions/{}", name),
