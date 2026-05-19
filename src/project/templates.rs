@@ -654,10 +654,7 @@ Only after this is done, proceed with the requested task.
     pub fn workflows_for_type(project_type: ProjectType) -> Vec<(&'static str, &'static str)> {
         match project_type {
             ProjectType::Api => vec![
-                (
-                    ".dec/workflows/test_api.yaml",
-                    Self::WORKFLOW_TEST_API,
-                ),
+                (".dec/workflows/test_api.yaml", Self::WORKFLOW_TEST_API),
                 (
                     ".dec/workflows/document_endpoints.yaml",
                     Self::WORKFLOW_DOCUMENT_ENDPOINTS,
@@ -682,10 +679,7 @@ Only after this is done, proceed with the requested task.
                     ".dec/workflows/service_discovery.yaml",
                     Self::WORKFLOW_SERVICE_DISCOVERY,
                 ),
-                (
-                    ".dec/workflows/dockerize.yaml",
-                    Self::WORKFLOW_DOCKERIZE,
-                ),
+                (".dec/workflows/dockerize.yaml", Self::WORKFLOW_DOCKERIZE),
                 (
                     ".dec/workflows/inter_service_comm.yaml",
                     Self::WORKFLOW_INTER_SERVICE_COMM,
@@ -695,16 +689,12 @@ Only after this is done, proceed with the requested task.
         }
     }
 
-    pub fn system_prompt_for_type(project_type: ProjectType) -> Option<(&'static str, &'static str)> {
+    pub fn system_prompt_for_type(
+        project_type: ProjectType,
+    ) -> Option<(&'static str, &'static str)> {
         match project_type {
-            ProjectType::Api => Some((
-                ".dec/prompts/system/api.md",
-                Self::SYSTEM_PROMPT_API,
-            )),
-            ProjectType::Cli => Some((
-                ".dec/prompts/system/cli.md",
-                Self::SYSTEM_PROMPT_CLI,
-            )),
+            ProjectType::Api => Some((".dec/prompts/system/api.md", Self::SYSTEM_PROMPT_API)),
+            ProjectType::Cli => Some((".dec/prompts/system/cli.md", Self::SYSTEM_PROMPT_CLI)),
             ProjectType::Microservice => Some((
                 ".dec/prompts/system/microservice.md",
                 Self::SYSTEM_PROMPT_MICROSERVICE,

@@ -149,7 +149,11 @@ fn main() {
             core::output::Output::print_success("dectl v0.1.0", mode);
         }
         Some(Commands::Project { command }) => match command {
-            Some(ProjectCommands::Init { standard, full, r#type }) => {
+            Some(ProjectCommands::Init {
+                standard,
+                full,
+                r#type,
+            }) => {
                 let level = if *full {
                     project::templates::InitLevel::Level3
                 } else if *standard {
@@ -168,7 +172,8 @@ fn main() {
                     std::process::exit(1);
                 }
 
-                if let Err(e) = project::init::run(level, project_type.unwrap(), !cli.non_interactive)
+                if let Err(e) =
+                    project::init::run(level, project_type.unwrap(), !cli.non_interactive)
                 {
                     core::output::Output::print_error(&e.to_string(), None, mode);
                     std::process::exit(1);

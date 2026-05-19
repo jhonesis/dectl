@@ -174,40 +174,45 @@ fn test_project_context_no_dec_directory() {
 #[test]
 fn test_project_init_type_api() {
     let tmp = TempDir::new().unwrap();
-    let output = run_dectl(&["project", "init", "--standard", "--type", "api"], tmp.path());
+    let output = run_dectl(
+        &["project", "init", "--standard", "--type", "api"],
+        tmp.path(),
+    );
     assert!(output.status.success());
     assert!(tmp.path().join(".dec/workflows/test_api.yaml").exists());
     assert!(tmp
         .path()
         .join(".dec/workflows/document_endpoints.yaml")
         .exists());
-    assert!(tmp
-        .path()
-        .join(".dec/prompts/system/api.md")
-        .exists());
+    assert!(tmp.path().join(".dec/prompts/system/api.md").exists());
 }
 
 #[test]
 fn test_project_init_type_cli() {
     let tmp = TempDir::new().unwrap();
-    let output = run_dectl(&["project", "init", "--standard", "--type", "cli"], tmp.path());
+    let output = run_dectl(
+        &["project", "init", "--standard", "--type", "cli"],
+        tmp.path(),
+    );
     assert!(output.status.success());
-    assert!(tmp.path().join(".dec/workflows/build_release.yaml").exists());
+    assert!(tmp
+        .path()
+        .join(".dec/workflows/build_release.yaml")
+        .exists());
     assert!(tmp
         .path()
         .join(".dec/workflows/document_args.yaml")
         .exists());
-    assert!(tmp
-        .path()
-        .join(".dec/prompts/system/cli.md")
-        .exists());
+    assert!(tmp.path().join(".dec/prompts/system/cli.md").exists());
 }
 
 #[test]
 fn test_project_init_type_microservice() {
     let tmp = TempDir::new().unwrap();
-    let output =
-        run_dectl(&["project", "init", "--standard", "--type", "microservice"], tmp.path());
+    let output = run_dectl(
+        &["project", "init", "--standard", "--type", "microservice"],
+        tmp.path(),
+    );
     assert!(output.status.success());
     assert!(tmp
         .path()
@@ -236,17 +241,26 @@ fn test_project_init_type_with_full() {
 #[test]
 fn test_project_init_type_other_no_extra_files() {
     let tmp = TempDir::new().unwrap();
-    let output = run_dectl(&["project", "init", "--standard", "--type", "other"], tmp.path());
+    let output = run_dectl(
+        &["project", "init", "--standard", "--type", "other"],
+        tmp.path(),
+    );
     assert!(output.status.success());
     assert!(!tmp.path().join(".dec/prompts/system/api.md").exists());
     assert!(!tmp.path().join(".dec/prompts/system/cli.md").exists());
-    assert!(!tmp.path().join(".dec/prompts/system/microservice.md").exists());
+    assert!(!tmp
+        .path()
+        .join(".dec/prompts/system/microservice.md")
+        .exists());
 }
 
 #[test]
 fn test_project_init_invalid_type() {
     let tmp = TempDir::new().unwrap();
-    let output = run_dectl(&["project", "init", "--standard", "--type", "invalid"], tmp.path());
+    let output = run_dectl(
+        &["project", "init", "--standard", "--type", "invalid"],
+        tmp.path(),
+    );
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Invalid project type"));
