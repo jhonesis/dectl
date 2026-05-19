@@ -215,15 +215,21 @@ fn run_dectl_with_stdin(args: &[&str], input: &str, cwd: &std::path::Path) -> st
     use std::io::Write;
     use std::process::{Command, Stdio};
 
-    let output = Command::new(dectl_bin())
-        .args(args)
-        .current_dir(cwd)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .write_stdin(input)
-        .output()
-        .expect("Failed to execute dectl with stdin");
+    let mut child = Command::new(dectl_bin())
+    .args(args)
+    .current_dir(cwd)
+    .stdin(Stdio::piped())
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped())
+    .spawn()
+    .expect("Failed to spawn dectl");
+
+{
+    let stdin = child.stdin.as_mut().expect("Failed to open stdin");
+    stdin.write_all(input.as_bytes()).expect("Failed to write to stdin");
+}
+
+let output = child.wait_with_output().expect("Failed to read stdout");
 
     output
 }
