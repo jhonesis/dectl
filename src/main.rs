@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 use std::path::PathBuf;
 
 mod core;
@@ -40,6 +40,9 @@ enum Commands {
     },
     ExecFromFile {
         path: PathBuf,
+    },
+    GenerateCompletions {
+        shell: String,
     },
     Version,
 }
@@ -161,18 +164,10 @@ fn main() {
                 }
             }
             Some(ProjectCommands::Context { max_tokens, format }) => {
-                #[derive(serde::Serialize)]
-                struct ContextResult {
-                    max_tokens: Option<usize>,
-                    format: String,
+                if let Err(e) = project::context::run(*max_tokens, format.clone(), mode) {
+                    core::output::Output::print_error(&e.to_string(), None, mode);
+                    std::process::exit(1);
                 }
-                core::output::Output::print(
-                    &ContextResult {
-                        max_tokens: *max_tokens,
-                        format: format.clone(),
-                    },
-                    mode,
-                );
             }
             None => {
                 core::output::Output::print_success("dectl project - Project management", mode);
@@ -210,10 +205,16 @@ fn main() {
                 }
             }
             Some(MemoryCommands::Delete { id, hard }) => {
-                println!("memory delete: id={}, hard={}", id, hard);
+                if let Err(e) = memory::delete::run(*id, *hard, cli.non_interactive, mode) {
+                    core::output::Output::print_error(&e.to_string(), None, mode);
+                    std::process::exit(1);
+                }
             }
             Some(MemoryCommands::Edit { id }) => {
-                println!("memory edit: id={}", id);
+                if let Err(e) = memory::edit::run(*id, mode) {
+                    core::output::Output::print_error(&e.to_string(), None, mode);
+                    std::process::exit(1);
+                }
             }
             None => {
                 println!("dectl memory - Memory management");
@@ -221,10 +222,16 @@ fn main() {
         },
         Some(Commands::Workflow { command }) => match command {
             Some(WorkflowCommands::List) => {
-                println!("workflow list");
+                if let Err(e) = workflow::list::run(mode) {
+                    core::output::Output::print_error(&e.to_string(), None, mode);
+                    std::process::exit(1);
+                }
             }
             Some(WorkflowCommands::Describe { name }) => {
-                println!("workflow describe: {}", name);
+                if let Err(e) = workflow::describe::run(name, mode) {
+                    core::output::Output::print_error(&e.to_string(), None, mode);
+                    std::process::exit(1);
+                }
             }
             Some(WorkflowCommands::Run {
                 name,
@@ -232,10 +239,17 @@ fn main() {
                 dry_run,
                 from_step,
             }) => {
-                println!(
-                    "workflow run: name={}, var={:?}, dry_run={}, from_step={:?}",
-                    name, var, dry_run, from_step
-                );
+                if let Err(e) = workflow::run::run(
+                    name,
+                    var.clone(),
+                    *dry_run,
+                    *from_step,
+                    cli.non_interactive,
+                    mode,
+                ) {
+                    core::output::Output::print_error(&e.to_string(), None, mode);
+                    std::process::exit(1);
+                }
             }
             None => {
                 println!("dectl workflow - Workflow management");
@@ -246,6 +260,21 @@ fn main() {
                 core::output::Output::print_error(&e.to_string(), None, mode);
                 std::process::exit(1);
             }
+        }
+        Some(Commands::GenerateCompletions { shell }) => {
+            use clap_complete::Shell;
+            let shell = match shell.to_lowercase().as_str() {
+                "bash" => Shell::Bash,
+                "zsh" => Shell::Zsh,
+                "fish" => Shell::Fish,
+                "powershell" => Shell::PowerShell,
+                _ => {
+                    eprintln!("Supported shells: bash, zsh, fish, powershell");
+                    std::process::exit(1);
+                }
+            };
+            let mut cli = Cli::command();
+            clap_complete::generate(shell, &mut cli, "dectl", &mut std::io::stdout());
         }
         None => {
             println!("dectl - Dev Environment Control");

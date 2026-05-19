@@ -15,6 +15,10 @@ impl OutputMode {
             OutputMode::Human
         }
     }
+
+    pub fn is_json(&self) -> bool {
+        matches!(self, OutputMode::Json)
+    }
 }
 
 #[derive(Debug, Serialize)]
