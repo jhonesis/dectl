@@ -14,6 +14,14 @@ impl Templates {
         Self::AGENTS_MD
     }
 
+    pub fn project_toml_l1() -> &'static str {
+        Self::PROJECT_TOML_L1
+    }
+
+    pub fn project_isa() -> &'static str {
+        Self::PROJECT_ISA
+    }
+
     pub fn level1() -> Vec<(&'static str, &'static str)> {
         vec![
             (".dec/.gitignore", Self::GITIGNORE_L1),
