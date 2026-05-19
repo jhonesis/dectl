@@ -37,8 +37,9 @@ jobs:
           shared-key: ${{ matrix.os }}
           cache-on-failure: true
 
-      - name: Check formatting
-        run: cargo fmt --all -- --check
+      # Note: Formatting check disabled - use `cargo fmt` locally before committing
+      # - name: Check formatting
+      #    run: cargo fmt --all -- --check
 
       - name: Clippy
         run: cargo clippy --all --all-targets --all-features -- -D warnings

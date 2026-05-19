@@ -146,10 +146,11 @@ fn ask_user_questions() -> Result<OptionalContext> {
 }
 
 fn context_to_stack(context: &OptionalContext) -> DetectedStack {
-    let mut stack = DetectedStack::default();
-    stack.name = context.name.clone();
-    stack.project_type = "other".to_string();
-    stack
+    DetectedStack {
+        name: context.name.clone(),
+        project_type: "other".to_string(),
+        ..Default::default()
+    }
 }
 
 fn prompt_with_default(prompt: &str, default: &str) -> Result<String> {

@@ -30,22 +30,12 @@ impl Default for DetectedStack {
     }
 }
 
+#[derive(Default)]
 pub struct OptionalContext {
     pub name: Option<String>,
     pub description: Option<String>,
     pub vision: Option<String>,
     pub objectives: Option<String>,
-}
-
-impl Default for OptionalContext {
-    fn default() -> Self {
-        Self {
-            name: None,
-            description: None,
-            vision: None,
-            objectives: None,
-        }
-    }
 }
 
 pub fn is_project_empty() -> bool {
@@ -370,8 +360,8 @@ fn read_readme_context(path: &str) -> Option<(Option<String>, Option<String>)> {
 
     for line in content.lines() {
         let trimmed = line.trim();
-        if trimmed.starts_with("# ") {
-            name = Some(trimmed[2..].trim().to_string());
+        if let Some(stripped) = trimmed.strip_prefix("# ") {
+            name = Some(stripped.trim().to_string());
             break;
         }
     }
