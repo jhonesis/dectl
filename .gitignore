@@ -1,1 +1,25 @@
+# Build artifacts
 /target
+*.pdb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor logs
+*.log
+
+# Test artifacts
+*.tmp
+/tests/integration/temp/
+/tests/integration/test_project_*/
+
+# Lock files (optional - uncomment if you want reproducible builds)
+# Cargo.lock
