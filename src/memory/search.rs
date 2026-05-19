@@ -40,29 +40,6 @@ pub fn run(query: String, project: Option<String>, mode: OutputMode) -> Result<(
         rows.filter_map(|r| r.ok()).collect()
     };
 
-    let tag_parts: Vec<String> = query
-        .split(',')
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect();
-
-    let entries = if !tag_parts.is_empty() {
-        entries
-            .into_iter()
-            .filter(|e| {
-                let entry_tags_lowercase: Vec<String> =
-                    e.tags.iter().map(|t| t.to_lowercase()).collect();
-                tag_parts.iter().all(|tp| {
-                    entry_tags_lowercase
-                        .iter()
-                        .any(|et| et.contains(&tp.to_lowercase()))
-                })
-            })
-            .collect()
-    } else {
-        entries
-    };
-
     let count = entries.len();
     let output = MemorySearchOutput {
         query,

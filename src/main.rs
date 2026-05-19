@@ -80,10 +80,16 @@ enum MemoryCommands {
 
         #[arg(long)]
         project: Option<String>,
+
+        #[arg(long)]
+        global: bool,
     },
     List {
         #[arg(long)]
         project: Option<String>,
+
+        #[arg(long)]
+        global: bool,
 
         #[arg(long, short = 'l')]
         limit: Option<usize>,
@@ -93,6 +99,9 @@ enum MemoryCommands {
 
         #[arg(long)]
         project: Option<String>,
+
+        #[arg(long)]
+        global: bool,
     },
     Show {
         id: i64,
@@ -178,22 +187,34 @@ fn main() {
                 content,
                 tags,
                 project,
+                global,
             }) => {
+                let resolved_project = resolve_project(project.as_deref(), *global);
                 if let Err(e) =
-                    memory::add::run(content.clone(), tags.clone(), project.clone(), mode)
+                    memory::add::run(content.clone(), tags.clone(), resolved_project, mode)
                 {
                     core::output::Output::print_error(&e.to_string(), None, mode);
                     std::process::exit(1);
                 }
             }
-            Some(MemoryCommands::List { project, limit }) => {
-                if let Err(e) = memory::list::run(project.clone(), *limit, mode) {
+            Some(MemoryCommands::List {
+                project,
+                global,
+                limit,
+            }) => {
+                let resolved_project = resolve_project(project.as_deref(), *global);
+                if let Err(e) = memory::list::run(resolved_project, *limit, mode) {
                     core::output::Output::print_error(&e.to_string(), None, mode);
                     std::process::exit(1);
                 }
             }
-            Some(MemoryCommands::Search { query, project }) => {
-                if let Err(e) = memory::search::run(query.clone(), project.clone(), mode) {
+            Some(MemoryCommands::Search {
+                query,
+                project,
+                global,
+            }) => {
+                let resolved_project = resolve_project(project.as_deref(), *global);
+                if let Err(e) = memory::search::run(query.clone(), resolved_project, mode) {
                     core::output::Output::print_error(&e.to_string(), None, mode);
                     std::process::exit(1);
                 }
@@ -280,5 +301,15 @@ fn main() {
             println!("dectl - Dev Environment Control");
             println!("Use --help for more information");
         }
+    }
+}
+
+fn resolve_project(project_arg: Option<&str>, global: bool) -> Option<String> {
+    if global {
+        None
+    } else if let Some(p) = project_arg {
+        Some(p.to_string())
+    } else {
+        crate::core::config::ProjectConfig::current_project_name()
     }
 }

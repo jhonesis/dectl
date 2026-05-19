@@ -144,4 +144,8 @@ impl ProjectConfig {
         let cwd = std::env::current_dir().context("Failed to get current directory")?;
         Ok(cwd.join(".dec").join("config").join("project.toml"))
     }
+
+    pub fn current_project_name() -> Option<String> {
+        Self::load().ok().flatten().map(|c| c.project.name)
+    }
 }
