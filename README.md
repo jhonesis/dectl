@@ -14,19 +14,22 @@ Every AI coding assistant (Claude Code, Gemini CLI, Qwen CLI, Ollama, or a human
 
 ## Features
 
-### 🧠 Persistent Memory
+### Persistent Memory
 - Add important context: decisions, architecture notes, team conventions
 - Search and retrieve across all stored memories
 - Tag-based organization
+- Per-project memory with auto-detection
 - Soft-delete with `--hard` for permanent removal
 
-### ⚡ Executable Workflows
+### Executable Workflows
 - Define reusable workflows in YAML
 - Variable interpolation: `{{variable}}`
 - Step types: `prompt`, `action`, `write`
 - Trust system for security (approves action steps per-project)
 
-### 📋 Project Context
+### Project Context with Auto-fill
+- Automatic stack detection (Rust, Node.js, Go, Python, Java, etc.)
+- Auto-fill project configuration from existing project files
 - Structured `.dec/` directory with schemas for:
   - Project identity (`project.isa.md`)
   - Configuration (`config/project.toml`)
@@ -35,26 +38,33 @@ Every AI coding assistant (Claude Code, Gemini CLI, Qwen CLI, Ollama, or a human
   - Prompts (`prompts/system/*.md`)
   - Workflows (`.dec/workflows/*.yaml`)
 
-### 🔄 Model Agnostic
+### Project Type Templates
+Pre-configured workflows and prompts based on project type:
+- **API**: REST, GraphQL, gRPC workflows
+- **CLI**: Argument parsing, help generation workflows
+- **Microservice**: Service orchestration, deployment workflows
+
+### Model Agnostic
 - Works with **any** AI coding environment
 - No API dependencies
 - No telemetry
 - All data stored locally
+- AGENTS.md auto-generated for AI configuration
 
 ## Installation
 
 ### From Source
 
 ```bash
-git clone https://github.com/yourusername/dectl.git
-cd dectl
+git clone https://github.com/jhonesis/dectl.git
+cd dectl/dectl
 cargo build --release
 sudo install target/release/dectl /usr/local/bin/
 ```
 
 ### From Release
 
-Download the binary for your platform from the releases page and add it to your PATH.
+Download the binary for your platform from the [releases page](https://github.com/jhonesis/dectl/releases).
 
 ## Quick Start
 
@@ -63,6 +73,8 @@ Download the binary for your platform from the releases page and add it to your 
 ```bash
 cd your-project
 dectl project init --standard
+# or with type-specific templates
+dectl project init --standard --type api
 ```
 
 This creates a `.dec/` directory with:
@@ -71,6 +83,7 @@ This creates a `.dec/` directory with:
 - `prompts/system/integration.md` — session instructions for the AI
 - `decisions/` — for architectural decisions
 - `workflows/` — for reusable workflows
+- `AGENTS.md` — AI configuration file
 
 ### 2. Add Context to Memory
 
@@ -83,6 +96,9 @@ cat architecture.md | dectl memory add --tags architecture,database
 
 # With project filter
 dectl memory add "API uses REST, not GraphQL" --project myapp
+
+# View all memories (across projects)
+dectl memory list --global
 ```
 
 ### 3. Use in AI Sessions
@@ -121,6 +137,7 @@ steps:
 ```
 
 Run it:
+
 ```bash
 dectl workflow run test --var coverage=--cov
 ```
@@ -129,34 +146,35 @@ dectl workflow run test --var coverage=--cov
 
 ### Project Management
 
-```bash
-dectl project init                    # Level 1: minimal structure
-dectl project init --standard         # Level 2: + decisions, workflows, prompts
-dectl project init --full             # Level 3: + architecture, knowledge
-dectl project info                    # Show project summary + schema warnings
-dectl project scan [--depth N]        # File tree (respects .gitignore)
-dectl project context [--max-tokens N] [--format text|json]
-                                       # Compact context for stateless environments
-```
+| Command | Description |
+|---------|-------------|
+| `dectl project init` | Initialize with minimal structure |
+| `dectl project init --standard` | Level 2: + decisions, workflows, prompts |
+| `dectl project init --full` | Level 3: + architecture, knowledge |
+| `dectl project init --type api\|cli\|microservice` | With type-specific templates |
+| `dectl project info` | Show project summary + schema warnings |
+| `dectl project scan [--depth N]` | File tree (respects .gitignore) |
+| `dectl project context [--max-tokens N] [--format text\|json]` | Compact context for stateless environments |
 
 ### Memory
 
-```bash
-dectl memory add "<content>" [--tags t1,t2] [--project <name>]
-dectl memory list [--project <name>] [--limit N]
-dectl memory search "<query>" [--project <name>]
-dectl memory show <id>
-dectl memory delete <id> [--hard]     # Soft-delete; --hard for permanent
-dectl memory edit <id>                # Opens in $EDITOR
-```
+| Command | Description |
+|---------|-------------|
+| `dectl memory add "<content>" [--tags t1,t2] [--project <name>]` | Add a memory |
+| `dectl memory list [--project <name>] [--limit N] [--global]` | List memories |
+| `dectl memory search "<query>" [--project <name>]` | Search memories |
+| `dectl memory show <id>` | Show memory details |
+| `dectl memory delete <id>` | Soft-delete (can be recovered) |
+| `dectl memory delete <id> --hard` | Permanent deletion |
+| `dectl memory edit <id>` | Edit in $EDITOR |
 
 ### Workflows
 
-```bash
-dectl workflow list                    # List all workflows
-dectl workflow describe <name>       # Show workflow details
-dectl workflow run <name> [--var k=v] [--dry-run] [--from-step N]
-```
+| Command | Description |
+|---------|-------------|
+| `dectl workflow list` | List all workflows |
+| `dectl workflow describe <name>` | Show workflow details |
+| `dectl workflow run <name> [--var k=v] [--dry-run] [--from-step N]` | Execute workflow |
 
 ### Shell Completions
 
@@ -222,6 +240,8 @@ They communicate through files and shell commands—no proprietary API.
 | Model-agnostic | ❌ | ❌ | ❌ | ✅ |
 | Workflows | ⚠️ | ❌ | ❌ | ✅ |
 | No telemetry | ⚠️ | ❌ | ❌ | ✅ |
+| Project templates | ❌ | ❌ | ❌ | ✅ |
+| Auto-fill on init | ❌ | ❌ | ❌ | ✅ |
 
 dectl complements any AI coding tool by providing the memory they lack.
 
@@ -247,7 +267,7 @@ schema_version = "1.0"
 
 [project]
 name = "my-project"
-type = "application"
+type = "api|cli|microservice|other"
 description = "A Rust CLI tool"
 
 [stack]
@@ -267,7 +287,17 @@ auto_init = true
 ## Requirements
 
 - Rust 1.70+
-- Linux/macOS/Windows (SQLite bundled)
+- Linux/macOS (Windows support via WSL)
+
+## Development
+
+```bash
+cd dectl
+cargo test        # Run all tests
+cargo fmt         # Format code
+cargo clippy      # Lint check
+cargo build --release  # Build binary
+```
 
 ## Contributing
 

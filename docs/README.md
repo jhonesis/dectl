@@ -1,19 +1,19 @@
-# Documentación — dectl
+# Documentation — dectl
 
 ```
 docs/
-├── usuario/          # Guías para usuarios finales
+├── user/          # Guides for end users
 │   ├── README.md
 │   ├── quickstart.md
-│   └── flujo.md
-├── desarrollo/       # Guías para desarrolladores
+│   └── flow.md
+├── development/       # Guides for developers
 │   └── README.md
-└── api/             # Referencia de comandos
+└── api/               # Command reference
     └── README.md
 ```
 
-## Navegación
+## Navigation
 
-**Si eres usuario nuevo:** → [usuario/quickstart.md](./usuario/quickstart.md)
+**If you are a new user:** → [user/quickstart.md](./user/quickstart.md)
 
-**Si eres desarrollador:** → [desarrollo/README.md](./desarrollo/README.md)
+**If you are a developer:** → [development/README.md](./development/README.md)
