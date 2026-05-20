@@ -45,7 +45,7 @@ jobs:
         run: cargo clippy --all --all-targets --all-features -- -D warnings
 
       - name: Build
-        run: cargo build --release
+        run: cargo build
 
       - name: Test
         run: cargo test --all
@@ -90,7 +90,7 @@ jobs:
           toolchain: stable
 
       - name: Build
-        run: cargo build --release
+        run: cargo build
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
