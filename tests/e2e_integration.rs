@@ -229,7 +229,5 @@ fn run_dectl_with_stdin(args: &[&str], input: &str, cwd: &std::path::Path) -> st
     stdin.write_all(input.as_bytes()).expect("Failed to write to stdin");
 }
 
-let output = child.wait_with_output().expect("Failed to read stdout");
-
-    output
+child.wait_with_output().expect("Failed to read stdout")
 }
