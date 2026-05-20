@@ -1,0 +1,58 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          targets: x86_64-unknown-linux-musl
+
+      - name: Build
+        run: cargo build --release --target x86_64-unknown-linux-musl
+
+      - name: Package
+        run: |
+          cp target/x86_64-unknown-linux-musl/release/dectl dectl
+          chmod +x dectl
+
+      - name: Upload Release Asset
+        uses: softprops/upload-gh-asset@v1
+        with:
+          asset_path: dectl
+          asset_name: dectl-linux-x86_64
+          content_type: application/octet-stream
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Package
+        run: |
+          cp target/release/dectl dectl
+          chmod +x dectl
+
+      - name: Upload Release Asset
+        uses: softprops/upload-gh-asset@v1
+        with:
+          asset_path: dectl
+          asset_name: dectl-macos-x86_64
+          content_type: application/octet-stream
