@@ -45,21 +45,19 @@ jobs:
         run: cargo clippy --all --all-targets --all-features -- -D warnings
 
       - name: Build
-        run: cargo build
+        run: cargo build --release
 
       - name: Test
         run: cargo test --all
 
       - name: Binary size check
         run: |
-          # Get binary size
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            SIZE=$(stat -c%s target/release/dectl.exe 2>/dev/null || stat -f%z target/release/dectl.exe 2>/dev/null)
+            SIZE=$(stat -c%s target/release/dectl.exe)
           else
-            SIZE=$(stat -c%s target/release/dectl 2>/dev/null || stat -f%z target/release/dectl 2>/dev/null)
+            SIZE=$(stat -c%s target/release/dectl)
           fi
           echo "Binary size: $SIZE bytes"
-          # 20MB limit = 20 * 1024 * 1024 = 20971520 bytes
           if [ $SIZE -gt 20971520 ]; then
             echo "ERROR: Binary exceeds 20MB limit"
             exit 1
@@ -89,8 +87,8 @@ jobs:
         with:
           toolchain: stable
 
-      - name: Build
-        run: cargo build
+      - name: Build Release
+        run: cargo build --release
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
