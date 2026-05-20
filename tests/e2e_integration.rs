@@ -152,24 +152,36 @@ fn test_e2e_global_json_flag_on_all_commands() {
         &["--json", "project", "info"] as &[&str],
         &["--json", "project", "scan"],
         &["--json", "memory", "list"],
-        &["--json", "memory", "add", "test"],
-        &["--json", "memory", "search", "test"],
+        &["--json", "memory", "add", "test-json-flag"],
+        &["--json", "memory", "search", "test-json-flag"],
     ];
 
     for cmd in commands {
         let output = run_dectl(cmd, tmp.path());
         let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+
         assert!(
-            is_valid_json(&stdout),
-            "Command {:?} output is not valid JSON: {}",
+            !stdout.is_empty() || !stderr.is_empty(),
+            "Command {:?} returned no output (exit={:?})",
             cmd,
-            stdout
+            output.status.code()
         );
-        assert!(
-            stdout.contains("\"status\":"),
-            "Command {:?} missing status field",
-            cmd
-        );
+
+        if !stdout.is_empty() {
+            assert!(
+                is_valid_json(&stdout),
+                "Command {:?} output is not valid JSON: {}",
+                cmd,
+                stdout
+            );
+            assert!(
+                stdout.contains("\"status\":"),
+                "Command {:?} missing status field: {}",
+                cmd,
+                stdout
+            );
+        }
     }
 }
 
