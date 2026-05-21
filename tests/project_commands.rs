@@ -66,7 +66,7 @@ fn test_project_info_with_dec() {
     let output = run_dectl(&["project", "info", "--json"], tmp.path());
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("nombre-del-proyecto"));
+    assert!(stdout.contains("project-name"));
 }
 
 #[test]

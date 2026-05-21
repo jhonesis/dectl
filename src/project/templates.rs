@@ -109,12 +109,12 @@ impl Templates {
         files
     }
 
-    const GITIGNORE_L1: &str = r#"# dectl — archivos que no deben versionarse
+    const GITIGNORE_L1: &str = r#"# dectl — files that should not be versioned
 
-# Estado local personal (no compartir con el equipo)
+# Personal local state (do not share with the team)
 state/local_*.json
 
-# Por si acaso — estos archivos NUNCA deben estar en .dec/
+# Just in case — these files should NEVER be inside .dec/
 *.env
 *.key
 *.pem
@@ -124,412 +124,412 @@ secrets.*
 "#;
 
     const PROJECT_TOML_L1: &str = r#"# dectl project configuration
-# Este archivo define el proyecto para el modelo y las herramientas.
-# El modelo debe leerlo al inicio de cada sesión.
+# This file defines the project for the model and tools.
+# The model should read it at the start of every session.
 
 [dec]
 schema_version = "1.0"
 
 [project]
-name = "nombre-del-proyecto"
-# Tipo de proyecto: api | cli | microservice | monolith | library | other
+name = "project-name"
+# Project type: api | cli | microservice | monolith | library | other
 type = "other"
-description = "Descripción breve del proyecto en una frase."
+description = "Brief project description in one sentence."
 
 [stack]
-# Lista de tecnologías principales del proyecto
+# List of main project technologies
 languages = []
 frameworks = []
 databases = []
 tools = []
 
 [conventions]
-# Convenciones especiales que el modelo debe seguir en este proyecto.
+# Special conventions the model must follow for this project.
 rules = []
 "#;
 
-    const PROJECT_ISA: &str = r#"# ISA: [Nombre del Proyecto]
-> **Para el modelo**: Lee este documento antes de tomar cualquier decisión importante.
-> Actualiza este archivo cuando la visión o el alcance cambien significativamente.
-> Si algo aquí contradice lo que ves en el código, pregunta al developer antes de asumir.
+    const PROJECT_ISA: &str = r#"# ISA: [Project Name]
+> **For the model**: Read this document before making any important decisions.
+> Update this file when the vision or scope change significantly.
+> If anything here contradicts what you see in the code, ask the developer before assuming.
 
 ---
 
-## Visión
-<!-- Una frase: qué es el proyecto y para quién. -->
+## Vision
+<!-- One sentence: what the project is and for whom. -->
 
 
-## Objetivo Principal
-<!-- Qué problema concreto resuelve y cómo se mide el éxito. -->
+## Main Objective
+<!-- What concrete problem it solves and how success is measured. -->
 
 
-## Alcance (qué SÍ incluye)
-<!-- Lista concreta de lo que el proyecto construye. -->
+## Scope (what it DOES include)
+<!-- Concrete list of what the project builds. -->
 -
 -
 
-## No-Objetivos (qué NO incluye)
-<!-- Lista explícita de lo que este proyecto NO hace. Evita scope creep. -->
+## Non-Goals (what it does NOT include)
+<!-- Explicit list of what this project does NOT do. Prevents scope creep. -->
 -
 -
 
-## Stack Tecnológico
-<!-- Tecnologías principales. El detalle está en config/project.toml. -->
+## Tech Stack
+<!-- Main technologies. Details are in config/project.toml. -->
 
 
-## Restricciones Conocidas
-<!-- Limitaciones técnicas, de tiempo o de recursos que el modelo debe respetar. -->
+## Known Constraints
+<!-- Technical, time, or resource limitations the model must respect. -->
 
 
-## Riesgos Principales
-<!-- Los 2-3 riesgos más importantes. Breve. -->
+## Main Risks
+<!-- The 2-3 most important risks. Brief. -->
 1.
 2.
 "#;
 
     const WORKFLOW_IMPLEMENT_FEATURE: &str = r#"name: implement_feature
-description: Implementa una nueva feature completa con tests y documentación
+description: Implement a complete feature with tests and documentation
 inputs:
   - name: feature_name
-    description: Nombre de la feature (ej. "user_authentication", "payment_processing")
+    description: Name of the feature (e.g. "user_authentication", "payment_processing")
     required: true
   - name: module
-    description: Módulo o carpeta donde se implementará
+    description: Module or folder where it will be implemented
     required: true
   - name: include_tests
-    description: Generar tests automáticamente (true/false)
+    description: Generate tests automatically (true/false)
     required: false
     default: "true"
 
 steps:
   - type: prompt
-    description: Cargar contexto del proyecto
+    description: Load project context
     content: |
-      Lee .dec/isa/project.isa.md y .dec/config/project.toml.
-      Lee .dec/decisions/ para entender restricciones arquitectónicas.
-      Confirma que entiendes el proyecto antes de continuar.
+      Read .dec/isa/project.isa.md and .dec/config/project.toml.
+      Read .dec/decisions/ to understand architectural constraints.
+      Confirm you understand the project before continuing.
 
   - type: action
-    description: Buscar decisiones relevantes en memoria
+    description: Search for relevant decisions in memory
     cmd: ["dectl", "memory", "search", "{{feature_name}}"]
 
   - type: prompt
-    description: Diseñar la implementación
+    description: Design the implementation
     content: |
-      Diseña la implementación de "{{feature_name}}" en el módulo "{{module}}".
-      - Sigue las convenciones en .dec/config/project.toml
-      - Respeta las decisiones en .dec/decisions/
-      - Describe los archivos que vas a crear/modificar antes de hacerlo
+      Design the implementation of "{{feature_name}}" in the "{{module}}" module.
+      - Follow conventions in .dec/config/project.toml
+      - Respect decisions in .dec/decisions/
+      - Describe the files you will create/modify before doing so
 
   - type: prompt
-    description: Implementar
+    description: Implement
     content: |
-      Implementa "{{feature_name}}" en "{{module}}".
+      Implement "{{feature_name}}" in "{{module}}".
       Include tests: {{include_tests}}.
-      Al terminar cada archivo, confirma que compila/pasa lint.
+      After each file, confirm it compiles/passes lint.
 
   - type: action
-    description: Registrar decisiones tomadas durante la implementación
-    cmd: ["dectl", "memory", "add", "Implementada feature {{feature_name}} en {{module}}"]
+    description: Record decisions made during implementation
+    cmd: ["dectl", "memory", "add", "Implemented feature {{feature_name}} in {{module}}"]
 
   - type: write
-    description: Actualizar estado del proyecto
+    description: Update project state
     path: .dec/state/last_session.md
     content: |
-      # Última sesión
-      **Fecha**: (completar)
-      **Qué se hizo**: Implementada feature {{feature_name}} en {{module}}
-      **Pendiente**: (completar)
-      **Decisiones tomadas**: (completar)
+      # Last Session
+      **Date**: (fill in)
+      **What was done**: Implemented feature {{feature_name}} in {{module}}
+      **Pending**: (fill in)
+      **Decisions made**: (fill in)
 "#;
 
     const WORKFLOW_DESIGN_ARCHITECTURE: &str = r#"name: design_architecture
-description: Guía al modelo para diseñar o revisar la arquitectura del proyecto
+description: Guide the model to design or review the project architecture
 inputs:
   - name: focus
-    description: Aspecto específico a diseñar (ej. "auth", "database", "api") o "general" para arquitectura completa
+    description: Specific aspect to design (e.g. "auth", "database", "api") or "general" for full architecture
     required: false
     default: "general"
 
 steps:
   - type: prompt
-    description: Cargar contexto completo
+    description: Load full context
     content: |
-      Lee .dec/isa/project.isa.md, .dec/config/project.toml y .dec/decisions/.
-      Identifica los componentes principales y sus responsabilidades.
-      Foco de esta sesión: {{focus}}.
+      Read .dec/isa/project.isa.md, .dec/config/project.toml and .dec/decisions/.
+      Identify the main components and their responsibilities.
+      Focus of this session: {{focus}}.
 
   - type: action
-    description: Buscar decisiones de arquitectura previas
-    cmd: ["dectl", "memory", "search", "arquitectura"]
+    description: Search for previous architecture decisions
+    cmd: ["dectl", "memory", "search", "architecture"]
 
   - type: prompt
-    description: Proponer arquitectura
+    description: Propose architecture
     content: |
-      Propón la arquitectura para "{{focus}}".
-      Incluye: módulos, responsabilidades, flujos principales y trade-offs.
-      Si hay decisiones previas en decisions/ que apliquen, referencialas.
+      Propose the architecture for "{{focus}}".
+      Include: modules, responsibilities, main flows and trade-offs.
+      If there are previous decisions in decisions/ that apply, reference them.
 
   - type: write
-    description: Documentar la decisión arquitectónica
+    description: Document the architecture decision
     path: .dec/decisions/XXXX-architecture-{{focus}}.md
     content: |
-      # [XXXX] Arquitectura: {{focus}}
-      **Fecha**: (completar)
-      **Estado**: activa
+      # [XXXX] Architecture: {{focus}}
+      **Date**: (fill in)
+      **Status**: active
 
-      ## Contexto
-      (completar)
+      ## Context
+      (fill in)
 
-      ## Decisión
-      (completar)
+      ## Decision
+      (fill in)
 
-      ## Alternativas Consideradas
-      (completar)
+      ## Alternatives Considered
+      (fill in)
 
-      ## Justificación
-      (completar)
+      ## Justification
+      (fill in)
 
-      ## Consecuencias
-      (completar)
+      ## Consequences
+      (fill in)
 
   - type: prompt
-    description: Actualizar ISA de arquitectura
+    description: Update architecture ISA
     content: |
-      Actualiza .dec/isa/architecture.isa.md con la arquitectura diseñada.
-      Luego ejecuta: dectl memory add "Arquitectura {{focus}} diseñada y documentada"
+      Update .dec/isa/architecture.isa.md with the designed architecture.
+      Then run: dectl memory add "Architecture {{focus}} designed and documented"
 "#;
 
-    const SYSTEM_BASE: &str = r#"# System Prompt Base — [Nombre del Proyecto]
-> **Instrucciones para el modelo**: Este prompt define tu comportamiento en este proyecto.
-> El developer puede actualizarlo en cualquier momento. Reléelo si recibes instrucciones contradictorias.
+    const SYSTEM_BASE: &str = r#"# System Prompt Base — [Project Name]
+> **Instructions for the model**: This prompt defines your behavior for this project.
+> The developer can update it at any time. Re-read if you receive contradictory instructions.
 
 ---
 
-## Contexto del Proyecto
-Estás trabajando en [nombre del proyecto]. Lee .dec/isa/project.isa.md para entender qué construyes.
+## Project Context
+You are working on [project name]. Read .dec/isa/project.isa.md to understand what you are building.
 
-## Comportamiento Esperado
+## Expected Behavior
 
-**Antes de actuar**:
-- Lee el contexto relevante en .dec/ antes de tomar decisiones importantes
-- Consulta .dec/decisions/ antes de proponer cambios arquitectónicos
-- Si algo no está claro, pregunta antes de asumir
+**Before acting**:
+- Read the relevant context in .dec/ before making important decisions
+- Consult .dec/decisions/ before proposing architectural changes
+- If something is unclear, ask before assuming
 
-**Al escribir código**:
-- Sigue las convenciones en .dec/config/project.toml
-- Respeta las restricciones en .dec/knowledge/constraints.md (si existe)
-- Usa los términos definidos en .dec/knowledge/glossary.md (si existe)
+**When writing code**:
+- Follow conventions in .dec/config/project.toml
+- Respect constraints in .dec/knowledge/constraints.md (if it exists)
+- Use terms defined in .dec/knowledge/glossary.md (if it exists)
 
-**Al terminar una tarea**:
-- Actualiza .dec/state/progress.json si completaste una feature
-- Actualiza .dec/state/last_session.md con un resumen de lo hecho
-- Registra decisiones importantes con: dectl memory add "..."
+**When completing a task**:
+- Update .dec/state/progress.json if you completed a feature
+- Update .dec/state/last_session.md with a summary of what was done
+- Record important decisions with: dectl memory add "..."
 
-## Lo que NO debes hacer
-- Inventar términos del dominio que no están en el glosario
-- Proponer cambios que contradigan decisiones en .dec/decisions/
-- Asumir requisitos no documentados — pregunta
+## What you must NOT do
+- Invent domain terms not in the glossary
+- Propose changes that contradict decisions in .dec/decisions/
+- Assume undocumented requirements — ask
 "#;
 
     const PROGRESS_JSON: &str = r#"{
-  "_comment": "Estado de features del proyecto. Actualizar al completar tareas.",
+  "_comment": "Project feature status. Update when completing tasks.",
   "schema_version": "1.0",
   "updated_at": "",
   "features": []
 }
 "#;
 
-    const LAST_SESSION: &str = r#"# Última Sesión
-> Actualiza este archivo al finalizar cada sesión de trabajo.
-> El modelo debe leerlo al inicio de una sesión nueva para retomar contexto.
+    const LAST_SESSION: &str = r#"# Last Session
+> Update this file at the end of each work session.
+> The model should read it at the start of a new session to resume context.
 
-**Fecha**: (sin sesiones aún)
-**Qué se hizo**: —
-**Qué quedó pendiente**: —
-**Decisiones tomadas**: —
-**Próximo paso recomendado**: Completar la inicialización del proyecto en .dec/isa/project.isa.md
+**Date**: (no sessions yet)
+**What was done**: —
+**What's pending**: —
+**Decisions made**: —
+**Recommended next step**: Complete project initialization in .dec/isa/project.isa.md
 "#;
 
-    const ARCHITECTURE_ISA: &str = r#"# ISA: Arquitectura — [Nombre del Proyecto]
-> **Para el modelo**: Lee este documento antes de proponer cambios arquitectónicos.
-> Consulta también decisions/ para entender por qué la arquitectura es como es.
+    const ARCHITECTURE_ISA: &str = r#"# ISA: Architecture — [Project Name]
+> **For the model**: Read this document before proposing architectural changes.
+> Also consult decisions/ to understand why the architecture is the way it is.
 
 ---
 
-## Visión de Arquitectura
-<!-- Descripción en 2-3 frases de la arquitectura general. -->
+## Architecture Vision
+<!-- 2-3 sentence description of the overall architecture. -->
 
 
-## Módulos / Componentes Principales
-<!-- Lista de componentes con una línea de responsabilidad cada uno. -->
-| Componente | Responsabilidad |
+## Main Modules / Components
+<!-- List of components with a one-line responsibility each. -->
+| Component | Responsibility |
 |-----------|----------------|
 |           |                |
 
-## Flujos Principales
-<!-- Los 2-3 flujos más importantes del sistema, descritos brevemente. -->
+## Main Flows
+<!-- The 2-3 most important system flows, described briefly. -->
 
-### Flujo 1: [nombre]
-<!-- Descripción del flujo paso a paso. -->
+### Flow 1: [name]
+<!-- Step-by-step flow description. -->
 
-## Decisiones de Diseño Clave
-<!-- Las decisiones que más impactan la arquitectura. Referencia decisions/ para el detalle. -->
-- [Decisión]: [consecuencia en una línea]
+## Key Design Decisions
+<!-- Decisions that most impact the architecture. Reference decisions/ for details. -->
+- [Decision]: [one-line consequence]
 
-## Diagrama (opcional)
-<!-- ASCII diagram o descripción textual de la arquitectura. -->
+## Diagram (optional)
+<!-- ASCII diagram or textual description of the architecture. -->
 
-## Lo que NO debe cambiar sin revisar decisions/
-<!-- Partes de la arquitectura que tienen restricciones fuertes. -->
+## What must NOT change without reviewing decisions/
+<!-- Parts of the architecture with strong constraints. -->
 -
 "#;
 
-    const TASK_IMPLEMENT_FEATURE: &str = r#"# Prompt: Implementar Feature
+    const TASK_IMPLEMENT_FEATURE: &str = r#"# Prompt: Implement Feature
 
-## Contexto
-Estás implementando una nueva feature. Lee `.dec/isa/project.isa.md` y `.dec/config/project.toml` primero.
+## Context
+You are implementing a new feature. Read `.dec/isa/project.isa.md` and `.dec/config/project.toml` first.
 
-## Tu tarea
-1. Lee `.dec/decisions/` para entender restricciones arquitectónicas
-2. Diseña la implementación brevemente antes de escribir código
-3. Implementa la feature siguiendo las convenciones del proyecto
-4. Si `include_tests` es true, genera tests para la nueva funcionalidad
-5. Confirma que el código compila y pasa lint
+## Your task
+1. Read `.dec/decisions/` to understand architectural constraints
+2. Briefly design the implementation before writing code
+3. Implement the feature following project conventions
+4. If `include_tests` is true, generate tests for the new functionality
+5. Confirm the code compiles and passes lint
 
-## Restricciones
-- Sigue las convenciones en `config/project.toml` → `[conventions]`
-- No modifiques archivos fuera del módulo asignado sin approval
-- Consulta `.dec/decisions/` antes de tomar decisiones arquitectónicas
+## Constraints
+- Follow conventions in `config/project.toml` → `[conventions]`
+- Do not modify files outside the assigned module without approval
+- Consult `.dec/decisions/` before making architectural decisions
 
-## Al terminar
-- Ejecuta `dectl memory add` con un resumen de lo que hiciste
-- Actualiza `.dec/state/progress.json` si la feature está completa
+## When done
+- Run `dectl memory add` with a summary of what you did
+- Update `.dec/state/progress.json` if the feature is complete
 "#;
 
-    const TASK_WRITE_TESTS: &str = r#"# Prompt: Escribir Tests
+    const TASK_WRITE_TESTS: &str = r#"# Prompt: Write Tests
 
-## Contexto
-Debes escribir tests para una funcionalidad existente. Lee el módulo primero.
+## Context
+You need to write tests for an existing functionality. Read the module first.
 
-## Tu tarea
-1. Identifica qué funcionalidades necesitan tests
-2. Escribe tests que cubran casos normales y edge cases
-3. Sigue el framework de testing del proyecto (ver `config/project.toml`)
-4. Ejecuta los tests para confirmar que pasan
+## Your task
+1. Identify which functionalities need tests
+2. Write tests covering normal cases and edge cases
+3. Follow the project's testing framework (see `config/project.toml`)
+4. Run the tests to confirm they pass
 
-## Restricciones
-- Tests deben ser independientes y poder ejecutarse en cualquier orden
-- No hardcodear paths — usar variables de entorno o configuración
-- Cobertura mínima: happy path + casos de error principales
+## Constraints
+- Tests must be independent and executable in any order
+- Do not hardcode paths — use environment variables or configuration
+- Minimum coverage: happy path + main error cases
 
-## Al terminar
-- Ejecuta todos los tests del módulo para confirmar que no rompiste nada
-- Registra con `dectl memory add` qué tests añadiste
+## When done
+- Run all module tests to confirm nothing is broken
+- Record with `dectl memory add` which tests you added
 "#;
 
     const TASK_REVIEW_CODE: &str = r#"# Prompt: Code Review
 
-## Contexto
-Debes hacer review de código cambios o propuesto. Enfócate en calidad, no en estilo.
+## Context
+You need to review code changes or proposed code. Focus on quality, not style.
 
-## Tu tarea
-1. Lee el código propuesto o los cambios recentos
-2. Identifica:
-   - Bugs potenciales o casos de borde no manejados
-   - Problemas de seguridad
-   - Violaciones de las convenciones del proyecto
-   - Mejores oportunidades de mejora
-3. Proporciona feedback constructivo con ejemplos específicos
+## Your task
+1. Read the proposed code or recent changes
+2. Identify:
+   - Potential bugs or unhandled edge cases
+   - Security issues
+   - Violations of project conventions
+   - Opportunities for improvement
+3. Provide constructive feedback with specific examples
 
-## Qué buscar
-- Errores lógicos o de null handling
-- Performance issues obvios
-- Violaciones del architecture decisions/
-- Falta de tests en código crítico
+## What to look for
+- Logical errors or null handling
+- Obvious performance issues
+- Violations of architecture decisions/
+- Missing tests for critical code
 
-## Al terminar
-- Registra con `dectl memory add` un resumen del review
-- Si hay issues críticos, propón soluciones específicas
+## When done
+- Record with `dectl memory add` a summary of the review
+- If there are critical issues, propose specific solutions
 "#;
 
-    const TASK_DOCUMENT_MODULE: &str = r#"# Prompt: Documentar Módulo
+    const TASK_DOCUMENT_MODULE: &str = r#"# Prompt: Document Module
 
-## Contexto
-Debes documentar un módulo existente del proyecto.
+## Context
+You need to document an existing module of the project.
 
-## Tu tarea
-1. Lee el código del módulo completo
-2. Identifica:
-   - La responsabilidad principal del módulo
-   - Las funciones/métodos públicos y sus contratos
-   - Dependencias y side effects
-3. Escribe documentación clara:
-   - README.md en la carpeta del módulo o sección en docs/
-   - Comentarios doc (/// en Rust, docstring en Python)
-   - Ejemplos de uso donde sea útil
+## Your task
+1. Read the complete module code
+2. Identify:
+   - The module's main responsibility
+   - Public functions/methods and their contracts
+   - Dependencies and side effects
+3. Write clear documentation:
+   - README.md in the module folder or docs/
+   - Doc comments (/// in Rust, docstrings in Python)
+   - Usage examples where helpful
 
-## Restricciones
-- Documentación debe ser útil para alguien que no escribió el código
-- No documentar el qué (el código ya lo dice), sino el por qué y el cómo
-- Mantener documentación cerca del código (comments, docstrings)
+## Constraints
+- Documentation must be useful for someone who didn't write the code
+- Don't document the what (the code already says it), document the why and how
+- Keep documentation close to the code (comments, docstrings)
 
-## Al terminar
-- Registra con `dectl memory add` qué documentaste
+## When done
+- Record with `dectl memory add` what you documented
 "#;
 
-    const KNOWLEDGE_GLOSSARY: &str = r#"# Glosario del Proyecto
-> **Para el modelo**: Define aquí términos del dominio que son específicos del proyecto.
-> Usa estos términos consistentemente. Si necesitas añadir uno, consulta al developer primero.
+    const KNOWLEDGE_GLOSSARY: &str = r#"# Project Glossary
+> **For the model**: Define domain terms specific to this project here.
+> Use these terms consistently. If you need to add one, consult the developer first.
 
 ---
 
-## Términos
+## Terms
 
-### [término]
-Definición breve. Una frase.
+### [term]
+Brief definition. One sentence.
 
-### [término]
-Definición breve. Una frase.
+### [term]
+Brief definition. One sentence.
 
 ---
 
-## Acrónimos
+## Acronyms
 
-| Acrónimo | Significado |
-|----------|-------------|
-|          |             |
+| Acronym | Meaning |
+|---------|---------|
+|         |         |
 "#;
 
-    const KNOWLEDGE_CONSTRAINTS: &str = r#"# Restricciones del Proyecto
-> **Para el modelo**: Estas restricciones deben respetarse en todo momento.
-> Si una restricción cambia, actualiza este archivo y notifica al team.
+    const KNOWLEDGE_CONSTRAINTS: &str = r#"# Project Constraints
+> **For the model**: These constraints must be respected at all times.
+> If a constraint changes, update this file and notify the team.
 
 ---
 
-## Restricciones Técnicas
+## Technical Constraints
 
-### [título]
-Descripción de la restricción y por qué existe.
-- Límite: [ejemplo]
-- Impacto: [qué limitaciones impone al código]
-
----
-
-## Restricciones de Negocio
-
-### [título]
-Descripción de la restricción de negocio.
-- Límite: [ejemplo]
-- Impacto: [qué limitaciones impone]
+### [title]
+Description of the constraint and why it exists.
+- Limit: [example]
+- Impact: [what limitations it imposes on the code]
 
 ---
 
-## Convenciones Obligatorias
+## Business Constraints
 
-- [ ] Regla 1
-- [ ] Regla 2
-- [ ] Regla 3
+### [title]
+Description of the business constraint.
+- Limit: [example]
+- Impact: [what limitations it imposes]
+
+---
+
+## Mandatory Conventions
+
+- [ ] Rule 1
+- [ ] Rule 2
+- [ ] Rule 3
 "#;
 
     const AGENTS_MD: &str = r#"# AGENTS.md — [PROJECT NAME]

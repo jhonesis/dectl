@@ -35,6 +35,22 @@ pub struct CapturedDecision {
     pub already_exists: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ConfigDiff {
+    pub new_languages: Vec<String>,
+    pub new_frameworks: Vec<String>,
+    pub new_tools: Vec<String>,
+    pub type_changed: Option<(String, String)>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ConfigSyncResult {
+    pub diff: ConfigDiff,
+    pub toml_updated: bool,
+    pub isa_incoherent: bool,
+    pub isa_warnings: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StepResult {
     pub name: String,
@@ -46,6 +62,7 @@ pub struct StepResult {
 pub struct SessionEndResult {
     pub steps: Vec<StepResult>,
     pub decisions_saved: usize,
+    pub config_changes: Option<ConfigSyncResult>,
 }
 
 impl SessionEndResult {
@@ -53,6 +70,7 @@ impl SessionEndResult {
         SessionEndResult {
             steps: Vec::new(),
             decisions_saved: 0,
+            config_changes: None,
         }
     }
 
