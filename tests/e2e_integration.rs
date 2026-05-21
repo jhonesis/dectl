@@ -48,34 +48,78 @@ fn test_e2e_project_init_and_memory_crud() {
     );
 
     let tests = [
-        (&["memory", "add", "First memory entry", "--json"] as &[&str], "first add"),
-        (&["memory", "add", "Second memory entry", "--tags", "rust,cli", "--json"], "second add"),
-        (&["memory", "add", "Third memory entry", "--project", "test-project", "--json"], "third add"),
+        (
+            &["memory", "add", "First memory entry", "--json"] as &[&str],
+            "first add",
+        ),
+        (
+            &[
+                "memory",
+                "add",
+                "Second memory entry",
+                "--tags",
+                "rust,cli",
+                "--json",
+            ],
+            "second add",
+        ),
+        (
+            &[
+                "memory",
+                "add",
+                "Third memory entry",
+                "--project",
+                "test-project",
+                "--json",
+            ],
+            "third add",
+        ),
     ];
 
     for (args, name) in tests {
         let output = run_dectl(args, tmp.path());
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
-        
+
         if has_valid_json_output(&stdout, &stderr) {
             continue;
         }
-        
-        eprintln!("{} failed: exit={:?}, stdout='{}', stderr='{}'", name, output.status.code(), stdout, stderr);
-        assert!(output.status.success() || !stdout.is_empty() || !stderr.is_empty(), 
-            "{} returned no output", name);
+
+        eprintln!(
+            "{} failed: exit={:?}, stdout='{}', stderr='{}'",
+            name,
+            output.status.code(),
+            stdout,
+            stderr
+        );
+        assert!(
+            output.status.success() || !stdout.is_empty() || !stderr.is_empty(),
+            "{} returned no output",
+            name
+        );
     }
 
     let output = run_dectl(&["memory", "list", "--json"], tmp.path());
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    
-    if !stdout.is_empty() && is_valid_json(&stdout) && stdout.contains("\"status\":") && stdout.contains("entries") {
+
+    if !stdout.is_empty()
+        && is_valid_json(&stdout)
+        && stdout.contains("\"status\":")
+        && stdout.contains("entries")
+    {
         // ok
     } else {
-        eprintln!("memory list: exit={:?}, stdout='{}', stderr='{}'", output.status.code(), stdout, stderr);
-        assert!(output.status.success() || !stdout.is_empty(), "memory list returned no output");
+        eprintln!(
+            "memory list: exit={:?}, stdout='{}', stderr='{}'",
+            output.status.code(),
+            stdout,
+            stderr
+        );
+        assert!(
+            output.status.success() || !stdout.is_empty(),
+            "memory list returned no output"
+        );
     }
 
     let output = run_dectl(&["memory", "search", "Second", "--json"], tmp.path());
@@ -83,7 +127,11 @@ fn test_e2e_project_init_and_memory_crud() {
     if !stdout.is_empty() && is_valid_json(&stdout) && stdout.contains("Second") {
         // ok
     } else {
-        eprintln!("memory search: exit={:?}, stdout='{}'", output.status.code(), stdout);
+        eprintln!(
+            "memory search: exit={:?}, stdout='{}'",
+            output.status.code(),
+            stdout
+        );
     }
 
     let output = run_dectl(&["memory", "search", "rust", "--json"], tmp.path());
@@ -91,7 +139,11 @@ fn test_e2e_project_init_and_memory_crud() {
     if !stdout.is_empty() && is_valid_json(&stdout) {
         // ok
     } else {
-        eprintln!("memory search rust: exit={:?}, stdout='{}'", output.status.code(), stdout);
+        eprintln!(
+            "memory search rust: exit={:?}, stdout='{}'",
+            output.status.code(),
+            stdout
+        );
     }
 
     let output = run_dectl(&["memory", "show", "1", "--json"], tmp.path());
@@ -102,7 +154,11 @@ fn test_e2e_project_init_and_memory_crud() {
     if !stdout.is_empty() && is_valid_json(&stdout) {
         // ok
     } else {
-        eprintln!("project info: exit={:?}, stdout='{}'", output.status.code(), stdout);
+        eprintln!(
+            "project info: exit={:?}, stdout='{}'",
+            output.status.code(),
+            stdout
+        );
     }
 
     let output = run_dectl(&["project", "scan", "--json"], tmp.path());
@@ -110,7 +166,11 @@ fn test_e2e_project_init_and_memory_crud() {
     if !stdout.is_empty() && is_valid_json(&stdout) {
         // ok
     } else {
-        eprintln!("project scan: exit={:?}, stdout='{}'", output.status.code(), stdout);
+        eprintln!(
+            "project scan: exit={:?}, stdout='{}'",
+            output.status.code(),
+            stdout
+        );
     }
 
     println!("All e2e tests passed!");
@@ -197,9 +257,13 @@ fn test_e2e_stdin_memory_add() {
     let success = output.status.success();
     let has_output = !stdout.is_empty() || !stderr.is_empty();
 
-    assert!(success || has_output, 
-        "stdin memory add failed with no output: exit={:?}, stdout='{}', stderr='{}'", 
-        output.status.code(), stdout, stderr);
+    assert!(
+        success || has_output,
+        "stdin memory add failed with no output: exit={:?}, stdout='{}', stderr='{}'",
+        output.status.code(),
+        stdout,
+        stderr
+    );
 }
 
 fn run_dectl_with_stdin(args: &[&str], input: &str, cwd: &std::path::Path) -> std::process::Output {
@@ -207,18 +271,20 @@ fn run_dectl_with_stdin(args: &[&str], input: &str, cwd: &std::path::Path) -> st
     use std::process::{Command, Stdio};
 
     let mut child = Command::new(dectl_bin())
-    .args(args)
-    .current_dir(cwd)
-    .stdin(Stdio::piped())
-    .stdout(Stdio::piped())
-    .stderr(Stdio::piped())
-    .spawn()
-    .expect("Failed to spawn dectl");
+        .args(args)
+        .current_dir(cwd)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn dectl");
 
-{
-    let stdin = child.stdin.as_mut().expect("Failed to open stdin");
-    stdin.write_all(input.as_bytes()).expect("Failed to write to stdin");
-}
+    {
+        let stdin = child.stdin.as_mut().expect("Failed to open stdin");
+        stdin
+            .write_all(input.as_bytes())
+            .expect("Failed to write to stdin");
+    }
 
-child.wait_with_output().expect("Failed to read stdout")
+    child.wait_with_output().expect("Failed to read stdout")
 }

@@ -51,20 +51,25 @@ Pre-configured workflows and prompts based on project type:
 - All data stored locally
 - AGENTS.md auto-generated for AI configuration
 
+### Automated Session Management
+- `dectl session end` — single command to close a session
+- Auto-generates session summary from git log and previous session
+- Syncs git changes to progress.json (auto-marks features as done)
+- Captures uncaptured decisions and saves to memory
+- Each step is independent; failures don't stop other steps
+- `--dry-run` to preview, `--skip-git` to bypass git sync
+
 ## Installation
 
 ### From Source
 
 ```bash
 git clone https://github.com/jhonesis/dectl.git
-cd dectl/dectl
+cd dectl
 cargo build --release
 sudo install target/release/dectl /usr/local/bin/
 ```
 
-### From Release
-
-Download the binary for your platform from the [releases page](https://github.com/jhonesis/dectl/releases).
 
 ## Quick Start
 
@@ -176,6 +181,19 @@ dectl workflow run test --var coverage=--cov
 | `dectl workflow describe <name>` | Show workflow details |
 | `dectl workflow run <name> [--var k=v] [--dry-run] [--from-step N]` | Execute workflow |
 
+### Session
+
+| Command | Description |
+|---------|-------------|
+| `dectl session end` | End session: update last_session.md, sync git, capture decisions |
+| `dectl session end --dry-run` | Preview changes without writing |
+| `dectl session end --skip-git` | Skip git synchronization |
+
+When executed, `dectl session end` performs three actions:
+1. Updates `.dec/state/last_session.md` with a structured session summary
+2. Syncs git changes to `.dec/state/progress.json` (marks features as done)
+3. Captures uncaptured decisions and saves them to memory
+
 ### Shell Completions
 
 ```bash
@@ -242,6 +260,7 @@ They communicate through files and shell commands—no proprietary API.
 | No telemetry | ⚠️ | ❌ | ❌ | ✅ |
 | Project templates | ❌ | ❌ | ❌ | ✅ |
 | Auto-fill on init | ❌ | ❌ | ❌ | ✅ |
+| Session management | ❌ | ❌ | ❌ | ✅ |
 
 dectl complements any AI coding tool by providing the memory they lack.
 
@@ -293,10 +312,10 @@ auto_init = true
 
 ```bash
 cd dectl
-cargo test        # Run all tests
+cargo test        # Run all tests (69 passing)
 cargo fmt         # Format code
 cargo clippy      # Lint check
-cargo build --release  # Build binary
+cargo build --release  # Build binary (~4.5MB)
 ```
 
 ## Contributing

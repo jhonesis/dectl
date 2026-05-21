@@ -7,6 +7,7 @@ mod core;
 mod memory;
 mod project;
 mod protocol;
+mod session;
 mod workflow;
 
 #[derive(Parser)]
@@ -43,6 +44,10 @@ enum Commands {
     },
     GenerateCompletions {
         shell: String,
+    },
+    Session {
+        #[command(subcommand)]
+        command: Option<SessionCommands>,
     },
     Version,
 }
@@ -137,6 +142,17 @@ enum WorkflowCommands {
 
         #[arg(long)]
         from_step: Option<usize>,
+    },
+}
+
+#[derive(Subcommand)]
+enum SessionCommands {
+    End {
+        #[arg(long)]
+        dry_run: bool,
+
+        #[arg(long)]
+        skip_git: bool,
     },
 }
 
@@ -293,6 +309,17 @@ fn main() {
             }
             None => {
                 println!("dectl workflow - Workflow management");
+            }
+        },
+        Some(Commands::Session { command }) => match command {
+            Some(SessionCommands::End { dry_run, skip_git }) => {
+                if let Err(e) = session::end::run(*dry_run, *skip_git, cli.non_interactive, mode) {
+                    core::output::Output::print_error(&e.to_string(), None, mode);
+                    std::process::exit(1);
+                }
+            }
+            None => {
+                println!("dectl session - Session management");
             }
         },
         Some(Commands::ExecFromFile { path }) => {
