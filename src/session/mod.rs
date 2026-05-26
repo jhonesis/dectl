@@ -1,3 +1,4 @@
+pub mod agent_sync;
 pub mod config_sync;
 pub mod decision_capture;
 pub mod end;

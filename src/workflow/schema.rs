@@ -8,6 +8,7 @@ pub enum StepType {
     Prompt,
     Action,
     Write,
+    Agent,
 }
 
 impl fmt::Display for StepType {
@@ -16,6 +17,7 @@ impl fmt::Display for StepType {
             StepType::Prompt => write!(f, "prompt"),
             StepType::Action => write!(f, "action"),
             StepType::Write => write!(f, "write"),
+            StepType::Agent => write!(f, "agent"),
         }
     }
 }
@@ -44,6 +46,14 @@ pub struct Step {
     pub path: Option<String>,
     #[serde(default)]
     pub shell: Option<bool>,
+    #[serde(default)]
+    pub agent_type: Option<String>,
+    #[serde(default)]
+    pub agent_types: Option<Vec<String>>,
+    #[serde(default)]
+    pub task: Option<String>,
+    #[serde(default)]
+    pub parallel: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

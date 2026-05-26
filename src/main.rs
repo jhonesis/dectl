@@ -3,6 +3,7 @@
 use clap::{CommandFactory, Parser, Subcommand};
 use std::path::PathBuf;
 
+mod agent;
 mod core;
 mod memory;
 mod project;
@@ -48,6 +49,10 @@ enum Commands {
     Session {
         #[command(subcommand)]
         command: Option<SessionCommands>,
+    },
+    Agent {
+        #[command(subcommand)]
+        command: Option<AgentCommands>,
     },
     Version,
 }
@@ -142,6 +147,29 @@ enum WorkflowCommands {
 
         #[arg(long)]
         from_step: Option<usize>,
+    },
+}
+
+#[derive(Subcommand)]
+enum AgentCommands {
+    List,
+    Describe {
+        r#type: String,
+    },
+    Run {
+        r#type: String,
+        #[arg(long)]
+        task: Option<String>,
+        #[arg(long)]
+        file: Option<String>,
+        #[arg(long)]
+        var: Vec<String>,
+        #[arg(long)]
+        timeout: Option<u64>,
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(long)]
+        parallel: bool,
     },
 }
 
@@ -320,6 +348,47 @@ fn main() {
             }
             None => {
                 println!("dectl session - Session management");
+            }
+        },
+        Some(Commands::Agent { command }) => match command {
+            Some(AgentCommands::List) => {
+                if let Err(e) = agent::list::run(mode) {
+                    core::output::Output::print_error(&e.to_string(), None, mode);
+                    std::process::exit(1);
+                }
+            }
+            Some(AgentCommands::Describe { r#type }) => {
+                if let Err(e) = agent::describe::run(r#type, mode) {
+                    core::output::Output::print_error(&e.to_string(), None, mode);
+                    std::process::exit(1);
+                }
+            }
+            Some(AgentCommands::Run {
+                r#type,
+                task,
+                file,
+                var,
+                timeout,
+                dry_run,
+                parallel,
+            }) => {
+                if let Err(e) = agent::run::run(
+                    r#type,
+                    task.as_deref(),
+                    file.as_deref(),
+                    var,
+                    *timeout,
+                    *dry_run,
+                    *parallel,
+                    cli.non_interactive,
+                    mode,
+                ) {
+                    core::output::Output::print_error(&e.to_string(), None, mode);
+                    std::process::exit(1);
+                }
+            }
+            None => {
+                println!("dectl agent - Agent management");
             }
         },
         Some(Commands::ExecFromFile { path }) => {

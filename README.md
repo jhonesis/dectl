@@ -51,11 +51,21 @@ Pre-configured workflows and prompts based on project type:
 - All data stored locally
 - AGENTS.md auto-generated for AI configuration
 
+### Specialized Agents
+- 4 built-in agent roles: coder, reviewer, researcher, documenter
+- Execute agents individually or in parallel
+- Agents are prompt templates with reusable steps (prompt, action, write)
+- All executions are logged to memory.db for auditing
+- Custom agents via `.dec/agents/*.yaml`
+- Configurable timeout per agent (default 5 min)
+- Trust system for action steps (same as workflows)
+
 ### Automated Session Management
 - `dectl session end` — single command to close a session
 - Auto-generates session summary from git log and previous session
 - Syncs git changes to progress.json (auto-marks features as done)
 - Captures uncaptured decisions and saves to memory
+- Reports agent activity during the session (Paso 5)
 - Each step is independent; failures don't stop other steps
 - `--dry-run` to preview, `--skip-git` to bypass git sync
 
@@ -147,6 +157,25 @@ Run it:
 dectl workflow run test --var coverage=--cov
 ```
 
+### 5. Use Agents
+
+```bash
+# List available agents
+dectl agent list
+
+# Describe an agent (see its role, steps, inputs)
+dectl agent describe coder
+
+# Run an agent for a specific task
+dectl agent run coder --task "Add input validation to the API"
+
+# Run multiple agents in parallel
+dectl agent run --parallel reviewer,documenter --task "src/auth/"
+
+# Preview without side effects
+dectl agent run coder --task "test" --dry-run
+```
+
 ## Commands
 
 ### Project Management
@@ -173,6 +202,16 @@ dectl workflow run test --var coverage=--cov
 | `dectl memory delete <id> --hard` | Permanent deletion |
 | `dectl memory edit <id>` | Edit in $EDITOR |
 
+### Agents
+
+| Command | Description |
+|---------|-------------|
+| `dectl agent list` | List available agents (built-in + custom) |
+| `dectl agent describe <type>` | Show agent definition (role, steps, inputs) |
+| `dectl agent run <type> --task <desc>` | Execute an agent for a task |
+| `dectl agent run --parallel t1,t2 --task <desc>` | Run multiple agents in parallel |
+| `[--file <path>] [--var k=v] [--timeout <secs>] [--dry-run]` | Optional flags for agent run |
+
 ### Workflows
 
 | Command | Description |
@@ -185,14 +224,16 @@ dectl workflow run test --var coverage=--cov
 
 | Command | Description |
 |---------|-------------|
-| `dectl session end` | End session: update last_session.md, sync git, capture decisions |
+| `dectl session end` | End session: update last_session.md, sync git, capture decisions, report agents |
 | `dectl session end --dry-run` | Preview changes without writing |
 | `dectl session end --skip-git` | Skip git synchronization |
 
-When executed, `dectl session end` performs three actions:
+When executed, `dectl session end` performs five actions:
 1. Updates `.dec/state/last_session.md` with a structured session summary
 2. Syncs git changes to `.dec/state/progress.json` (marks features as done)
 3. Captures uncaptured decisions and saves them to memory
+4. Detects stack changes and syncs `project.toml`
+5. Reports agent activity during the session from `agent_log`
 
 ### Shell Completions
 
@@ -233,11 +274,21 @@ They communicate through files and shell commands—no proprietary API.
 ### Session Flow
 
 ```
-1. AI loads: .dec/config/project.toml + .dec/isa/project.isa.md
-2. AI reads: .dec/state/last_session.md → resumes from "Next step"
-3. AI runs: dectl project info --json → checks for warnings
-4. AI reads: .dec/prompts/system/integration.md (if exists)
-5. AI confirms: "I understand X, will work on Y"
+START
+  1. Read .dec/config/project.toml + .dec/isa/project.isa.md
+  2. Read .dec/state/last_session.md → resume from "Next step"
+  3. Run: dectl project info --json → check warnings
+  4. Read .dec/prompts/system/integration.md (if exists)
+  5. Confirm understanding to developer
+
+DURING SESSION
+  • Use dectl memory add/search for context
+  • Use dectl workflow run for repeatable tasks
+  • Use dectl agent run for specialized roles (coder, reviewer, etc.)
+
+CLOSE
+  • Run: dectl session end (auto-summarizes, syncs git, captures decisions,
+    syncs config, reports agent activity)
 ```
 
 ### Data Storage
@@ -249,6 +300,24 @@ They communicate through files and shell commands—no proprietary API.
 | Trust registry | `~/.dectl/trust.toml` |
 | Project context | `.dec/` (in project root) |
 
+## dectl Agents vs IDE AI Agents
+
+Tools like **Claude Code agents** and **opencode agents** are extensions of their conversational model — the AI uses them internally to delegate subtasks, read files, or run commands. They are tightly coupled to a specific provider and IDE.
+
+**dectl agents** solve a different problem:
+
+| Aspect | IDE Agents (Claude Code, opencode) | dectl Agents |
+|--------|-----------------------------------|--------------|
+| **What they are** | Tool-calling functions the model uses internally | Prompt templates + step recipes in YAML |
+| **Model dependency** | Tied to a specific AI provider | Model-agnostic — any model or human can follow them |
+| **Portability** | Stay inside the IDE/chat | Portable across any environment |
+| **Audit trail** | Usually none | Every execution logged to SQLite with timestamp |
+| **Customization** | Requires provider-specific config | Just drop a `.yaml` file in `.dec/agents/` |
+| **Composability** | Single-model internal calls | Can be chained in workflows (`type: agent`) |
+| **Persistence** | Session-only | Full memory integration via `dectl memory` |
+
+**They complement each other.** An IDE agent can invoke `dectl agent run coder --task "..."` as part of its workflow, benefiting from standardized prompts and auditable execution. dectl is the "what to do" (the recipe); IDE agents are the "who does it" (the executor with IDE access).
+
 ## Why dectl?
 
 | Feature | Claude Code | Gemini CLI | Ollama | dectl |
@@ -257,6 +326,7 @@ They communicate through files and shell commands—no proprietary API.
 | Local storage | ⚠️ | ❌ | ❌ | ✅ |
 | Model-agnostic | ❌ | ❌ | ❌ | ✅ |
 | Workflows | ⚠️ | ❌ | ❌ | ✅ |
+| Specialized agents | ⚠️ | ❌ | ❌ | ✅ |
 | No telemetry | ⚠️ | ❌ | ❌ | ✅ |
 | Project templates | ❌ | ❌ | ❌ | ✅ |
 | Auto-fill on init | ❌ | ❌ | ❌ | ✅ |
@@ -312,7 +382,7 @@ auto_init = true
 
 ```bash
 cd dectl
-cargo test        # Run all tests (69 passing)
+cargo test        # Run all tests (83 passing)
 cargo fmt         # Format code
 cargo clippy      # Lint check
 cargo build --release  # Build binary (~4.5MB)

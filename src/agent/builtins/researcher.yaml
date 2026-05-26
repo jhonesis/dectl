@@ -1,0 +1,13 @@
+name: researcher
+role: "Context and prior decisions investigator"
+description: Searches memory and decisions for all context relevant to a task
+steps:
+  - type: action
+    description: Search memory
+    cmd: ["dectl", "memory", "search", "{{task}}"]
+  - type: prompt
+    description: Analyze relevant decisions
+    content: |
+      Read .dec/decisions/ and find all decisions relevant to: {{task}}
+      Summarize context found in memory and decisions.
+      Run: dectl memory add "Context researched for {{task}}: [summary]"

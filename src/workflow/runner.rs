@@ -187,6 +187,131 @@ impl Runner {
                         output: None,
                     });
                 }
+                StepType::Agent => {
+                    let agent_types: Vec<String> = if step.parallel.unwrap_or(false) {
+                        step.agent_types.clone().unwrap_or_default()
+                    } else {
+                        if let Some(ref agent_type) = step.agent_type {
+                            vec![agent_type.clone()]
+                        } else {
+                            results.push(StepResult {
+                                step_num,
+                                step_type: "agent".to_string(),
+                                success: false,
+                                output: Some("Agent step missing agent_type".to_string()),
+                            });
+                            all_success = false;
+                            eprintln!(
+                                "\nStep {} failed: agent step requires agent_type or agent_types",
+                                step_num
+                            );
+                            break;
+                        }
+                    };
+
+                    if agent_types.is_empty() {
+                        results.push(StepResult {
+                            step_num,
+                            step_type: "agent".to_string(),
+                            success: false,
+                            output: Some("No agent types specified".to_string()),
+                        });
+                        all_success = false;
+                        eprintln!("\nStep {} failed: no agent types specified", step_num);
+                        break;
+                    }
+
+                    let task_raw = step.task.as_deref().unwrap_or("");
+                    let task = interpolate(task_raw, vars).context("Interpolation error")?;
+
+                    let agent_results = if step.parallel.unwrap_or(false) {
+                        crate::agent::parallel::run_parallel(
+                            &agent_types,
+                            &task,
+                            vars,
+                            None,
+                            dry_run,
+                            false,
+                            output,
+                        )
+                    } else {
+                        let agent_def = match crate::agent::loader::load_agent(&agent_types[0]) {
+                            Some((def, _)) => def,
+                            None => {
+                                let msg = format!("Agent '{}' not found", agent_types[0]);
+                                results.push(StepResult {
+                                    step_num,
+                                    step_type: "agent".to_string(),
+                                    success: false,
+                                    output: Some(msg.clone()),
+                                });
+                                all_success = false;
+                                eprintln!("\n\u{26a0}\u{fe0f}  Step {} failed. Resume with --from-step {}", step_num, step_num);
+                                break;
+                            }
+                        };
+
+                        crate::agent::runner::run_agent(
+                            &agent_def, &task, vars, None, dry_run, None, false, output,
+                        )
+                        .map(|r| vec![r])
+                    };
+
+                    match agent_results {
+                        Ok(results_list) => {
+                            let all_agent_ok = results_list.iter().all(|r| {
+                                matches!(r.status, crate::agent::schema::AgentRunStatus::Ok)
+                            });
+                            if all_agent_ok {
+                                println!("\u{2713} Agent step completed");
+                                results.push(StepResult {
+                                    step_num,
+                                    step_type: "agent".to_string(),
+                                    success: true,
+                                    output: Some(format!(
+                                        "{} agent(s) completed",
+                                        results_list.len()
+                                    )),
+                                });
+                            } else {
+                                let failed: Vec<&str> = results_list
+                                    .iter()
+                                    .filter(|r| {
+                                        !matches!(
+                                            r.status,
+                                            crate::agent::schema::AgentRunStatus::Ok
+                                        )
+                                    })
+                                    .map(|r| r.agent_type.as_str())
+                                    .collect();
+                                let msg = format!("Agent(s) failed: {}", failed.join(", "));
+                                results.push(StepResult {
+                                    step_num,
+                                    step_type: "agent".to_string(),
+                                    success: false,
+                                    output: Some(msg.clone()),
+                                });
+                                all_success = false;
+                                eprintln!("\n\u{26a0}\u{fe0f}  Step {} failed. Resume with --from-step {}", step_num, step_num);
+                                break;
+                            }
+                        }
+                        Err(e) => {
+                            results.push(StepResult {
+                                step_num,
+                                step_type: "agent".to_string(),
+                                success: false,
+                                output: Some(e.to_string()),
+                            });
+                            all_success = false;
+                            eprintln!(
+                                "\n\u{26a0}\u{fe0f}  Step {} failed. Resume with --from-step {}",
+                                step_num, step_num
+                            );
+                            break;
+                        }
+                    }
+                }
             }
 
             let _ = output;

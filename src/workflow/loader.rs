@@ -71,6 +71,15 @@ pub fn validate_workflow(workflow: &Workflow) -> Result<()> {
                     );
                 }
             }
+            crate::workflow::StepType::Agent => {
+                if step.task.is_none() {
+                    anyhow::bail!(
+                        "Step {} ('{}'): 'agent' type requires 'task' field",
+                        idx + 1,
+                        step.description
+                    );
+                }
+            }
         }
     }
 
@@ -155,6 +164,10 @@ mod tests {
                 cmd: None,
                 path: None,
                 shell: None,
+                agent_type: None,
+                agent_types: None,
+                task: None,
+                parallel: None,
             }],
         }
     }
@@ -213,6 +226,10 @@ mod tests {
             cmd: None,
             path: None,
             shell: None,
+            agent_type: None,
+            agent_types: None,
+            task: None,
+            parallel: None,
         };
         let err = validate_workflow(&workflow).unwrap_err();
         assert!(err.to_string().contains("cmd"));
@@ -228,6 +245,10 @@ mod tests {
             cmd: None,
             path: None,
             shell: None,
+            agent_type: None,
+            agent_types: None,
+            task: None,
+            parallel: None,
         };
         let err = validate_workflow(&workflow).unwrap_err();
         assert!(err.to_string().contains("path") && err.to_string().contains("content"));

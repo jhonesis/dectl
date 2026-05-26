@@ -63,6 +63,7 @@ pub struct SessionEndResult {
     pub steps: Vec<StepResult>,
     pub decisions_saved: usize,
     pub config_changes: Option<ConfigSyncResult>,
+    pub agent_sessions: usize,
 }
 
 impl SessionEndResult {
@@ -71,6 +72,7 @@ impl SessionEndResult {
             steps: Vec::new(),
             decisions_saved: 0,
             config_changes: None,
+            agent_sessions: 0,
         }
     }
 

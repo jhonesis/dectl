@@ -1,0 +1,19 @@
+name: coder
+role: "Feature implementer following project conventions"
+description: Implements code respecting the stack and conventions from .dec/
+steps:
+  - type: prompt
+    description: Load project context
+    content: |
+      You are a developer implementing features in this project.
+      Read .dec/config/project.toml for stack and conventions.
+      Read .dec/decisions/ to respect prior architectural decisions.
+      Task: {{task}}
+  - type: action
+    description: Search for relevant context in memory
+    cmd: ["dectl", "memory", "search", "{{task}}"]
+  - type: prompt
+    description: Implement
+    content: |
+      Implement the task respecting the project stack and conventions.
+      When done run: dectl memory add "Implemented: {{task}}"

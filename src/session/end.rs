@@ -1,6 +1,6 @@
 use crate::core::output::{Output, OutputMode};
 use crate::session::types::SessionEndResult;
-use crate::session::{config_sync, decision_capture, git_sync, session_summary};
+use crate::session::{agent_sync, config_sync, decision_capture, git_sync, session_summary};
 use anyhow::Result;
 
 pub fn run(dry_run: bool, skip_git: bool, _non_interactive: bool, mode: OutputMode) -> Result<()> {
@@ -126,6 +126,23 @@ pub fn run(dry_run: bool, skip_git: bool, _non_interactive: bool, mode: OutputMo
         }
     }
 
+    // Step 5: Query agent sessions
+    match agent_sync::query_agent_sessions() {
+        Ok(count) => {
+            result.agent_sessions = count;
+            if count > 0 {
+                result.add_step(
+                    "agent_sync",
+                    true,
+                    &format!("{} agent sessions this cycle", count),
+                );
+            }
+        }
+        Err(e) => {
+            result.add_step("agent_sync", false, &e.to_string());
+        }
+    }
+
     // Output results
     print_result(&result, mode);
 
@@ -164,6 +181,7 @@ fn print_result(result: &SessionEndResult, mode: OutputMode) {
             steps: Vec<StepOutput>,
             decisions_saved: usize,
             config_changes: Option<ConfigSyncOutput>,
+            agent_sessions: usize,
         }
         let config_out = result.config_changes.as_ref().map(|c| ConfigSyncOutput {
             toml_updated: c.toml_updated,
@@ -188,6 +206,7 @@ fn print_result(result: &SessionEndResult, mode: OutputMode) {
                 .collect(),
             decisions_saved: result.decisions_saved,
             config_changes: config_out,
+            agent_sessions: result.agent_sessions,
         };
         Output::print(&output, mode);
     } else {
