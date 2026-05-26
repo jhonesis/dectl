@@ -1,107 +1,32 @@
-# Quick Start — dectl
+# Quickstart — dectl
 
-> > *Get started with dectl in 5 minutes.*
-
----
-
-## Installation (2 minutes)
+## Scenario 1: Legacy project (the anchor moment)
 
 ```bash
-# Download the latest release binary
-# Or build from source:
-git clone https://github.com/jhonesis/dectl.git
-cd dectl
-cargo build --release
-sudo cp target/release/dectl /usr/local/bin/
-```
-
-Check:
-```bash
-dectl --version
-```
-
----
-
-## Project Setup (3 minutes)
-
-```bash
-cd ~/projects/my-project
-
-# Create .dec/ (hidden folder with context)
+git clone https://github.com/your/legacy-project.git
+cd legacy-project
 dectl project init --standard
-
-# Configure
-nano .dec/config/project.toml
-nano .dec/isa/project.isa.md
-
-# Check
-dectl project info
+# Open your favorite AI (Claude Code, Gemini CLI, etc.)
+# Ask: "Explain the architecture of this project"
+# The AI reads .dec/ and responds with precise context.
 ```
 
-All set! Your project now has context.
-
----
-
-## Essential Commands
+## Scenario 2: New project
 
 ```bash
-# View project status
-dectl project info
-
-# View files (respects .gitignore)
-dectl project scan
-
-# Generate context for AI
-dectl project context > context.txt
-
-# Add to memory
-dectl memory add "Decision: use PostgreSQL"
-
-# Search in memory
-dectl memory search "PostgreSQL"
-
-# List workflows
-dectl workflow list
+mkdir my-new-project && cd my-new-project
+dectl project init --standard
+# Answer the interactive questions about stack and purpose
+# Start coding. The AI already knows what you're building.
 ```
 
----
-
-## With AI (Example)
+## Scenario 3: Team collaboration
 
 ```bash
-# 1. Copy context
-dectl project context | pbcopy
+# The .dec/ is shared in git (like .editorconfig)
+git add .dec/
+git commit -m "Add .dec/ project context"
 
-# 2. Paste in Claude/ChatGPT:
-# "I'm working on [paste context]. 
-#  Need to implement auth with JWT."
-
-# 3. AI tells you what to do
-# 4. You apply the changes
+# Each member has their own personal memory
+# ~/.dectl/memory.db — never compete over context
 ```
-
----
-
-## Structure
-
-```
-my-project/
-├── .dec/           ← context of dectl (hidden)
-│   ├── config/
-│   ├── isa/
-│   └── workflows/
-├── src/            ← your code
-└── ...             ← project files
-```
-
----
-
-## Tips
-
-- `.dec/` does not interfere with your code (hidden folder)
-- the memory is global — works in all your projects
-- you don't need AI to use dectl — it works from terminal
-
----
-
-*For more details: [flow.md](./flow.md)*

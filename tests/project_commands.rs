@@ -15,6 +15,44 @@ fn run_dectl(args: &[&str], cwd: &Path) -> std::process::Output {
         .expect("Failed to execute dectl")
 }
 
+fn create_standard_dec(dec: &Path) {
+    fs::create_dir_all(dec.join("isa")).unwrap();
+    fs::create_dir_all(dec.join("config")).unwrap();
+    fs::create_dir_all(dec.join("state")).unwrap();
+    fs::create_dir_all(dec.join("prompts/system")).unwrap();
+    fs::create_dir_all(dec.join("decisions")).unwrap();
+    fs::write(
+        dec.join("isa/project.isa.md"),
+        "# My Project\nA test project",
+    )
+    .unwrap();
+    fs::write(
+        dec.join("config/project.toml"),
+        "stack = \"Rust\"\nframework = \"Axum\"\n",
+    )
+    .unwrap();
+    fs::write(
+        dec.join("state/last_session.md"),
+        "# Last Session\n\n**Fecha**: 2026-05-25\n\nDid some work.\n",
+    )
+    .unwrap();
+    fs::write(
+        dec.join("state/progress.json"),
+        "{\"completed\": 5, \"total\": 10}",
+    )
+    .unwrap();
+    fs::write(
+        dec.join("prompts/system/integration.md"),
+        "Integration prompt content",
+    )
+    .unwrap();
+    fs::write(
+        dec.join("decisions/001-db-choice.md"),
+        "# Database choice\nWe chose SQLite.\n",
+    )
+    .unwrap();
+}
+
 #[test]
 fn test_project_init_level1() {
     let tmp = TempDir::new().unwrap();
@@ -169,6 +207,152 @@ fn test_project_context_no_dec_directory() {
     assert_eq!(output.status.code().unwrap(), 1);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains(".dec") || stderr.contains("not found"));
+}
+
+#[test]
+fn test_context_proportional_budget() {
+    let tmp = TempDir::new().unwrap();
+    let dec = tmp.path().join(".dec");
+    fs::create_dir_all(dec.join("isa")).unwrap();
+    fs::create_dir_all(dec.join("config")).unwrap();
+    fs::create_dir_all(dec.join("state")).unwrap();
+    fs::create_dir_all(dec.join("prompts/system")).unwrap();
+    fs::create_dir_all(dec.join("decisions")).unwrap();
+
+    let big_content = "word pleasant orange grape banana apple ";
+    let big_file: String = big_content.repeat(50);
+    fs::write(dec.join("isa/project.isa.md"), &big_file).unwrap();
+    fs::write(dec.join("config/project.toml"), &big_file).unwrap();
+    fs::write(dec.join("state/last_session.md"), &big_file).unwrap();
+    fs::write(dec.join("state/progress.json"), &big_file).unwrap();
+    fs::write(dec.join("prompts/system/integration.md"), &big_file).unwrap();
+    fs::write(dec.join("decisions/001-test.md"), &big_file).unwrap();
+
+    let output = run_dectl(&["project", "context", "--max-tokens", "500"], tmp.path());
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let sections_present = [
+        "project.isa.md",
+        "project.toml",
+        "last_session.md",
+        "progress.json",
+        "integration.md",
+        "001-test",
+    ]
+    .iter()
+    .filter(|s| stdout.contains(*s))
+    .count();
+    assert!(
+        sections_present >= 5,
+        "Expected ≥5 sections, got {}:\n{}",
+        sections_present,
+        stdout
+    );
+}
+
+#[test]
+fn test_context_large_budget() {
+    let tmp = TempDir::new().unwrap();
+    let dec = tmp.path().join(".dec");
+    fs::create_dir_all(dec.join("isa")).unwrap();
+    let content = "hello world\n".repeat(50);
+    fs::write(dec.join("isa/project.isa.md"), &content).unwrap();
+
+    let output = run_dectl(&["project", "context", "--max-tokens", "10000"], tmp.path());
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("tokens:"));
+    assert!(stdout.contains("hello world"));
+}
+
+#[test]
+fn test_context_extreme_budget() {
+    let tmp = TempDir::new().unwrap();
+    let dec = tmp.path().join(".dec");
+    fs::create_dir_all(dec.join("isa")).unwrap();
+    fs::write(dec.join("isa/project.isa.md"), "word ".repeat(500)).unwrap();
+
+    let output = run_dectl(&["project", "context", "--max-tokens", "50"], tmp.path());
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!stdout.trim().is_empty(), "Output vacío con budget mínimo");
+}
+
+#[test]
+fn test_context_format_compact() {
+    let tmp = TempDir::new().unwrap();
+    let dec = tmp.path().join(".dec");
+    create_standard_dec(&dec);
+
+    let output = run_dectl(&["project", "context", "--format", "compact"], tmp.path());
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let lines: Vec<&str> = stdout.lines().filter(|l| !l.trim().is_empty()).collect();
+    assert!(
+        lines.len() >= 4,
+        "Expected ≥4 lines, got {}:\n{}",
+        lines.len(),
+        stdout
+    );
+    assert!(
+        stdout.contains("project:"),
+        "Missing project: in:\n{}",
+        stdout
+    );
+    assert!(stdout.contains("stack:"), "Missing stack: in:\n{}", stdout);
+}
+
+#[test]
+fn test_context_format_compact_json() {
+    let tmp = TempDir::new().unwrap();
+    let dec = tmp.path().join(".dec");
+    create_standard_dec(&dec);
+
+    let output = run_dectl(
+        &["project", "context", "--format", "compact", "--json"],
+        tmp.path(),
+    );
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).expect("Valid JSON");
+    let data = parsed.get("data").expect("data field in envelope");
+    assert!(data.get("project").is_some(), "Missing project field");
+    assert!(data.get("stack").is_some(), "Missing stack field");
+    assert!(data.get("progress").is_some(), "Missing progress field");
+}
+
+#[test]
+fn test_context_recent_changes_prioritized() {
+    let tmp = TempDir::new().unwrap();
+    let dec = tmp.path().join(".dec");
+    create_standard_dec(&dec);
+
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    fs::write(
+        dec.join("state/last_session.md"),
+        "# Last Session\n\n**Fecha**: 2026-05-26\n\nJust modified this.\n",
+    )
+    .unwrap();
+
+    let output = run_dectl(&["project", "context", "--max-tokens", "200"], tmp.path());
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Just modified this."));
+}
+
+#[test]
+fn test_context_no_session_date() {
+    let tmp = TempDir::new().unwrap();
+    let dec = tmp.path().join(".dec");
+    create_standard_dec(&dec);
+
+    fs::remove_file(dec.join("state/last_session.md")).ok();
+
+    let output = run_dectl(&["project", "context", "--max-tokens", "200"], tmp.path());
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!stdout.trim().is_empty());
 }
 
 #[test]

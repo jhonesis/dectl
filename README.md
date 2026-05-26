@@ -2,6 +2,28 @@
 
 > A model-agnostic developer life OS that gives any AI coding environment persistent memory, executable workflows, and structured project context.
 
+> **The anchor moment**: Open a legacy project you haven't touched in months,
+> run `dectl project init --standard`, open your AI, and the model already
+> understands the project's architecture. No explanations. No setup.
+
+```bash
+# 1. Install dectl
+cargo install dectl
+
+# 2. Enter any project
+cd your-legacy-project
+
+# 3. Create automatic context
+dectl project init --standard
+# → Detects stack, analyzes code, generates .dec/
+
+# 4. Open your AI and ask about the project
+# "How is this project structured?"
+# → The model already has all the context. It responds without you explaining anything.
+```
+
+*No external APIs. No telemetry. No manual configuration.*
+
 ## The Problem
 
 Every AI coding assistant (Claude Code, Gemini CLI, Qwen CLI, Ollama, or a human in a terminal) starts from scratch in each session. They forget:
