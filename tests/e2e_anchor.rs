@@ -119,8 +119,23 @@ fn test_anchor_moment_full_flow() {
     let isa_content = fs::read_to_string(dec.join("isa/project.isa.md")).unwrap_or_default();
     assert!(
         isa_content.len() > 50,
-        "isa.md should have substantial content:\n{}",
+        "isa.md should have template content:\n{}",
         isa_content
+    );
+
+    let auto_fill_path = dec.join("prompts/tasks/auto-fill.md");
+    assert!(
+        auto_fill_path.exists(),
+        "auto-fill.md prompt should be created"
+    );
+    let auto_fill_content = fs::read_to_string(&auto_fill_path).unwrap_or_default();
+    assert!(
+        !auto_fill_content.trim().is_empty(),
+        "auto-fill.md should not be empty"
+    );
+    assert!(
+        auto_fill_content.contains("Auto-Fill"),
+        "auto-fill.md should contain title"
     );
 
     let context_output = run_dectl(

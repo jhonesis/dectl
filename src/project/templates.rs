@@ -703,15 +703,89 @@ dectl exec-from-file <path>                   # execute commands from a file
 
 ## If the Project Is New (First Session)
 
-If `last_session.md` does not exist or `project.isa.md` is empty:
+If `project.toml` has placeholder values (e.g. "project-name") or `project.isa.md`
+has placeholder content (e.g. "[Project Name]"):
 
-1. Ask the user: what are we building, what is the stack, what is the scope.
-2. Fill `.dec/config/project.toml` with the answers.
-3. Fill `.dec/isa/project.isa.md` with vision and objectives.
-4. Run `dectl memory add "Project initialized: [name] — [one line description]"`.
+1. **Read `.dec/prompts/tasks/auto-fill.md`** for detailed fill instructions.
+2. **Auto-detect the stack**: Read the project's source code, config files,
+   dependencies, and imports to determine the full tech stack. Be thorough:
+   languages, frameworks, databases, tools, testing frameworks, CI/CD.
+3. **Analyze the project**: Read README.md, docs/, specs/, and any existing
+   documentation to extract project name, description, vision, and objectives.
+4. **Fill `.dec/config/project.toml`**: Update `[project].description`,
+   `[stack].frameworks`, `[stack].databases`, `[stack].tools`. Never remove
+   existing values — only add what is missing.
+5. **Fill `.dec/isa/project.isa.md`**: Complete Vision, Main Objective, Scope,
+   Non-Goals, Tech Stack, Known Constraints, and Main Risks.
+6. **Log it**: Run `dectl memory add "Project initialized: [name] — [one-liner]"`.
+7. **Update progress**: Set `updated_at` in `.dec/state/progress.json`.
 
-Only after this is done, proceed with the requested task.
+Do NOT ask the user for what you can determine by reading the project code.
+Only ask if something is genuinely ambiguous or requires human judgment.
 "#;
+
+    const AUTO_FILL_TASK: &str = r#"# Task: Auto-Fill Project Context
+
+## Why this file exists
+This project was initialized with `dectl project init`. The `.dec/` structure
+is ready but some files contain placeholder values that need to be filled based
+on the actual project code and documentation.
+
+## Your task
+Read this entire file. Then fill the missing context by analyzing the project:
+
+### Step 1 — Detect the stack
+Read the project source code, config files, and dependencies:
+- Languages: detect from source files and config (Cargo.toml, package.json, go.mod, etc.)
+- Frameworks: detect from imports, dependencies, and code patterns
+- Databases: detect from ORM imports, migration files, connection strings
+- Tools: detect from config files (Docker, CI/CD, linters, formatters, etc.)
+
+### Step 2 — Analyze project context
+Read documentation files for project intent:
+- README.md → project name, description, what it does
+- docs/ → architecture, design decisions, vision
+- specs/ → requirements, acceptance criteria
+- Other .md files → additional context
+
+### Step 3 — Fill .dec/config/project.toml
+Set:
+- [project].description → one-sentence summary
+- [stack].frameworks → detected from code (not just config files)
+- [stack].databases → detected from imports/config
+- [stack].tools → detected from config files
+
+Do NOT modify [project].name, [project].type, [stack].languages,
+[dec], or [conventions] — those are already set.
+
+### Step 4 — Fill .dec/isa/project.isa.md
+Complete:
+- Vision → one sentence: what the project is and for whom
+- Main Objective → what problem it solves and success metrics
+- Scope → concrete list of what the project builds
+- Non-Goals → what it explicitly does NOT do
+- Tech Stack → main technologies (summary from project.toml)
+- Known Constraints → technical, time, or resource limitations
+- Main Risks → the 2-3 most important risks
+
+### Step 5 — Log the initialization
+```bash
+dectl memory add "Project initialized: [name] — [one-line description]"
+```
+
+## What NOT to do
+- Do NOT remove existing data from project.toml or project.isa.md
+- Do NOT guess frameworks if unsure — leave as empty array or ask
+- Do NOT modify files outside of .dec/ unless explicitly requested
+- Do NOT run session end — the project is not ready for that yet
+
+## Verification
+After filling, run `dectl project info --json` to verify the setup is valid.
+"#;
+
+    pub fn auto_fill_task() -> &'static str {
+        Self::AUTO_FILL_TASK
+    }
 
     pub fn workflows_for_type(project_type: ProjectType) -> Vec<(&'static str, &'static str)> {
         match project_type {

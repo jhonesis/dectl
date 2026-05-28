@@ -153,6 +153,24 @@ pub fn detect_stack() -> DetectedStack {
     if Path::new("requirements.txt").exists() {
         stack.project_type = "pip".to_string();
         stack.languages.push("python".to_string());
+        if let Some(content) = read_file_prefix("requirements.txt", 2000) {
+            let lower = content.to_lowercase();
+            if lower.contains("fastapi") {
+                stack.frameworks.push("fastapi".to_string());
+            }
+            if lower.contains("django") {
+                stack.frameworks.push("django".to_string());
+            }
+            if lower.contains("flask") {
+                stack.frameworks.push("flask".to_string());
+            }
+            if lower.contains("aiortc") {
+                stack.frameworks.push("aiortc".to_string());
+            }
+            if lower.contains("uvicorn") {
+                stack.tools.push("uvicorn".to_string());
+            }
+        }
     }
 
     if Path::new("pyproject.toml").exists() {
@@ -214,42 +232,27 @@ pub fn detect_stack() -> DetectedStack {
 pub fn scan_docs_for_context() -> OptionalContext {
     let mut ctx = OptionalContext::default();
 
-    if let Some((name, desc)) =
-        read_readme_context("README.md").or_else(|| read_readme_context("README.MD"))
-    {
-        ctx.name = ctx.name.or(name);
-        ctx.description = ctx.description.or(desc);
-    }
-
-    if let Some((name, desc)) =
-        read_readme_context("docs/README.md").or_else(|| read_readme_context("docs/README.MD"))
-    {
-        ctx.name = ctx.name.or(name);
-        ctx.description = ctx.description.or(desc);
-    }
-
-    for entry in glob_readme_entries().unwrap_or_default() {
-        let first_lines = read_file_lines(&entry, 20);
-        let keywords = extract_keywords_from_lines(&first_lines);
-
-        if keywords.vision.is_some() && ctx.vision.is_none() {
-            ctx.vision = keywords.vision;
-        }
-        if keywords.objectives.is_some() && ctx.objectives.is_none() {
-            ctx.objectives = keywords.objectives;
-        }
-    }
-
-    if let Some(spec_content) = read_file_prefix("SPEC.md", 500)
-        .or_else(|| read_file_prefix("spec.md", 500))
-        .or_else(|| read_file_prefix("specs/master/spec.md", 500))
-    {
-        if ctx.description.is_none() {
-            ctx.description = extract_description_from_spec(&spec_content);
+    // Minimal: only try to read project name from README title as basic fallback
+    if let Some(content) = read_file_prefix("README.md", 200) {
+        for line in content.lines() {
+            if let Some(stripped) = line.trim().strip_prefix("# ") {
+                ctx.name = Some(stripped.trim().to_string());
+                break;
+            }
         }
     }
 
     ctx
+}
+
+pub fn generate_auto_fill_prompt(project_dir: &Path) -> Result<()> {
+    use crate::project::templates::Templates;
+
+    let prompt_dir = project_dir.join(".dec/prompts/tasks");
+    fs::create_dir_all(&prompt_dir)?;
+    let prompt_path = prompt_dir.join("auto-fill.md");
+    fs::write(&prompt_path, Templates::auto_fill_task())?;
+    Ok(())
 }
 
 pub fn fill_project_files(
@@ -263,13 +266,110 @@ pub fn fill_project_files(
         .or_else(|| context.name.clone())
         .unwrap_or_else(|| {
             project_dir
-                .file_name()
-                .map(|s| s.to_string_lossy().to_string())
+                .canonicalize()
+                .ok()
+                .and_then(|p| p.file_name().map(|s| s.to_string_lossy().to_string()))
+                .or_else(|| {
+                    std::env::current_dir()
+                        .ok()
+                        .and_then(|p| p.file_name().map(|s| s.to_string_lossy().to_string()))
+                })
                 .unwrap_or_else(|| "mi-proyecto".to_string())
         });
 
     update_project_toml(project_dir, &project_name, stack)?;
-    update_project_isa(project_dir, &project_name, context)?;
+    update_project_isa(project_dir, &project_name)?;
+    generate_auto_fill_prompt(project_dir)?;
+
+    Ok(())
+}
+
+fn update_project_toml(project_dir: &Path, name: &str, stack: &DetectedStack) -> Result<()> {
+    use super::templates::Templates;
+
+    let toml_path = project_dir.join(".dec/config/project.toml");
+
+    let content = if toml_path.exists() {
+        fs::read_to_string(&toml_path)?
+    } else {
+        Templates::project_toml_l1().to_string()
+    };
+
+    let mut doc: toml::map::Map<String, toml::Value> =
+        toml::from_str(&content).unwrap_or_else(|_| toml::map::Map::new());
+
+    if let Some(project) = doc.get_mut("project") {
+        if let Some(map) = project.as_table_mut() {
+            if let Some(n) = map.get_mut("name") {
+                *n = toml::Value::String(name.to_string());
+            }
+            if let Some(t) = map.get_mut("type") {
+                *t = toml::Value::String(stack.project_type.clone());
+            }
+        }
+    } else {
+        let mut project_map = toml::map::Map::new();
+        project_map.insert("name".to_string(), toml::Value::String(name.to_string()));
+        project_map.insert(
+            "type".to_string(),
+            toml::Value::String(stack.project_type.clone()),
+        );
+        doc.insert("project".to_string(), toml::Value::Table(project_map));
+    }
+
+    // Merge languages into existing stack, preserving frameworks, tools, databases
+    if !stack.languages.is_empty() {
+        let existing_languages: Vec<String> = doc
+            .get("stack")
+            .and_then(|s| s.get("languages"))
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let mut merged: Vec<String> = existing_languages.clone();
+        for lang in &stack.languages {
+            if !merged.contains(lang) {
+                merged.push(lang.clone());
+            }
+        }
+        merged.sort();
+
+        let stack_entry = doc
+            .entry("stack".to_string())
+            .or_insert_with(|| toml::Value::Table(toml::map::Map::new()));
+
+        if let Some(stack_table) = stack_entry.as_table_mut() {
+            stack_table.insert(
+                "languages".to_string(),
+                toml::Value::Array(merged.into_iter().map(toml::Value::String).collect()),
+            );
+        }
+    }
+
+    let new_content = toml::to_string_pretty(&doc)?;
+    fs::write(&toml_path, new_content)?;
+
+    Ok(())
+}
+
+fn update_project_isa(project_dir: &Path, name: &str) -> Result<()> {
+    use super::templates::Templates;
+
+    let isa_path = project_dir.join(".dec/isa/project.isa.md");
+
+    let template = if isa_path.exists() {
+        fs::read_to_string(&isa_path)?
+    } else {
+        Templates::project_isa().to_string()
+    };
+
+    let new_content = template.replace("[Project Name]", name);
+
+    fs::write(&isa_path, new_content)?;
 
     Ok(())
 }
@@ -308,254 +408,4 @@ fn read_file_prefix(path: &str, max_chars: usize) -> Option<String> {
     } else {
         Some(content.chars().take(max_chars).collect())
     }
-}
-
-fn read_file_lines(path: &str, max_lines: usize) -> Vec<String> {
-    let full_path = Path::new(path);
-    if !full_path.exists() {
-        return Vec::new();
-    }
-
-    let content = fs::read_to_string(full_path).ok();
-    let content = match content {
-        Some(c) => c,
-        None => return Vec::new(),
-    };
-
-    content
-        .lines()
-        .take(max_lines)
-        .map(|s| s.to_string())
-        .collect()
-}
-
-fn glob_readme_entries() -> Option<Vec<String>> {
-    let walker = WalkBuilder::new(Path::new("docs"))
-        .max_depth(Some(2))
-        .hidden(false)
-        .build();
-
-    let mut entries = Vec::new();
-    for entry in walker.flatten() {
-        let path = entry.path();
-        let name = path.file_name()?.to_string_lossy();
-        if name.ends_with(".md") && name.to_lowercase().starts_with("readme") {
-            entries.push(path.to_string_lossy().to_string());
-        }
-    }
-    Some(entries)
-}
-
-fn read_readme_context(path: &str) -> Option<(Option<String>, Option<String>)> {
-    let full_path = Path::new(path);
-    if !full_path.exists() {
-        return None;
-    }
-
-    let content = fs::read_to_string(full_path).ok()?;
-    let content = content.chars().take(500).collect::<String>();
-
-    let mut name = None;
-    let mut description = None;
-
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if let Some(stripped) = trimmed.strip_prefix("# ") {
-            name = Some(stripped.trim().to_string());
-            break;
-        }
-    }
-
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if !trimmed.is_empty() && !trimmed.starts_with('#') && !trimmed.starts_with("```") {
-            description = Some(trimmed.to_string());
-            break;
-        }
-    }
-
-    Some((name, description))
-}
-
-fn extract_keywords_from_lines(lines: &[String]) -> OptionalContext {
-    let mut ctx = OptionalContext::default();
-    let content = lines.join(" ");
-
-    let vision_keywords = ["vision", "visi", "propósito", "qué es"];
-    let objectives_keywords = ["objective", "objetivo", "meta", "meta"];
-
-    for keyword in vision_keywords {
-        if content.to_lowercase().contains(keyword) {
-            ctx.vision = lines
-                .iter()
-                .find(|l| l.to_lowercase().contains(keyword))
-                .map(|s| s.trim().to_string());
-            break;
-        }
-    }
-
-    for keyword in objectives_keywords {
-        if content.to_lowercase().contains(keyword) {
-            ctx.objectives = lines
-                .iter()
-                .find(|l| l.to_lowercase().contains(keyword))
-                .map(|s| s.trim().to_string());
-            break;
-        }
-    }
-
-    ctx
-}
-
-fn extract_description_from_spec(content: &str) -> Option<String> {
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if !trimmed.is_empty()
-            && !trimmed.starts_with('#')
-            && !trimmed.starts_with("```")
-            && trimmed.len() > 20
-        {
-            return Some(trimmed.to_string());
-        }
-    }
-    None
-}
-
-fn update_project_toml(project_dir: &Path, name: &str, stack: &DetectedStack) -> Result<()> {
-    use super::templates::Templates;
-
-    let toml_path = project_dir.join(".dec/config/project.toml");
-
-    let content = if toml_path.exists() {
-        fs::read_to_string(&toml_path)?
-    } else {
-        Templates::project_toml_l1().to_string()
-    };
-
-    let mut doc: toml::map::Map<String, toml::Value> =
-        toml::from_str(&content).unwrap_or_else(|_| toml::map::Map::new());
-
-    if let Some(project) = doc.get_mut("project") {
-        if let Some(map) = project.as_table_mut() {
-            if let Some(n) = map.get_mut("name") {
-                *n = toml::Value::String(name.to_string());
-            }
-            if let Some(t) = map.get_mut("type") {
-                *t = toml::Value::String(stack.project_type.clone());
-            }
-        }
-    } else {
-        let mut project_map = toml::map::Map::new();
-        project_map.insert("name".to_string(), toml::Value::String(name.to_string()));
-        project_map.insert(
-            "type".to_string(),
-            toml::Value::String(stack.project_type.clone()),
-        );
-        doc.insert("project".to_string(), toml::Value::Table(project_map));
-    }
-
-    if !stack.languages.is_empty() || !stack.frameworks.is_empty() || !stack.tools.is_empty() {
-        let mut stack_map = toml::map::Map::new();
-
-        if !stack.languages.is_empty() {
-            stack_map.insert(
-                "languages".to_string(),
-                toml::Value::Array(
-                    stack
-                        .languages
-                        .iter()
-                        .map(|s| toml::Value::String(s.clone()))
-                        .collect(),
-                ),
-            );
-        }
-
-        if !stack.frameworks.is_empty() {
-            stack_map.insert(
-                "frameworks".to_string(),
-                toml::Value::Array(
-                    stack
-                        .frameworks
-                        .iter()
-                        .map(|s| toml::Value::String(s.clone()))
-                        .collect(),
-                ),
-            );
-        }
-
-        if !stack.tools.is_empty() {
-            stack_map.insert(
-                "tools".to_string(),
-                toml::Value::Array(
-                    stack
-                        .tools
-                        .iter()
-                        .map(|s| toml::Value::String(s.clone()))
-                        .collect(),
-                ),
-            );
-        }
-
-        doc.insert("stack".to_string(), toml::Value::Table(stack_map));
-    }
-
-    let new_content = toml::to_string_pretty(&doc)?;
-    fs::write(&toml_path, new_content)?;
-
-    Ok(())
-}
-
-fn update_project_isa(project_dir: &Path, name: &str, context: &OptionalContext) -> Result<()> {
-    use super::templates::Templates;
-
-    let isa_path = project_dir.join(".dec/isa/project.isa.md");
-
-    let template = if isa_path.exists() {
-        fs::read_to_string(&isa_path)?
-    } else {
-        Templates::project_isa().to_string()
-    };
-
-    let new_content = if context.vision.is_some() || context.objectives.is_some() {
-        let mut content = template.replace("[Nombre del Proyecto]", name);
-
-        if let Some(ref vision) = context.vision {
-            content = fill_section(&content, "## Visión", vision);
-        }
-
-        if let Some(ref objectives) = context.objectives {
-            content = fill_section(&content, "## Objetivo Principal", objectives);
-        }
-
-        content
-    } else {
-        template.replace("[Nombre del Proyecto]", name)
-    };
-
-    fs::write(&isa_path, new_content)?;
-
-    Ok(())
-}
-
-fn fill_section(content: &str, section_header: &str, value: &str) -> String {
-    let mut result = content.to_string();
-
-    if let Some(pos) = result.find(section_header) {
-        let after_header = &result[pos..];
-        if let Some(next_newline) = after_header[1..].find('\n') {
-            let start = pos + 1 + next_newline;
-            let after = &result[start..];
-
-            let replacement = if after.trim().starts_with("<!--") || after.trim().is_empty() {
-                format!(" {}", value)
-            } else {
-                let indent = " ".repeat(section_header.len() - 3);
-                format!("\n{}\n{}", indent, value)
-            };
-
-            result = format!("{}{}", &result[..start], replacement);
-        }
-    }
-
-    result
 }

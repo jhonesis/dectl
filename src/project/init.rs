@@ -55,11 +55,13 @@ pub fn run(level: InitLevel, project_type: ProjectType, _interactive: bool) -> R
             println!("Empty project detected. Use interactive mode to fill files automatically.");
         }
     } else {
-        println!("Detecting project context...");
+        println!("Detecting project languages...");
         let stack = detect_stack();
         let context = scan_docs_for_context();
         fill_project_files(&stack, &context, Path::new("."))?;
-        println!("Auto-filled .dec/config/project.toml and .dec/isa/project.isa.md");
+        println!("✓ Basic context written to project.toml");
+        println!("→ Created .dec/prompts/tasks/auto-fill.md for AI-assisted setup");
+        println!("→ On first session, the AI will complete project.toml and project.isa.md");
     }
 
     print_next_steps(level, project_type);
@@ -185,8 +187,8 @@ fn print_next_steps(level: InitLevel, project_type: ProjectType) {
         Templates::files_for_level(level).len()
     );
     println!("\nNext steps:");
-    println!("  1. Edit .dec/config/project.toml with your project details");
-    println!("  2. Edit .dec/isa/project.isa.md to define your vision");
-    println!("  3. Run 'dectl project info' to verify the setup");
-    println!("  4. AGENTS.md was created in the project root — point your AI tool to it");
+    println!("  1. Open the project with your AI tool (Claude Code, opencode, etc.)");
+    println!("  2. The AI will read .dec/prompts/tasks/auto-fill.md and auto-fill the context");
+    println!("  3. Run 'dectl project info --json' to verify the setup");
+    println!("  4. AGENTS.md was created in the project root — the AI reads it automatically");
 }
