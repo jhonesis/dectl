@@ -9,6 +9,7 @@ mod memory;
 mod project;
 mod protocol;
 mod session;
+mod spec;
 mod workflow;
 
 #[derive(Parser)]
@@ -53,6 +54,10 @@ enum Commands {
     Agent {
         #[command(subcommand)]
         command: Option<AgentCommands>,
+    },
+    Spec {
+        #[command(subcommand)]
+        command: Option<SpecCommands>,
     },
     Version,
 }
@@ -171,6 +176,11 @@ enum AgentCommands {
         #[arg(long)]
         parallel: bool,
     },
+}
+
+#[derive(Subcommand)]
+enum SpecCommands {
+    Init,
 }
 
 #[derive(Subcommand)]
@@ -389,6 +399,17 @@ fn main() {
             }
             None => {
                 println!("dectl agent - Agent management");
+            }
+        },
+        Some(Commands::Spec { command }) => match command {
+            Some(SpecCommands::Init) => {
+                if let Err(e) = spec::init::run(cli.json, cli.non_interactive) {
+                    core::output::Output::print_error(&e.to_string(), None, mode);
+                    std::process::exit(1);
+                }
+            }
+            None => {
+                core::output::Output::print_success("dectl spec - Spec-Driven Development", mode);
             }
         },
         Some(Commands::ExecFromFile { path }) => {

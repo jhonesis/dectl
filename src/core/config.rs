@@ -94,6 +94,14 @@ pub struct ProjectConfig {
     pub stack: StackDetails,
     #[serde(default)]
     pub conventions: ProjectConventions,
+    #[serde(default)]
+    pub specs: SpecsConfig,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct SpecsConfig {
+    #[serde(default)]
+    pub dir: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

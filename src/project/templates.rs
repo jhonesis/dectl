@@ -79,6 +79,9 @@ impl Templates {
             ),
             (".dec/state/progress.json", Self::PROGRESS_JSON),
             (".dec/state/last_session.md", Self::LAST_SESSION),
+            (".dec/sdd/SKILL.md", Self::SDD_SKILL),
+            (".dec/sdd/references/templates.md", Self::SDD_TEMPLATES),
+            (".dec/sdd/references/examples.md", Self::SDD_EXAMPLES),
         ]);
         files
     }
@@ -412,6 +415,10 @@ Usa agentes cuando la tarea sea autónoma y especializada. El modelo principal m
 **Decisions made**: —
 **Recommended next step**: Complete project initialization in .dec/isa/project.isa.md
 "#;
+
+    const SDD_SKILL: &str = include_str!("../../../sdd/SKILL.md");
+    const SDD_TEMPLATES: &str = include_str!("../../../sdd/references/templates.md");
+    const SDD_EXAMPLES: &str = include_str!("../../../sdd/references/examples.md");
 
     const ARCHITECTURE_ISA: &str = r#"# ISA: Architecture — [Project Name]
 > **For the model**: Read this document before proposing architectural changes.
