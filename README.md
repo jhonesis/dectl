@@ -46,8 +46,11 @@ Every AI coding assistant (Claude Code, Gemini CLI, Qwen CLI, Ollama, or a human
 ### Executable Workflows
 - Define reusable workflows in YAML
 - Variable interpolation: `{{variable}}`
-- Step types: `prompt`, `action`, `write`
+- Step types: `prompt`, `action`, `write`, `agent`
+- `run_always: true` — steps that execute even if previous steps fail
+- `--auto` flag to skip trust confirmation prompts
 - Trust system for security (approves action steps per-project)
+- `--from-step N` to resume workflows after fixing failures
 
 ### Project Context with Auto-fill
 - Automatic stack detection (Rust, Node.js, Go, Python, Java, etc.)
@@ -76,15 +79,50 @@ Pre-configured workflows and prompts based on project type:
 ### Specialized Agents (Pipeline)
 - 4 built-in agent roles: **researcher → coder → reviewer → documenter**
 - Agents are **executable pipelines** — they run real commands (`action`), write files (`write`), and generate prompts (`prompt`)
-- One command starts the full workflow: `dectl agent run researcher --task "T0XX: desc" --var task_id=T0XX`
-- The researcher scans the project, searches memory, and saves context to `.dec/agent-output/`
-- The coder searches memory for relevant context before implementation
-- The reviewer compiles the project (`[build] command` in project.toml), runs `git diff`, and generates a review report
-- The documenter persists progress to memory and updates state files
 - All agent artifacts are saved to `.dec/agent-output/{{task_id}}-*` for cross-session persistence
 - Custom agents via `.dec/agents/*.yaml` (override builtins)
 - Configurable timeout per agent (default 5 min)
 - Trust system for action steps (same as workflows)
+- `dectl agent trust <type> [--project]` — trust an agent without running it (for CI/headless)
+
+### Executable Task Pipeline (Workflow)
+
+The `execute-task` workflow (auto-created with `dectl project init --standard`) orchestrates the full SDD cycle in one command:
+
+```bash
+dectl workflow run execute_task --var task_id=T001 --var description="Add user auth"
+```
+
+**Pipeline steps:**
+
+| Step | Type | Description |
+|------|------|-------------|
+| 1 | `agent: researcher` | Scans project, searches memory, saves context to `.dec/agent-output/` |
+| 2 | `agent: coder` | Prepares implementation context |
+| 3 | `prompt` | **Pause** — the AI model implements the code manually using its editing tools |
+| 4 | `agent: reviewer` | Builds project (`[build] command`), runs `git diff`, generates review report |
+| 5 | `agent: documenter` | Saves task decision to memory (runs **even if step 4 fails** via `run_always: true`) |
+| 6 | `action` | Marks task as completed in memory |
+
+**Why this saves tokens and keeps the model focused:**
+
+The pipeline delegates all mechanical work to dectl (scans, builds, git operations, memory writes) so the AI model only spends tokens on what requires intelligence — understanding context and writing code. Without it, the model would waste tokens on:
+- Scanning file trees and searching memory (done by researcher)
+- Remembering past decisions (read from files instead of prompt history)
+- Compiling and verifying mentally (done by reviewer via real commands)
+- Formatting and saving documentation (done by documenter)
+
+Each agent ends with a **next-step hint** guiding the model to the next command:
+```
+→ Next in pipeline: dectl agent run coder --task T001 --var task_id=T001
+→ After implementing, run: dectl agent run reviewer --task T001 --var task_id=T001
+→ Task cycle complete. Log it: dectl memory add 'Task T001 completed' --tags task,sdd
+```
+
+Use `--auto` to skip trust confirmation prompts (once agents are trusted):
+```bash
+dectl workflow run execute_task --var task_id=T001 --var description="test" --auto
+```
 
 ### Automated Session Management
 - `dectl session end` — single command to close a session
@@ -190,16 +228,28 @@ Run it:
 dectl workflow run test --var coverage=--cov
 ```
 
-### 5. Use Agents (Pipeline)
+### 5. Use the Task Pipeline (Recommended)
 
-The built-in agents form an **end-to-end pipeline**: `researcher → coder → reviewer → documenter`.
-Run a single agent to start the chain — the model reads the output and invokes the next agent automatically.
+The fastest way to execute a full SDD task cycle is with the `execute-task` workflow
+(auto-created with `dectl project init --standard`):
 
 ```bash
-# Full pipeline from research to documentation (single command)
-dectl agent run researcher --task "T011: Implement Telegram notifications" --var task_id=T011
+# One command: research → code context → [you implement] → review → document → close
+dectl workflow run execute_task --var task_id=T011 --var description="Implement Telegram notifications"
 
-# Or run individual agents
+# After implementing the code at the prompt step, resume with:
+dectl workflow run execute_task --var task_id=T011 --var description="Implement Telegram notifications" --from-step 4
+
+# Skip trust prompts (when already trusted):
+dectl workflow run execute_task --var task_id=T011 --var description="test" --auto
+```
+
+The documenter step always runs (`run_always: true`), so even if the build fails,
+the attempted task is recorded in memory for traceability.
+
+### 6. Or Run Individual Agents
+
+```bash
 dectl agent list                                        # List available agents
 dectl agent describe coder                              # Describe an agent
 dectl agent run coder --task "Add input validation"     # Run a single agent
@@ -248,6 +298,7 @@ Agent artifacts are written to `.dec/agent-output/{{task_id}}-*` and persist bet
 |---------|-------------|
 | `dectl agent list` | List available agents (built-in + custom) |
 | `dectl agent describe <type>` | Show agent definition (role, steps, inputs) |
+| `dectl agent trust <type> [--project <path>]` | Trust an agent for a project without running it |
 | `dectl agent run researcher --task <desc> --var task_id=<id>` | Start full research→review→document pipeline |
 | `dectl agent run <type> --task <desc>` | Execute a single agent for a task |
 | `dectl agent run --parallel t1,t2 --task <desc>` | Run multiple agents in parallel |
@@ -261,7 +312,8 @@ Pipeline: `researcher` saves context to `.dec/agent-output/`, chains to `coder` 
 |---------|-------------|
 | `dectl workflow list` | List all workflows |
 | `dectl workflow describe <name>` | Show workflow details |
-| `dectl workflow run <name> [--var k=v] [--dry-run] [--from-step N]` | Execute workflow |
+| `dectl workflow run <name> [--var k=v] [--dry-run] [--from-step N] [--auto]` | Execute workflow (`--auto` skips trust prompts) |
+| Steps with `run_always: true` execute even if previous steps fail (e.g. documenter after failed build) |
 
 ### Session
 
@@ -389,10 +441,14 @@ The `[build]` section is used by the reviewer agent to compile your project and 
 
 ## Security
 
-- Action steps in workflows require explicit trust
+- Action steps in workflows and agents require explicit trust
 - Trust is granted per-project via `~/.dectl/trust.toml`
-- First run with action steps prompts for confirmation
-- Use `--non-interactive` to skip prompts in CI/CD
+- Three ways to trust:
+  - **Interactive**: Run the agent — it prompts "Do you trust this agent? (y/N)"
+  - **Explicit**: `dectl agent trust <type> --project .` — trust without executing
+  - **Automatic**: `--auto` flag skips trust checks (for trusted pipelines)
+- Paths are canonicalized (`canonicalize()`) to prevent duplicate entries from relative vs absolute paths
+- Use `--non-interactive` to fail with a helpful suggestion instead of prompting in CI/CD
 
 ## Requirements
 
@@ -403,7 +459,7 @@ The `[build]` section is used by the reviewer agent to compile your project and 
 
 ```bash
 cd dectl
-cargo test        # Run all tests (102 passing)
+cargo test        # Run all tests (111 passing)
 cargo fmt         # Format code
 cargo clippy      # Lint check
 cargo build --release  # Build binary (~4.5MB)

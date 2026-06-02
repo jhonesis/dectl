@@ -16,6 +16,7 @@ pub fn run_agent(
     timeout_secs: Option<u64>,
     non_interactive: bool,
     mode: &crate::core::output::OutputMode,
+    auto: bool,
 ) -> Result<AgentResult> {
     let agent_def = agent_def.clone();
     let agent_name = agent_def.name.clone();
@@ -36,6 +37,7 @@ pub fn run_agent(
             file_context.as_deref(),
             dry_run,
             non_interactive,
+            auto,
             &mode,
         );
         let _ = tx.send(result);
@@ -71,6 +73,7 @@ pub fn run_agent(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn execute_agent_inner(
     agent_def: &AgentDef,
     task: &str,
@@ -78,6 +81,7 @@ fn execute_agent_inner(
     file_context: Option<&str>,
     dry_run: bool,
     non_interactive: bool,
+    auto: bool,
     mode: &crate::core::output::OutputMode,
 ) -> Result<AgentResult> {
     let start = std::time::Instant::now();
@@ -102,8 +106,9 @@ fn execute_agent_inner(
         .steps
         .iter()
         .any(|s| s.step_type == StepType::Action);
-    if has_action && !dry_run {
+    if has_action && !dry_run && !auto {
         let project_path = std::env::current_dir()
+            .and_then(|p| std::fs::canonicalize(&p))
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_default();
         let trust_decision = crate::workflow::trust::check_trust(
@@ -115,9 +120,10 @@ fn execute_agent_inner(
         match trust_decision {
             crate::workflow::trust::TrustDecision::RequiresConfirmation => {
                 anyhow::bail!(
-                    "Agent '{}' contains action steps that are not trusted.\n\
-                     Trust this agent for this project? Edit ~/.dectl/trust.toml manually.",
-                    agent_def.name
+                    "Agent '{}' is not trusted for this project.\n\
+                     Run without --non-interactive to trust interactively, or use:\n\
+                     dectl agent trust {} --project .",
+                    agent_def.name, agent_def.name
                 );
             }
             crate::workflow::trust::TrustDecision::AskUser => {
@@ -157,7 +163,7 @@ fn execute_agent_inner(
     let mut merged = all_vars.clone();
     merged.extend(resolved);
 
-    let execution_result = Runner::execute(&workflow, &mut merged, dry_run, None, mode)?;
+    let execution_result = Runner::execute(&workflow, &mut merged, dry_run, None, auto, mode)?;
     let duration_ms = start.elapsed().as_millis() as i64;
 
     let error_msg_owned: Option<String> = if !execution_result.success {

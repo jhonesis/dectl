@@ -9,6 +9,7 @@ pub fn run(
     var: Vec<String>,
     dry_run: bool,
     from_step: Option<usize>,
+    auto: bool,
     non_interactive: bool,
     mode: OutputMode,
 ) -> Result<()> {
@@ -22,52 +23,57 @@ pub fn run(
     }
 
     let workflow = crate::workflow::loader::load_workflow(&workflow_path)?;
-    let project_path = std::env::current_dir()?.to_string_lossy().to_string();
+    let project_path = std::env::current_dir()
+        .and_then(|p| std::fs::canonicalize(&p))
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
 
     let has_action_steps = workflow
         .steps
         .iter()
         .any(|s| s.step_type == crate::workflow::StepType::Action);
 
-    let trust_decision = crate::workflow::trust::check_trust(
-        &project_path,
-        name,
-        has_action_steps,
-        non_interactive,
-    )?;
+    if !auto {
+        let trust_decision = crate::workflow::trust::check_trust(
+            &project_path,
+            name,
+            has_action_steps,
+            non_interactive,
+        )?;
 
-    match trust_decision {
-        crate::workflow::trust::TrustDecision::RequiresConfirmation => {
-            anyhow::bail!(
-                "Workflow '{}' contains action steps that are not trusted.\n\
-                 Trust this workflow for this project? Edit ~/.dectl/trust.toml manually.",
-                name
-            );
-        }
-        crate::workflow::trust::TrustDecision::AskUser => {
-            println!("Workflow '{}' contains action steps:", name);
-            for step in &workflow.steps {
-                if step.step_type == crate::workflow::StepType::Action {
-                    if let Some(cmd) = &step.cmd {
-                        println!("  - {}", cmd.join(" "));
+        match trust_decision {
+            crate::workflow::trust::TrustDecision::RequiresConfirmation => {
+                anyhow::bail!(
+                    "Workflow '{}' contains action steps that are not trusted.\n\
+                     Trust this workflow for this project? Edit ~/.dectl/trust.toml manually.",
+                    name
+                );
+            }
+            crate::workflow::trust::TrustDecision::AskUser => {
+                println!("Workflow '{}' contains action steps:", name);
+                for step in &workflow.steps {
+                    if step.step_type == crate::workflow::StepType::Action {
+                        if let Some(cmd) = &step.cmd {
+                            println!("  - {}", cmd.join(" "));
+                        }
                     }
                 }
+                print!("\nDo you trust this workflow? (y/N): ");
+                std::io::Write::flush(&mut std::io::stdout())?;
+
+                let mut input = String::new();
+                std::io::stdin().read_line(&mut input)?;
+
+                if input.trim().to_lowercase() != "y" {
+                    println!("Aborted.");
+                    return Ok(());
+                }
+
+                crate::workflow::trust::grant_trust(&project_path, name)?;
+                println!("✓ Trusted. This workflow is now trusted for this project.");
             }
-            print!("\nDo you trust this workflow? (y/N): ");
-            std::io::Write::flush(&mut std::io::stdout())?;
-
-            let mut input = String::new();
-            std::io::stdin().read_line(&mut input)?;
-
-            if input.trim().to_lowercase() != "y" {
-                println!("Aborted.");
-                return Ok(());
-            }
-
-            crate::workflow::trust::grant_trust(&project_path, name)?;
-            println!("✓ Trusted. This workflow is now trusted for this project.");
+            crate::workflow::trust::TrustDecision::Trusted => {}
         }
-        crate::workflow::trust::TrustDecision::Trusted => {}
     }
 
     let mut provided_vars: HashMap<String, String> = HashMap::new();
@@ -92,7 +98,7 @@ pub fn run(
         println!();
     }
 
-    let result = Runner::execute(&workflow, &mut vars, dry_run, from_step, &mode)?;
+    let result = Runner::execute(&workflow, &mut vars, dry_run, from_step, auto, &mode)?;
 
     if mode.is_json() {
         let json_result = if result.success {

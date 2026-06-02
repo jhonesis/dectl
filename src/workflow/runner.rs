@@ -38,6 +38,7 @@ impl Runner {
         vars: &mut HashMap<String, String>,
         dry_run: bool,
         from_step: Option<usize>,
+        auto: bool,
         output: &crate::core::output::OutputMode,
     ) -> Result<ExecutionResult> {
         let start_idx = from_step.unwrap_or(0);
@@ -53,8 +54,24 @@ impl Runner {
         let mut results: Vec<StepResult> = Vec::new();
         let mut all_success = true;
 
+        let has_remaining_run_always = |current_idx: usize| -> bool {
+            workflow.steps[current_idx + 1..]
+                .iter()
+                .any(|s| s.run_always.unwrap_or(false))
+        };
+
         for (idx, step) in workflow.steps.iter().enumerate().skip(start_idx) {
             let step_num = idx + 1;
+
+            if !all_success && !step.run_always.unwrap_or(false) {
+                results.push(StepResult {
+                    step_num,
+                    step_type: format!("{:?}", step.step_type).to_lowercase(),
+                    success: false,
+                    output: Some("Skipped due to previous failure".to_string()),
+                });
+                continue;
+            }
 
             if dry_run {
                 println!("[DRY-RUN] Step {}: {}", step_num, step.description);
@@ -136,7 +153,10 @@ impl Runner {
                                 "\n⚠️  Step {} failed. Resume with --from-step {}",
                                 step_num, step_num
                             );
-                            break;
+                            if !has_remaining_run_always(idx) {
+                                break;
+                            }
+                            continue;
                         }
 
                         Some(captured_out)
@@ -162,7 +182,10 @@ impl Runner {
                                 "\n⚠️  Step {} failed. Resume with --from-step {}",
                                 step_num, step_num
                             );
-                            break;
+                            if !has_remaining_run_always(idx) {
+                                break;
+                            }
+                            continue;
                         }
 
                         Some(String::from_utf8_lossy(&output.stdout).to_string())
@@ -225,7 +248,10 @@ impl Runner {
                                 "\nStep {} failed: agent step requires agent_type or agent_types",
                                 step_num
                             );
-                            break;
+                            if !has_remaining_run_always(idx) {
+                                break;
+                            }
+                            continue;
                         }
                     };
 
@@ -238,7 +264,10 @@ impl Runner {
                         });
                         all_success = false;
                         eprintln!("\nStep {} failed: no agent types specified", step_num);
-                        break;
+                        if !has_remaining_run_always(idx) {
+                            break;
+                        }
+                        continue;
                     }
 
                     let task_raw = step.task.as_deref().unwrap_or("");
@@ -251,7 +280,7 @@ impl Runner {
                             vars,
                             None,
                             dry_run,
-                            false,
+                            auto,
                             output,
                         )
                     } else {
@@ -267,12 +296,15 @@ impl Runner {
                                 });
                                 all_success = false;
                                 eprintln!("\n\u{26a0}\u{fe0f}  Step {} failed. Resume with --from-step {}", step_num, step_num);
-                                break;
+                                if !has_remaining_run_always(idx) {
+                                    break;
+                                }
+                                continue;
                             }
                         };
 
                         crate::agent::runner::run_agent(
-                            &agent_def, &task, vars, None, dry_run, None, false, output,
+                            &agent_def, &task, vars, None, dry_run, None, auto, output, auto,
                         )
                         .map(|r| vec![r])
                     };
@@ -313,7 +345,10 @@ impl Runner {
                                 });
                                 all_success = false;
                                 eprintln!("\n\u{26a0}\u{fe0f}  Step {} failed. Resume with --from-step {}", step_num, step_num);
-                                break;
+                                if !has_remaining_run_always(idx) {
+                                    break;
+                                }
+                                continue;
                             }
                         }
                         Err(e) => {
@@ -328,7 +363,10 @@ impl Runner {
                                 "\n\u{26a0}\u{fe0f}  Step {} failed. Resume with --from-step {}",
                                 step_num, step_num
                             );
-                            break;
+                            if !has_remaining_run_always(idx) {
+                                break;
+                            }
+                            continue;
                         }
                     }
                 }

@@ -49,6 +49,7 @@ pub fn run_parallel(
                     timeout_secs,
                     non_interactive,
                     &mode,
+                    false,
                 )
             }));
 

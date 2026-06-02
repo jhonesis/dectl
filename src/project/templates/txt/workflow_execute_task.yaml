@@ -1,0 +1,40 @@
+name: execute-task
+description: "Full SDD task execution pipeline: research -> code context -> implement -> review -> document -> close"
+inputs:
+  - name: task_id
+    description: "Task identifier (e.g. T001)"
+    required: true
+  - name: description
+    description: "Task description"
+    required: true
+steps:
+  - type: agent
+    description: "Investigate context and relevant memory for the task"
+    agent_type: researcher
+    task: "{{description}}"
+
+  - type: agent
+    description: "Prepare context for implementation"
+    agent_type: coder
+    task: "{{description}}"
+
+  - type: prompt
+    description: "Implement the changes manually"
+    content: |
+      Implement the changes for task {{task_id}}: {{description}}.
+      When done, run: dectl workflow run execute-task --var task_id={{task_id}} --var description="{{description}}" --from-step 4
+
+  - type: agent
+    description: "Build + diff + verification"
+    agent_type: reviewer
+    task: "{{description}}"
+
+  - type: agent
+    description: "Register decision and close the task cycle"
+    agent_type: documenter
+    task: "{{description}}"
+    run_always: true
+
+  - type: action
+    description: "Mark task as completed in memory"
+    cmd: ["dectl", "memory", "add", "Task {{task_id}} completed: {{description}}", "--tags", "task,sdd"]

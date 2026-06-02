@@ -6,6 +6,7 @@ pub mod parallel;
 pub mod run;
 pub mod runner;
 pub mod schema;
+pub mod trust;
 
 #[allow(unused_imports)]
 pub use schema::{AgentDef, AgentResult, AgentRunStatus, AgentSource};

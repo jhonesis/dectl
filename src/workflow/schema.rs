@@ -54,6 +54,8 @@ pub struct Step {
     pub task: Option<String>,
     #[serde(default)]
     pub parallel: Option<bool>,
+    #[serde(default)]
+    pub run_always: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

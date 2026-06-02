@@ -168,6 +168,7 @@ mod tests {
                 agent_types: None,
                 task: None,
                 parallel: None,
+                run_always: None,
             }],
         }
     }
@@ -230,6 +231,7 @@ mod tests {
             agent_types: None,
             task: None,
             parallel: None,
+            run_always: None,
         };
         let err = validate_workflow(&workflow).unwrap_err();
         assert!(err.to_string().contains("cmd"));
@@ -249,6 +251,7 @@ mod tests {
             agent_types: None,
             task: None,
             parallel: None,
+            run_always: None,
         };
         let err = validate_workflow(&workflow).unwrap_err();
         assert!(err.to_string().contains("path") && err.to_string().contains("content"));

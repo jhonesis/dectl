@@ -1,6 +1,7 @@
 name: reviewer
 role: "Code quality reviewer"
-description: Reviews code for bugs, code smells, and convention violations
+description: "Review phase: build project, run tests, verify implementation quality. Third step in the SDD task pipeline. Run after implementing."
+next_step_hint: "If satisfied, run: dectl agent run documenter --task {{task}} --var task_id={{task_id}}"
 steps:
   - type: action
     description: Compile Code

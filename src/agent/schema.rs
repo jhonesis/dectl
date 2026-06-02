@@ -11,6 +11,8 @@ pub struct AgentDef {
     pub context_files: Vec<String>,
     #[serde(default)]
     pub inputs: Vec<InputDefinition>,
+    #[serde(default)]
+    pub next_step_hint: Option<String>,
     pub steps: Vec<Step>,
 }
 

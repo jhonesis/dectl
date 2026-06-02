@@ -1,6 +1,7 @@
 name: documenter
 role: "Technical documentation generator"
-description: Generates or updates documentation for the indicated module or feature
+description: "Documentation phase: register task decision in memory, update progress files, close the task cycle. Final step in the SDD task pipeline. Run after reviewer (even on failure)."
+next_step_hint: "Task cycle complete. Log it: dectl memory add 'Task {{task_id}} completed: {{task}}' --tags task,sdd"
 steps:
   - type: action
     description: Save implementation to memory

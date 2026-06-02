@@ -155,6 +155,9 @@ enum WorkflowCommands {
 
         #[arg(long)]
         from_step: Option<usize>,
+
+        #[arg(long)]
+        auto: bool,
     },
 }
 
@@ -163,6 +166,11 @@ enum AgentCommands {
     List,
     Describe {
         r#type: String,
+    },
+    Trust {
+        r#type: String,
+        #[arg(long, default_value = ".")]
+        project: String,
     },
     Run {
         r#type: String,
@@ -346,12 +354,14 @@ fn main() {
                 var,
                 dry_run,
                 from_step,
+                auto,
             }) => {
                 if let Err(e) = workflow::run::run(
                     name,
                     var.clone(),
                     *dry_run,
                     *from_step,
+                    *auto,
                     cli.non_interactive,
                     mode,
                 ) {
@@ -383,6 +393,12 @@ fn main() {
             }
             Some(AgentCommands::Describe { r#type }) => {
                 if let Err(e) = agent::describe::run(r#type, mode) {
+                    core::output::Output::print_error(&e.to_string(), None, mode);
+                    std::process::exit(1);
+                }
+            }
+            Some(AgentCommands::Trust { r#type, project }) => {
+                if let Err(e) = agent::trust::run(r#type, project, mode) {
                     core::output::Output::print_error(&e.to_string(), None, mode);
                     std::process::exit(1);
                 }

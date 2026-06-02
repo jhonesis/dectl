@@ -76,6 +76,10 @@ impl Templates {
                 include_str!("txt/workflow_design_architecture.yaml"),
             ),
             (
+                ".dec/workflows/execute_task.yaml",
+                include_str!("txt/workflow_execute_task.yaml"),
+            ),
+            (
                 ".dec/prompts/system/base.md",
                 include_str!("txt/system_base.md"),
             ),

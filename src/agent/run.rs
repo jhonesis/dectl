@@ -3,6 +3,15 @@ use crate::core::output::{Output, OutputMode};
 use anyhow::Result;
 use std::collections::HashMap;
 
+fn interpolate_hint(template: &str, task: &str, vars: &HashMap<String, String>) -> String {
+    let mut all_vars = vars.clone();
+    all_vars.insert("task".to_string(), task.to_string());
+    match crate::workflow::interpolate::interpolate(template, &all_vars) {
+        Ok(s) => s,
+        Err(_) => template.to_string(),
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn run(
     agent_type: &str,
@@ -108,6 +117,7 @@ fn run_single_agent(
         timeout,
         non_interactive,
         &mode,
+        false,
     )?;
 
     if mode.is_json() {
@@ -156,6 +166,15 @@ fn run_single_agent(
             }
             AgentRunStatus::Timeout => {
                 println!("⏱ Agent '{}' timed out", agent_def.name);
+            }
+        }
+    }
+
+    if matches!(result.status, AgentRunStatus::Ok) {
+        if let Some(hint) = &agent_def.next_step_hint {
+            let msg = interpolate_hint(hint, task, vars);
+            if !mode.is_json() {
+                println!("\n→ {}", msg);
             }
         }
     }

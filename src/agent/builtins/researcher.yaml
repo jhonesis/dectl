@@ -1,6 +1,7 @@
 name: researcher
 role: "Context and prior decisions investigator"
-description: Searches memory and decisions for all context relevant to a task
+description: "Research phase: analyze context, scan files, and gather relevant memory for the task. First step in the SDD task pipeline."
+next_step_hint: "Next in pipeline: dectl agent run coder --task {{task}} --var task_id={{task_id}}"
 steps:
   - type: action
     description: Scan project structure

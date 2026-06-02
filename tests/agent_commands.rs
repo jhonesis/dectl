@@ -154,3 +154,86 @@ fn test_agent_list_json_has_source() {
         assert!(source == "builtin" || source.starts_with("custom"));
     }
 }
+
+#[test]
+fn test_agent_trust_builtin() {
+    let tmp = TempDir::new().unwrap();
+    let output = run_dectl(&["agent", "trust", "researcher"], tmp.path());
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("researcher"));
+    assert!(stdout.contains("trusted"));
+}
+
+#[test]
+fn test_agent_trust_nonexistent() {
+    let tmp = TempDir::new().unwrap();
+    let output = run_dectl(&["agent", "trust", "nonexistent"], tmp.path());
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("not found"));
+}
+
+#[test]
+fn test_agent_trust_invalid_path() {
+    let tmp = TempDir::new().unwrap();
+    let output = run_dectl(
+        &[
+            "agent",
+            "trust",
+            "researcher",
+            "--project",
+            "/nonexistent/path/xxxxx",
+        ],
+        tmp.path(),
+    );
+    assert!(!output.status.success());
+}
+
+#[test]
+fn test_agent_run_non_interactive_error_suggests_trust() {
+    let tmp = TempDir::new().unwrap();
+    let output = run_dectl(
+        &[
+            "agent",
+            "run",
+            "researcher",
+            "--task",
+            "test",
+            "--var",
+            "task_id=test",
+            "--non-interactive",
+        ],
+        tmp.path(),
+    );
+    assert!(!output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{}{}", stdout, stderr);
+    assert!(combined.contains("dectl agent trust"));
+    assert!(combined.contains("researcher"));
+}
+
+#[test]
+fn test_agent_trust_then_dry_run() {
+    let tmp = TempDir::new().unwrap();
+    let trust_output = run_dectl(&["agent", "trust", "researcher"], tmp.path());
+    assert!(trust_output.status.success());
+
+    let run_output = run_dectl(
+        &[
+            "agent",
+            "run",
+            "researcher",
+            "--task",
+            "test",
+            "--var",
+            "task_id=test",
+            "--dry-run",
+        ],
+        tmp.path(),
+    );
+    assert!(run_output.status.success());
+    let stdout = String::from_utf8_lossy(&run_output.stdout);
+    assert!(stdout.contains("[DRY-RUN]"));
+}

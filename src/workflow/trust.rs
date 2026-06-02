@@ -75,6 +75,12 @@ impl TrustConfig {
     }
 }
 
+fn canonicalize_path(path: &str) -> String {
+    std::fs::canonicalize(path)
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|_| path.to_string())
+}
+
 pub fn check_trust(
     project_path: &str,
     workflow_name: &str,
@@ -86,8 +92,9 @@ pub fn check_trust(
     }
 
     let config = TrustConfig::load()?;
+    let canonical = canonicalize_path(project_path);
 
-    if config.is_trusted(project_path, workflow_name) {
+    if config.is_trusted(&canonical, workflow_name) {
         return Ok(TrustDecision::Trusted);
     }
 
@@ -100,7 +107,8 @@ pub fn check_trust(
 
 pub fn grant_trust(project_path: &str, workflow_name: &str) -> Result<()> {
     let mut config = TrustConfig::load()?;
-    config.trust(project_path.to_string(), workflow_name.to_string());
+    let canonical = canonicalize_path(project_path);
+    config.trust(canonical, workflow_name.to_string());
     config.save()
 }
 

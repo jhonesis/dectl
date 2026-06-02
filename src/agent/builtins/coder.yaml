@@ -1,6 +1,7 @@
 name: coder
 role: "Feature implementer following project conventions"
-description: Implements code respecting the stack and conventions from .dec/
+description: "Code generation phase: produce implementation files based on research context. Second step in the SDD task pipeline. Run after researcher."
+next_step_hint: "After implementing, run: dectl agent run reviewer --task {{task}} --var task_id={{task_id}}"
 steps:
   - type: action
     description: Search memory for context
