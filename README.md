@@ -7,8 +7,8 @@
 > understands the project's architecture. No explanations. No setup.
 
 ```bash
-# 1. Install dectl
-cargo install dectl
+# 1. Install dectl (macOS, Linux, WSL)
+curl -fsSL https://raw.githubusercontent.com/jhonesis/dectl/main/scripts/install.sh | bash
 
 # 2. Enter any project
 cd your-legacy-project
@@ -141,6 +141,18 @@ dectl workflow run execute_task --var task_id=T001 --var description="test" --au
 - Signals the AI model to interview you and generate `specs/` documents
 
 ## Installation
+
+### Quick Install (curl)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jhonesis/dectl/main/scripts/install.sh | bash
+```
+
+To pin a specific version or custom path:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jhonesis/dectl/main/scripts/install.sh | bash -s -- --version v1.0.0 --to ~/.local/bin
+```
 
 ### From Source
 
