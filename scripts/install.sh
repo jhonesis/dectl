@@ -71,8 +71,13 @@ install_rust() {
         exit 0
     fi
 
+    if [[ ! -t 0 ]] && [[ ! -e /dev/tty ]]; then
+        echo "✗ No TTY available. Install Rust manually: https://rustup.rs"
+        exit 1
+    fi
+
     echo -n "→ Install Rust via rustup? [Y/n] "
-    read -r CONFIRM
+    read -r CONFIRM < /dev/tty
     if [[ "$CONFIRM" =~ ^[Nn] ]]; then
         echo "✗ Aborted. Install Rust manually:"
         echo "  https://rustup.rs"

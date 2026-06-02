@@ -1,7 +1,7 @@
 # Constitution — Integration Layer
 > *Principios que gobiernan cómo se comunican los tres actores del sistema.*
 > *Hereda y extiende: specs/master/constitution.md*
-> *Última actualización: 2026-05-13*
+> *Última actualización: 2026-06-02*
 
 ---
 

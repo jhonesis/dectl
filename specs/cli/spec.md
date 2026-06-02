@@ -1,7 +1,7 @@
 # Specification — dectl CLI
 > *Technology-agnostic. Describe QUÉ hace el CLI, no cómo se implementa.*
 > *Extiende specs/master/spec.md con el contrato exacto de cada comando.*
-> *Version: 1.0 | Status: Draft | Last updated: 2026-05-13*
+> *Version: 1.0 | Status: Updated | Last updated: 2026-06-02*
 
 ---
 
@@ -30,11 +30,15 @@ El CLI `dectl` es el ejecutor del sistema. Expone una interfaz de línea de coma
 
 **Acceptance Criteria**:
 - WHEN se ejecuta `dectl project init` en un directorio sin `.dec/` THEN SHALL crear la estructura nivel 1: `.dec/.gitignore`, `.dec/config/project.toml`, `.dec/isa/project.isa.md`
-- WHEN se ejecuta con `--standard` THEN SHALL crear nivel 1 + nivel 2: `decisions/`, `workflows/implement_feature.yaml`, `workflows/design_architecture.yaml`, `prompts/system/base.md`, `state/progress.json`, `state/last_session.md`
+- WHEN se ejecuta con `--standard` THEN SHALL crear nivel 1 + nivel 2: `decisions/`, `workflows/implement_feature.yaml`, `workflows/design_architecture.yaml`, `prompts/system/base.md`, `prompts/system/integration.md`, `state/progress.json`, `state/last_session.md`
 - WHEN se ejecuta con `--full` THEN SHALL crear nivel 2 + nivel 3: `isa/architecture.isa.md`, `prompts/tasks/`, `knowledge/`
 - WHEN ya existe `.dec/` en el directorio THEN SHALL abortar con mensaje claro y exit code 1, sin modificar nada
 - WHEN completa exitosamente THEN SHALL mostrar lista de archivos creados y el próximo paso recomendado
 - WHEN se usa `--json` THEN SHALL retornar `{status: "ok", level: 1|2|3, files_created: [...], next_step: "..."}`
+- WHEN el proyecto tiene código existente THEN SHALL auto-detectar el stack (lenguajes, frameworks, herramientas) y auto-llenar los archivos `.dec/` con el contexto detectado
+- WHEN el proyecto está vacío THEN SHALL ofrecer prompts interactivos para nombre, tipo, lenguajes, descripción y visión (si TTY disponible)
+- WHEN se usa `--type api|cli|microservice|other` THEN SHALL crear workflows y prompts específicos del tipo
+- WHEN init completa en un proyecto no vacío THEN SHALL crear `AGENTS.md` en la raíz del proyecto
 
 ---
 
@@ -76,6 +80,7 @@ El CLI `dectl` es el ejecutor del sistema. Expone una interfaz de línea de coma
 - WHEN se usa `--tags t1,t2` THEN SHALL almacenar los tags asociados a la entrada
 - WHEN se usa `--project <nombre>` THEN SHALL asociar la entrada al proyecto indicado
 - WHEN no se usa `--project` y existe `.dec/config/project.toml` en el directorio actual THEN SHALL auto-detectar el nombre del proyecto y asociarlo
+- WHEN se usa `--global` THEN SHALL NO asociar la entrada a ningún proyecto (memoria global)
 - WHEN no se provee argumento de contenido y stdin no es TTY THEN SHALL abortar con mensaje claro y exit code 1
 - WHEN no se provee argumento y stdin es un pipe THEN SHALL leer el contenido completo desde stdin y almacenarlo
 - WHEN se usa `--json` THEN SHALL retornar `{status: "ok", id: 42, preview: "primeros 80 chars..."}`
@@ -90,6 +95,7 @@ El CLI `dectl` es el ejecutor del sistema. Expone una interfaz de línea de coma
 **Acceptance Criteria**:
 - WHEN se ejecuta THEN SHALL mostrar entradas en orden cronológico inverso con: ID, fecha, tags y primeros 100 caracteres del contenido
 - WHEN se usa `--project <nombre>` THEN SHALL filtrar por proyecto; mostrar solo entradas de ese proyecto y entradas globales (sin proyecto)
+- WHEN se usa `--global` THEN SHALL mostrar todas las entradas sin filtrar por proyecto
 - WHEN se usa `--limit <n>` THEN SHALL mostrar máximo `n` entradas
 - WHEN no hay entradas THEN SHALL mostrar mensaje informativo, no un error
 - WHEN se usa `--json` THEN SHALL retornar `{status: "ok", entries: [{id, created_at, tags, project, preview}], total: n}`
@@ -104,6 +110,7 @@ El CLI `dectl` es el ejecutor del sistema. Expone una interfaz de línea de coma
 **Acceptance Criteria**:
 - WHEN se ejecuta `dectl memory search "<query>"` THEN SHALL buscar en `content` y `tags` usando coincidencia de substring case-insensitive
 - WHEN se usa `--project <nombre>` THEN SHALL limitar la búsqueda a entradas de ese proyecto y entradas globales
+- WHEN se usa `--global` THEN SHALL buscar en todas las entradas sin filtrar por proyecto
 - WHEN hay resultados THEN SHALL mostrarlos con ID, fecha, tags y fragmento del contenido que contiene la coincidencia
 - WHEN no hay resultados THEN SHALL mostrar mensaje informativo con la query usada, no un error
 - WHEN la query está vacía THEN SHALL abortar con mensaje claro y exit code 1
@@ -172,33 +179,133 @@ El CLI `dectl` es el ejecutor del sistema. Expone una interfaz de línea de coma
 
 ---
 
-### REQ-C-011: Comando `dectl exec-from-file`
+### REQ-C-013: Comando `dectl project context`
 
 **User Story**:
-> Como modelo o script, quiero ejecutar una lista de comandos `dectl` desde un archivo para automatizar secuencias sin repetir invocaciones manuales.
+> Como modelo de lenguaje en un entorno stateless, quiero obtener un resumen compacto del proyecto para tener contexto sin leer cada archivo individualmente.
 
 **Acceptance Criteria**:
-- WHEN se ejecuta `dectl exec-from-file <ruta>` THEN SHALL leer el archivo línea por línea, ejecutar cada línea no vacía como subcomando `dectl` en orden
-- WHEN una línea comienza con `#` THEN SHALL tratarla como comentario e ignorarla
-- WHEN un comando falla THEN SHALL reportar el número de línea, el comando fallido y el error — y detener la ejecución con exit code del comando fallido
-- WHEN el archivo no existe THEN SHALL abortar con mensaje claro y exit code 1
-- WHEN se usa `--json` THEN SHALL retornar `{status: "ok"|"error", executed: n, failed_line: n | null, failed_cmd: "..." | null}`
+- WHEN se ejecuta en un directorio con `.dec/` THEN SHALL leer los archivos prioritarios (project.toml, project.isa.md, last_session.md, progress.json, integration.md, decisions recientes) y concatenarlos en un resumen legible
+- WHEN se usa `--max-tokens <n>` THEN SHALL asignar un budget proporcional a cada sección según su peso (last_session 25%, isa 20%, config 15%, progress 10%, integration 5%, decisions 25%), truncar cada archivo individualmente, y redistribuir el sobrante iterativamente
+- WHEN se usa `--format json` THEN SHALL retornar el contexto como objeto JSON estructurado con campos: project, vision, last_session, decisions, progress, token_count
+- WHEN se usa `--format compact` THEN SHALL retornar solo 6 líneas clave (project, stack, last_session, progress, decisions, memory_hits) ignorando `--max-tokens`
+- WHEN el proyecto tiene `last_session.md` con `**Fecha**: YYYY-MM-DD` THEN SHALL comparar fechas de modificación de cada archivo contra esa fecha; archivos más recientes que la última sesión reciben peso ×2, archivos sin cambios reciben peso ×0.5 (antes de normalizar)
+- WHEN no existe `.dec/` THEN SHALL abortar con mensaje claro y exit code 1
 
 ---
 
-### REQ-C-012: Flags globales
+### REQ-C-014: Comando `dectl session end`
 
 **User Story**:
-> Como script o modelo, quiero flags consistentes en todos los comandos para integrar `dectl` en pipelines sin tratar cada comando de forma especial.
+> Como developer o modelo, quiero ejecutar un solo comando al finalizar la sesión para que todo el contexto se capture automáticamente y esté disponible en la próxima sesión.
 
 **Acceptance Criteria**:
-- WHEN se usa `--json` en cualquier comando THEN SHALL producir JSON válido con envelope `{status, ...}` en stdout
-- WHEN se usa `--help` en cualquier comando o subcomando THEN SHALL mostrar descripción, uso, flags disponibles y al menos un ejemplo
-- WHEN se usa `--version` en el comando raíz THEN SHALL mostrar versión del binario y versión de schema de `.dec/` soportada
-- WHEN stdout no es TTY (pipe o redirección) THEN SHALL desactivar colores automáticamente sin flag adicional
-- WHEN se usa `--non-interactive` THEN SHALL abortar en lugar de mostrar prompts interactivos — útil para scripts
+- WHEN se ejecuta `dectl session end` THEN SHALL realizar cinco acciones en secuencia:
+  1. Actualizar `.dec/state/last_session.md` con resumen estructurado (fecha, acciones, pendientes, decisiones, próximo paso)
+  2. Sincronizar cambios de git a `.dec/state/progress.json` (marcar features como done, detectar nuevas features)
+  3. Capturar decisiones no guardadas y almacenarlas en memoria (usando patrones regex sobre commits y archivos de sesión)
+  4. Sincronizar cambios del stack detectados en el filesystem con `.dec/config/project.toml` (config_sync)
+  5. Registrar actividad de agentes desde el último cierre de sesión en el log (agent_sync)
+- WHEN un paso falla THEN los pasos restantes SHALL continuar independientemente (un fallo no detiene a los demás)
+- WHEN se usa `--dry-run` THEN SHALL previsualizar todos los cambios sin escribir ningún archivo
+- WHEN se usa `--skip-git` THEN SHALL omitir el paso de sincronización con git sin error
+- WHEN no existe un repositorio git THEN SHALL omitir el paso de git gracefulmente (no es un error)
+- WHEN se usa `--json` THEN SHALL retornar un resultado estructurado con estado por paso, conteo de decisiones guardadas, cambios de configuración y sesiones de agentes: `{status: "ok", data: {steps: [{name, success, message}], decisions_saved: n, config_changes: {stack_changed, project_toml_updated, isa_updated}, agent_sessions: n}}`
+- WHEN todos los pasos fallan THEN SHALL exit con código no cero
+- WHEN al menos un paso tiene éxito THEN SHALL exit con código 0
 
 ---
+
+### REQ-C-015: Comando `dectl generate-completions`
+
+**User Story**:
+> Como developer, quiero generar scripts de autocompletado para mi shell para tener sugerencias de comandos y flags al presionar Tab.
+
+**Acceptance Criteria**:
+- WHEN se ejecuta `dectl generate-completions bash|zsh|fish|powershell` THEN SHALL generar el script de autocompletado correspondiente en stdout
+- WHEN el shell no es soportado THEN SHALL abortar con mensaje claro listando los shells soportados y exit code 1
+- WHEN se usa con pipe o redirección THEN SHALL escribir el script sin colores ni texto adicional
+
+---
+
+### REQ-C-016: Comando `dectl version`
+
+**User Story**:
+> Como developer o script, quiero verificar la versión instalada del CLI para confirmar compatibilidad.
+
+**Acceptance Criteria**:
+- WHEN se ejecuta `dectl version` THEN SHALL mostrar la versión del binario
+- WHEN se usa `--json` THEN SHALL retornar `{status: "ok", version: "0.1.0", schema: "1.0"}`
+
+---
+
+### REQ-C-017: Config Sync en `dectl session end`
+
+**User Story**:
+> Como developer, quiero que `dectl session end` detecte automáticamente cambios en el stack del proyecto y actualice `.dec/config/project.toml` para mantener la coherencia entre el código real y la configuración registrada.
+
+**Acceptance Criteria**:
+- WHEN `dectl session end` se ejecuta THEN SHALL ejecutar un paso de config_sync después de decision_capture
+- WHEN el stack detectado en el filesystem difiere del registrado en `project.toml` THEN SHALL hacer merge de los items nuevos (languages, frameworks, tools) sin remover existentes
+- WHEN el `project.type` ha cambiado (ej: de "npm" a "cargo") THEN SHALL actualizar el tipo en `project.toml`
+- WHEN se usa `--dry-run` THEN SHALL mostrar cambios detectados sin aplicarlos
+- WHEN `project.isa.md` no menciona lenguajes o frameworks detectados THEN SHALL generar warnings de coherencia (sin modificar el archivo)
+- WHEN el paso de config_sync falla THEN SHALL reportar el error pero NO detener los demás pasos de session end
+- WHEN se usa `--json` THEN SHALL incluir `config_changes` en el output con `stack_changed`, `project_toml_updated` e `isa_updated`
+
+---
+
+### REQ-C-018: Comandos de Agentes
+
+**User Story**:
+> Como developer o modelo, quiero invocar agentes especializados para tareas específicas de coding, review, research y documentation.
+
+**Acceptance Criteria**:
+- WHEN se ejecuta `dectl agent list` THEN SHALL mostrar agentes built-in y custom con nombre, rol, descripción y source
+- WHEN se ejecuta `dectl agent describe <type>` THEN SHALL mostrar definición completa del agente
+- WHEN se ejecuta `dectl agent run <type> --task "<desc>"` THEN SHALL cargar agente, inyectar tarea, ejecutar steps, y registrar en agent_log
+- WHEN se ejecuta `dectl agent run --parallel <type1>,<type2>` THEN SHALL lanzar agentes en threads separados
+- WHEN un agente falla en paralelo THEN SHALL continuar con los demás y reportar status "partial"
+- WHEN se usa `--json` en cualquier comando de agente THEN SHALL retornar envelope con status y datos específicos
+- WHEN un agente custom tiene mismo nombre que built-in THEN SHALL usar el custom
+
+**Referencia**: Ver `specs/agents/spec.md` para requisitos detallados (REQ-A-001 a REQ-A-009).
+
+---
+
+### REQ-C-020: Comando `dectl agent trust`
+
+**User Story**:
+> Como developer o modelo, quiero confiar un agente sin ejecutarlo para evitar prompts interactivos durante `dectl agent run`.
+
+**Acceptance Criteria**:
+- WHEN se ejecuta `dectl agent trust <type>` THEN SHALL verificar que el agente existe (built-in o custom) y mostrar error si no
+- WHEN se usa `--project <path>` THEN SHALL confiar el agente para el proyecto indicado (por defecto: directorio actual)
+- WHEN el agente ya está confiado THEN SHALL informar que ya está confiado (idempotente)
+- WHEN se completa THEN SHALL agregar entrada en `~/.dectl/trust.toml` con path canónico y timestamp
+- WHEN se usa `--json` THEN SHALL retornar `{status:"ok", agent:"coder", project:"/path", already_trusted:false}`
+- WHEN el agente no existe THEN SHALL abortar con mensaje claro y exit code 1
+- WHEN `--non-interactive` y trust necesario en `agent run` THEN el mensaje de error SHALL sugerir `dectl agent trust <type> --project .`
+
+---
+
+### REQ-C-019: Comando `dectl spec init`
+
+**User Story**:
+> Como developer o modelo, quiero inicializar la metodología SDD en .dec/ para que el agente IA pueda seguir el proceso Build+Verify+Gate y crear specs/ con contenido real.
+
+**Acceptance Criteria**:
+- WHEN se ejecuta `dectl spec init` THEN SHALL asegurar que `.dec/sdd/` existe con SKILL.md, references/templates.md y references/examples.md
+- WHEN `.dec/sdd/` ya existe THEN SHALL ser idempotente (no modificar nada)
+- WHEN se ejecuta THEN SHALL actualizar `.dec/config/project.toml` con `[specs] dir = "specs"`
+- WHEN se ejecuta THEN SHALL actualizar `.dec/isa/project.isa.md` con enlace a "See specs/ for SDD artifacts"
+- WHEN no existe `.dec/` THEN SHALL abortar con mensaje claro y exit code 1
+- WHEN no existe `.dec/config/project.toml` THEN SHALL abortar con mensaje claro
+- WHEN se usa `--json` THEN SHALL retornar `{status: "ok", data: {message: ".dec/sdd/ ready", bridge: {project_toml: true, project_isa: true}, next: "Interview the user and create specs/"}}`
+
+---
+
+
 
 ## Requisitos No Funcionales
 

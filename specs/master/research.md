@@ -1,6 +1,6 @@
 # Technical Research — dectl
 > *Documents technical unknowns investigated during planning. Captures decisions and their rationale.*
-> *Written alongside plan.md | Last updated: 2026-05-13*
+> *Written alongside plan.md | Last updated: 2026-06-02*
 
 ---
 
@@ -196,24 +196,14 @@ All path operations use `std::path::Path` which is cross-platform. No hardcoded 
 
 ---
 
-### CI/CD Recommendation
+### CI/CD Status
 
-No existing CI found (no `.github/workflows/`). Add Windows testing:
+CI/CD pipeline is now configured (`.github/workflows/`). Current pipeline:
+- `cargo fmt --check`
+- `cargo clippy -- -D warnings`
+- `cargo build --release`
 
-```yaml
-# .github/workflows/test.yml (proposed)
-jobs:
-  test:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-action@stable
-      - run: cargo test --workspace
-      - run: cargo build --release
-```
+Windows testing is not yet in CI. See Windows issues below for known blockers.
 
 ---
 

@@ -1,7 +1,7 @@
 # Strategic Notes — dectl
 > *Decisiones de diseño, riesgos identificados y principios de producto.*
 > *Este documento debe consultarse antes de tomar decisiones importantes sobre dirección, features o comunicación del proyecto.*
-> *Last updated: 2026-05-13*
+> *Last updated: 2026-06-02*
 
 ---
 
@@ -118,9 +118,9 @@ Un repositorio de templates `.dec/` por tipo de proyecto (API REST, CLI tool, mi
 
 ---
 
-## Decisiones pendientes
+## Decisiones resueltas
 
-- [ ] Decidir si `dectl project init` crea estructura mínima por defecto o estructura completa (recomendación: mínima, con `--full` flag)
-- [ ] Definir la política de versionado del schema de `.dec/` antes de publicar el SDD
-- [ ] Diseñar el escenario ancla completo (proyecto legacy → contexto en 2 minutos) como test de aceptación
-- [ ] Evaluar si el README principal debe ser el SDD de `.dec/` o un quickstart orientado al caso de uso ancla
+- [x] `dectl project init` crea estructura mínima por defecto, con `--standard` y `--full` flags para niveles superiores — resuelto en implementación
+- [x] Schema versionado desde Phase 1 con `schema_version` en `project.toml` y `dectl migrate` tool — resuelto en Phase 4
+- [x] Escenario ancla diseñado e implementado como test end-to-end (`tests/e2e_anchor.rs`) — completado en Phase 7
+- [x] README principal combina quickstart ancla + enlaces a docs/ detalladas — resuelto en Phase 7

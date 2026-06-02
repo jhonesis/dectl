@@ -1,6 +1,6 @@
 # Specification — .dec/ System
 > *Technology-agnostic. Describe QUÉ es .dec/ y qué debe lograr, no cómo se implementa.*
-> *Version: 1.0 | Status: Draft | Last updated: 2026-05-13*
+> *Version: 1.0 | Status: Approved | Last updated: 2026-06-02*
 
 ---
 
@@ -153,9 +153,24 @@
 
 **Acceptance Criteria**:
 - WHEN el developer inicializa un proyecto sin flags THEN SHALL crearse solo la estructura mínima (nivel 1): `config/project.toml` y `isa/project.isa.md`
-- WHEN el developer inicializa con flag estándar THEN SHALL crearse la estructura nivel 2, que agrega decisiones, workflows base, prompt del sistema y estado
+- WHEN el developer inicializa con flag estándar THEN SHALL crearse la estructura nivel 2, que agrega decisiones, workflows base, prompt del sistema, estado y metodología SDD (.dec/sdd/)
 - WHEN el developer inicializa con flag completo THEN SHALL crearse la estructura nivel 3 con todos los archivos y carpetas
 - WHEN un developer trabaja con nivel 1 THEN el sistema SHALL ser completamente funcional — ninguna feature core de dectl SHALL requerir nivel 2 o 3 para operar
+
+---
+
+### REQ-D-011: Metodología SDD (Spec-Driven Development)
+
+**User Story**:
+> Como modelo de lenguaje, quiero una metodología estructurada dentro de .dec/ que me guíe en la creación de documentos de especificación (specs/) usando el proceso Build+Verify+Gate con tareas atómicas y verificables.
+
+**Acceptance Criteria**:
+- WHEN existe `.dec/sdd/SKILL.md` THEN el modelo SHALL encontrar las reglas de la metodología SDD: tareas atómicas, compilación tras cada tarea, verificación antes de avanzar
+- WHEN existe `.dec/sdd/references/templates.md` THEN el modelo SHALL encontrar las plantillas de cada documento SDD (constitution, spec, requirements, research, plan, data-model, tasks)
+- WHEN existe `.dec/sdd/references/examples.md` THEN el modelo SHALL encontrar ejemplos de documentos SDD completados
+- WHEN el modelo va a crear specs/ THEN SHALL leer los archivos en `.dec/sdd/` primero para entender la metodología y el formato
+- WHEN `.dec/sdd/` es creado por `dectl project init --standard` THEN SHALL contener los 3 archivos (SKILL.md, references/templates.md, references/examples.md)
+- WHEN el modelo completa la entrevista al usuario THEN SHALL crear los documentos en `specs/` con contenido real siguiendo los templates
 
 ---
 

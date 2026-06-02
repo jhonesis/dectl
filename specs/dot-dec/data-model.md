@@ -1,6 +1,6 @@
 # Data Model — .dec/ System
 > *Define todos los schemas de archivos de .dec/, sus campos, tipos y validaciones.*
-> *Last updated: 2026-05-13*
+> *Last updated: 2026-06-02*
 
 ---
 
@@ -87,7 +87,7 @@ Feature:
 {
   "_comment": "Estado de features del proyecto. Actualizar al completar tareas.",
   "schema_version": "1.0",
-  "updated_at": "2026-05-13T14:00:00Z",
+  "updated_at": "2026-06-02T14:00:00Z",
   "features": [
     {
       "id": "user-auth",
@@ -155,7 +155,7 @@ default        string    condicional Requerido si required = false.
 **Schema de `Step`**:
 
 ```
-type           string    requerido   Enum: "prompt" | "action" | "write"
+type           string    requerido   Enum: "prompt" | "action" | "write" | "agent"
 
 description    string    requerido   Explica la intención del paso.
                                      Mostrado en dectl workflow describe.
@@ -176,10 +176,26 @@ path           string    condicional Requerido si type = "write".
                                      Soporta interpolación {{variable}}.
 
 shell          boolean   opcional    Solo para type = "action".
-                                     Default: false.
-                                     true = ejecuta via sh -c (habilita pipes y
-                                     redirects). Requiere confirmación de trust
-                                     igual que cualquier action step.
+                                      Default: false.
+                                      true = ejecuta via sh -c (habilita pipes y
+                                      redirects). Requiere confirmación de trust
+                                      igual que cualquier action step.
+
+agent_type     string    condicional Requerido si type = "agent" y parallel = false.
+                                      Nombre del agente a ejecutar.
+                                      Ej: "reviewer", "coder", "documenter"
+
+agent_types    array     condicional Requerido si type = "agent" y parallel = true.
+                                      Lista de agentes a ejecutar en paralelo.
+                                      Ej: ["reviewer", "documenter"]
+
+task           string    condicional Requerido si type = "agent".
+                                      Descripción de la tarea para el agente.
+                                      Soporta interpolación {{variable}}.
+
+parallel       boolean   opcional    Solo para type = "agent".
+                                      Default: false.
+                                      true = ejecuta agent_types en paralelo.
 ```
 
 ---
@@ -257,3 +273,31 @@ El CLI lee `schema_version` al abrir cualquier proyecto y:
 - Versión menor o igual a la soportada → opera normalmente
 - Versión minor mayor → opera con advertencia ("campos nuevos podrían ignorarse")
 - Versión major mayor → aborta con instrucciones para actualizar el CLI
+
+---
+
+## Entidades SDD (.dec/sdd/)
+
+### `sdd/SKILL.md`
+
+Archivo Markdown que define la metodología SDD. No tiene schema estructurado (es Markdown legible por el modelo). Contiene:
+
+- Reglas de atomicidad: cada tarea es un commit individual, compila antes de pasar a la siguiente
+- Proceso Build+Verify+Gate: cada tarea tiene Build (compila), Verify (pass o fail), Gate (condición para avanzar)
+- Formato de tareas: ID, archivos, esfuerzo (S/M/L), qué hacer, Build, Verify, Gate
+- Fases con Gates: cada fase termina con un Gate que valida toda la fase antes de continuar
+
+### `sdd/references/templates.md`
+
+Define el formato de cada documento SDD:
+- constitution.md — principios, reglas, valores
+- spec.md — technology-agnostic requirements
+- requirements.md — validation checklist
+- research.md — technical investigation
+- plan.md — implementation plan
+- data-model.md — schemas and types
+- tasks.md — task tracking with Build+Verify+Gate
+
+### `sdd/references/examples.md`
+
+Ejemplos de documentos SDD completados para referencia del modelo.

@@ -1,6 +1,6 @@
 # Technical Research — Integration Layer
 > *Investiga las decisiones técnicas sobre el protocolo de integración entre actores.*
-> *Last updated: 2026-05-13*
+> *Last updated: 2026-05-29*
 
 ---
 

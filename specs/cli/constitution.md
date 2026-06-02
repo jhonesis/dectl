@@ -1,7 +1,7 @@
 # Constitution — dectl CLI
 > *Principios que gobiernan el diseño, implementación y evolución del binario `dectl`.*
 > *Hereda y extiende: specs/master/constitution.md*
-> *Última actualización: 2026-05-13*
+> *Última actualización: 2026-06-02*
 
 ---
 

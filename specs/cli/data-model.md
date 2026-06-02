@@ -2,7 +2,7 @@
 > *Define los tipos Rust internos del CLI y el contrato exacto de todos los JSON outputs.*
 > *La persistencia SQLite está en master/data-model.md.*
 > *Los schemas de archivos .dec/ están en dot-dec/data-model.md.*
-> *Last updated: 2026-05-13*
+> *Last updated: 2026-06-02*
 
 ---
 
@@ -169,6 +169,7 @@ pub enum StepType {
     Prompt,
     Action,
     Write,
+    Agent,
 }
 
 // Estado de un step durante ejecución
@@ -204,12 +205,63 @@ pub struct ProgressSummary {
 
 ---
 
+### Session (Phase 4)
+
+```rust
+// Resumen de sesión generado al cerrar
+#[derive(Serialize)]
+pub struct SessionSummary {
+    pub date:       String,          // ISO 8601
+    pub actions:    Vec<String>,     // acciones realizadas
+    pub pending:    Vec<String>,     // items pendientes
+    pub decisions:  Vec<String>,     // decisiones tomadas
+    pub next_step:  String,          // próximo paso recomendado
+}
+
+// Cambios detectados en git
+#[derive(Serialize)]
+pub struct GitChanges {
+    pub modified_files:    Vec<(String, String)>,  // (status, path)
+    pub new_commits:       Vec<String>,            // mensajes de commit
+    pub detected_features: Vec<String>,            // features de commits
+}
+
+// Decisión capturada
+#[derive(Serialize)]
+pub struct CapturedDecision {
+    pub text:            String,
+    pub tags:            Vec<String>,
+    pub already_exists:  bool,
+}
+
+// Resultado de cada paso del session end
+#[derive(Serialize)]
+pub struct StepResult {
+    pub name:     String,
+    pub success:  bool,
+    pub message:  String,
+}
+
+// Resultado completo del session end
+#[derive(Serialize)]
+pub struct SessionEndResult {
+    pub steps:             Vec<StepResult>,
+    pub decisions_saved:   usize,
+}
+```
+
+---
+
 ## 3. JSON Output Shapes
 
-Todos los outputs JSON siguen el envelope:
+Todos los outputs JSON con `--json` siguen el envelope:
+
 ```json
-{"status": "ok" | "error", ...campos específicos}
+{"status": "ok", "data": { ... }}
+{"status": "error", "message": "...", "hint": "..."}
 ```
+
+Sin `--json` pero con `--format json`, el envelope NO se usa (solo el contenido de `data` se imprime directamente).
 
 Los campos de error siempre incluyen `message` y opcionalmente `hint`.
 
@@ -221,13 +273,31 @@ Los campos de error siempre incluyen `message` y opcionalmente `hint`.
 ```json
 {
   "status": "ok",
-  "level": 1,
-  "files_created": [
-    ".dec/.gitignore",
-    ".dec/config/project.toml",
-    ".dec/isa/project.isa.md"
-  ],
-  "next_step": "Edit .dec/config/project.toml and .dec/isa/project.isa.md with your project details"
+  "data": {
+    "level": 1,
+    "files_created": [
+      ".dec/.gitignore",
+      ".dec/config/project.toml",
+      ".dec/isa/project.isa.md"
+    ],
+    "next_step": "Edit .dec/config/project.toml and .dec/isa/project.isa.md with your project details"
+  }
+}
+```
+
+**Éxito con auto-fill** (proyecto no vacío):
+```json
+{
+  "status": "ok",
+  "data": {
+    "level": 2,
+    "files_created": [".dec/config/project.toml", "..."],
+    "auto_fill": {
+      "detected_stack": { "languages": ["Rust"] },
+      "filled_files": ["project.toml", "project.isa.md"]
+    },
+    "next_step": "Run 'dectl project info' to verify the setup"
+  }
 }
 ```
 
@@ -247,28 +317,91 @@ Los campos de error siempre incluyen `message` y opcionalmente `hint`.
 ```json
 {
   "status": "ok",
-  "project": {
+  "data": {
     "name": "my-api",
-    "type": "api",
+    "project_type": "api",
     "description": "REST API for inventory management",
-    "schema_version": "1.0"
-  },
-  "stack": {
-    "languages": ["python"],
-    "frameworks": ["fastapi"],
-    "databases": ["postgresql"],
-    "tools": ["docker"]
-  },
-  "isa_vision": "A REST API to manage inventory for small stores.",
-  "progress": {
-    "done": 2,
-    "in_progress": 1,
-    "pending": 3,
-    "blocked": 0,
-    "total": 6
-  },
-  "warnings": []
+    "stack": {
+      "languages": ["rust"],
+      "frameworks": [],
+      "databases": [],
+      "tools": []
+    },
+    "conventions": [],
+    "warnings": [],
+    "isa": {
+      "vision": "A REST API to manage inventory...",
+      "objective": null,
+      "path": ".dec/isa/project.isa.md"
+    }
+  }
 }
+```
+
+---
+
+### `dectl project context --format json` (sin `--json`)
+
+```json
+{
+  "project": "my-project",
+  "tokens_used": 328,
+  "tokens_limit": 4000,
+  "files": [
+    {
+      "path": "isa/project.isa.md",
+      "content": "# ISA: [Project Name]\n...",
+      "tokens": 195
+    },
+    {
+      "path": "config/project.toml",
+      "content": "[project]\nname = \"...\"",
+      "tokens": 35
+    }
+  ]
+}
+```
+
+### `dectl project context --format json --json` (con envelope)
+
+```json
+{
+  "status": "ok",
+  "data": {
+    "project": "my-project",
+    "tokens_used": 328,
+    "tokens_limit": 4000,
+    "files": [
+      { "path": "isa/project.isa.md", "content": "...", "tokens": 195 }
+    ]
+  }
+}
+```
+
+### `dectl project context --format compact --json`
+
+```json
+{
+  "status": "ok",
+  "data": {
+    "project": "my-project",
+    "stack": "Rust, Axum",
+    "last_session": "Implementada auth JWT. Pendiente refresh token.",
+    "progress": "5/10 features complete",
+    "decisions": "001-db-choice, 002-api-design",
+    "memory_hits": 42
+  }
+}
+```
+
+Modo human (sin `--json`):
+```
+project: my-project
+stack: Rust, Axum
+last_session: Implementada auth JWT. Pendiente refresh token.
+progress: 5/10 features complete
+decisions: 001-db-choice, 002-api-design
+memory_hits: 42
 ```
 
 ---
@@ -278,17 +411,10 @@ Los campos de error siempre incluyen `message` y opcionalmente `hint`.
 ```json
 {
   "status": "ok",
-  "tree": [
-    {
-      "path": "src",
-      "type": "dir",
-      "children": [
-        { "path": "src/main.rs", "type": "file", "children": [] },
-        { "path": "src/lib.rs",  "type": "file", "children": [] }
-      ]
-    },
-    { "path": "Cargo.toml", "type": "file", "children": [] }
-  ]
+  "data": {
+    "count": 5,
+    "files": [".", "./src", "./src/main.rs", "./Cargo.toml", "./AGENTS.md"]
+  }
 }
 ```
 
@@ -296,13 +422,16 @@ Los campos de error siempre incluyen `message` y opcionalmente `hint`.
 
 ### `dectl memory add --json`
 
-**Éxito**:
 ```json
 {
   "status": "ok",
-  "id": 42,
-  "project": "my-api",
-  "preview": "Decisión: usar PostgreSQL por soporte de JSONB y familiaridad del equipo"
+  "data": {
+    "id": 42,
+    "content_preview": "Decisión: usar PostgreSQL por soporte de JSONB",
+    "tags": [],
+    "project": "my-api",
+    "created_at": "2026-05-26T10:46:08.799091+00:00"
+  }
 }
 ```
 
@@ -313,16 +442,19 @@ Los campos de error siempre incluyen `message` y opcionalmente `hint`.
 ```json
 {
   "status": "ok",
-  "entries": [
-    {
-      "id": 42,
-      "created_at": "2026-05-13T14:32:00Z",
-      "tags": "architecture,database",
-      "project": "my-api",
-      "preview": "Decisión: usar PostgreSQL por soporte de JSONB..."
-    }
-  ],
-  "total": 1
+  "data": {
+    "entries": [
+      {
+        "id": 42,
+        "content": "Decisión: usar PostgreSQL...",
+        "tags": [],
+        "project": "my-api",
+        "created_at": "2026-05-26T10:46:08.799091+00:00",
+        "updated_at": "2026-05-26T10:46:08.799091+00:00"
+      }
+    ],
+    "count": 1
+  }
 }
 ```
 
@@ -333,17 +465,20 @@ Los campos de error siempre incluyen `message` y opcionalmente `hint`.
 ```json
 {
   "status": "ok",
-  "query": "postgresql",
-  "entries": [
-    {
-      "id": 42,
-      "created_at": "2026-05-13T14:32:00Z",
-      "tags": "architecture,database",
-      "project": "my-api",
-      "preview": "Decisión: usar **PostgreSQL** por soporte de JSONB..."
-    }
-  ],
-  "total": 1
+  "data": {
+    "query": "postgresql",
+    "entries": [
+      {
+        "id": 42,
+        "content": "Decisión: usar PostgreSQL...",
+        "tags": [],
+        "project": "my-api",
+        "created_at": "2026-05-26T10:46:08.799091+00:00",
+        "updated_at": "2026-05-26T10:46:08.799091+00:00"
+      }
+    ],
+    "count": 1
+  }
 }
 ```
 
@@ -354,13 +489,15 @@ Los campos de error siempre incluyen `message` y opcionalmente `hint`.
 ```json
 {
   "status": "ok",
-  "entry": {
-    "id": 42,
-    "content": "# Decisión: Base de datos\n\nUsar PostgreSQL por...",
-    "tags": "architecture,database",
-    "project": "my-api",
-    "created_at": "2026-05-13T14:32:00Z",
-    "updated_at": null
+  "data": {
+    "entry": {
+      "id": 42,
+      "content": "# Decisión: Base de datos\n\nUsar PostgreSQL por...",
+      "tags": [],
+      "project": "my-api",
+      "created_at": "2026-05-26T10:46:08.799091+00:00",
+      "updated_at": "2026-05-26T10:46:08.799091+00:00"
+    }
   }
 }
 ```
@@ -372,18 +509,19 @@ Los campos de error siempre incluyen `message` y opcionalmente `hint`.
 ```json
 {
   "status": "ok",
-  "workflows": [
-    {
-      "name": "implement_feature",
-      "description": "Implementa una nueva feature completa con tests y documentación",
-      "required_inputs": ["feature_name", "module"]
-    },
-    {
-      "name": "design_architecture",
-      "description": "Guía al modelo para diseñar o revisar la arquitectura del proyecto",
-      "required_inputs": []
-    }
-  ]
+  "data": {
+    "workflows": [
+      {
+        "name": "implement_feature",
+        "description": "Implement a complete feature with tests and documentation",
+        "inputs": [
+          { "name": "feature_name", "required": true, "default": null },
+          { "name": "module", "required": true, "default": null },
+          { "name": "include_tests", "required": false, "default": "true" }
+        ]
+      }
+    ]
+  }
 }
 ```
 
@@ -394,37 +532,18 @@ Los campos de error siempre incluyen `message` y opcionalmente `hint`.
 ```json
 {
   "status": "ok",
-  "workflow": {
-    "name": "implement_feature",
-    "description": "Implementa una nueva feature completa con tests y documentación",
-    "inputs": [
-      {
-        "name": "feature_name",
-        "description": "Nombre de la feature (ej. 'user_authentication')",
-        "required": true,
-        "default": null
-      },
-      {
-        "name": "include_tests",
-        "description": "Generar tests automáticamente (true/false)",
-        "required": false,
-        "default": "true"
-      }
-    ],
-    "steps": [
-      {
-        "index": 1,
-        "type": "prompt",
-        "description": "Cargar contexto del proyecto",
-        "content": "Lee .dec/isa/project.isa.md y .dec/config/project.toml..."
-      },
-      {
-        "index": 2,
-        "type": "action",
-        "description": "Buscar decisiones relevantes en memoria",
-        "cmd": ["dectl", "memory", "search", "{{feature_name}}"]
-      }
-    ]
+  "data": {
+    "workflow": {
+      "name": "implement_feature",
+      "description": "Implement a complete feature...",
+      "inputs": [
+        { "name": "feature_name", "description": "...", "required": true, "default": null }
+      ],
+      "steps": [
+        { "index": 1, "type": "prompt", "description": "...", "content": "..." },
+        { "index": 2, "type": "action", "description": "...", "cmd": ["dectl", "memory", "search", "{{feature_name}}"] }
+      ]
+    }
   }
 }
 ```
@@ -437,10 +556,12 @@ Los campos de error siempre incluyen `message` y opcionalmente `hint`.
 ```json
 {
   "status": "ok",
-  "workflow": "implement_feature",
-  "steps_executed": 5,
-  "steps_skipped": 0,
-  "failed_step": null
+  "data": {
+    "workflow": "implement_feature",
+    "steps_executed": 5,
+    "steps_skipped": 0,
+    "failed_step": null
+  }
 }
 ```
 
@@ -448,19 +569,21 @@ Los campos de error siempre incluyen `message` y opcionalmente `hint`.
 ```json
 {
   "status": "error",
-  "workflow": "implement_feature",
-  "steps_executed": 2,
-  "steps_skipped": 0,
-  "failed_step": {
-    "index": 3,
-    "type": "action",
-    "description": "Buscar decisiones relevantes",
-    "cmd": ["dectl", "memory", "search", "user_auth"],
-    "exit_code": 1,
-    "stderr": "No se encontró .dec/ en el directorio actual"
-  },
   "message": "Step 3 failed",
-  "hint": "Fix the error above and resume with --from-step 3"
+  "hint": "Fix the error above and resume with --from-step 3",
+  "data": {
+    "workflow": "implement_feature",
+    "steps_executed": 2,
+    "steps_skipped": 0,
+    "failed_step": {
+      "index": 3,
+      "type": "action",
+      "description": "Search relevant decisions",
+      "cmd": ["dectl", "memory", "search", "user_auth"],
+      "exit_code": 1,
+      "stderr": "Not found"
+    }
+  }
 }
 ```
 
@@ -472,9 +595,13 @@ Los campos de error siempre incluyen `message` y opcionalmente `hint`.
 ```json
 {
   "status": "ok",
-  "executed": 5,
-  "failed_line": null,
-  "failed_cmd": null
+  "data": {
+    "total": 3,
+    "succeeded": 3,
+    "failed": 0,
+    "error_line": null,
+    "error_message": null
+  }
 }
 ```
 
@@ -482,11 +609,141 @@ Los campos de error siempre incluyen `message` y opcionalmente `hint`.
 ```json
 {
   "status": "error",
-  "executed": 2,
-  "failed_line": 3,
-  "failed_cmd": "dectl memory add",
-  "message": "Command failed at line 3",
-  "hint": "Fix the command and re-run from line 3"
+  "data": {
+    "total": 3,
+    "succeeded": 1,
+    "failed": 1,
+    "error_line": 2,
+    "error_message": "Command failed at line 2"
+  }
+}
+```
+
+---
+
+### `dectl agent list --json`
+
+```json
+{
+  "status": "ok",
+  "data": {
+    "agents": [
+      {
+        "name": "coder",
+        "role": "Feature implementer following project conventions",
+        "description": "Implements code respecting the stack and conventions from .dec/",
+        "source": "builtin"
+      }
+    ]
+  }
+}
+```
+
+---
+
+### `dectl agent describe --json`
+
+```json
+{
+  "status": "ok",
+  "data": {
+    "name": "coder",
+    "role": "Feature implementer...",
+    "description": "...",
+    "source": "builtin",
+    "inputs": [],
+    "steps": [
+      { "type": "prompt", "content": "...", "description": "..." },
+      { "type": "action", "cmd": ["dectl", "memory", "search", "{{task}}"], "description": "..." }
+    ]
+  }
+}
+```
+
+---
+
+### `dectl agent trust --json`
+
+**Éxito**:
+```json
+{
+  "status": "ok",
+  "data": {
+    "agent": "coder",
+    "project": "/home/user/projects/myapp",
+    "already_trusted": false
+  }
+}
+```
+
+**Ya confiado**:
+```json
+{
+  "status": "ok",
+  "data": {
+    "agent": "coder",
+    "project": "/home/user/projects/myapp",
+    "already_trusted": true
+  }
+}
+```
+
+**Error** (agente no existe):
+```json
+{
+  "status": "error",
+  "message": "Agent 'nonexistent' not found",
+  "hint": "Run 'dectl agent list' to see available agents"
+}
+```
+
+---
+
+### `dectl agent run --json`
+
+```json
+{
+  "status": "ok",
+  "data": {
+    "agents": ["coder"],
+    "status": "completed",
+    "duration_secs": 12,
+    "steps_executed": 3,
+    "error": null
+  }
+}
+```
+
+---
+
+### `dectl generate-completions` (no tiene `--json`)
+
+El comando genera script de shell en stdout; no tiene output JSON.
+
+---
+
+### `dectl spec init --json`
+
+**Éxito**:
+```json
+{
+  "status": "ok",
+  "data": {
+    "message": ".dec/sdd/ ready",
+    "bridge": {
+      "project_toml": true,
+      "project_isa": true
+    },
+    "next": "Interview the user and create specs/ with SDD documents"
+  }
+}
+```
+
+**Error** (no .dec/):
+```json
+{
+  "status": "error",
+  "message": ".dec/ not found. Run `dectl project init` first."
 }
 ```
 
@@ -511,5 +768,79 @@ CLI Structs
     │                            [definido en dot-dec/data-model.md]
     │
     └── lee/escribe ──────────► progress.json + last_session.md
-                                 [definido en dot-dec/data-model.md]
+                                  [definido en dot-dec/data-model.md]
+```
+
+---
+
+### `dectl session end --json`
+
+**Éxito** (al menos un paso):
+```json
+{
+  "status": "ok",
+  "data": {
+    "steps": [
+      { "name": "last_session.md", "success": true, "message": "updated" },
+      { "name": "progress.json", "success": true, "message": "synced with git" },
+      { "name": "memory", "success": true, "message": "2 decisions saved" },
+      { "name": "config_sync", "success": true, "message": "no changes detected" },
+      { "name": "agent_sync", "success": true, "message": "0 agent sessions" }
+    ],
+    "decisions_saved": 2,
+    "config_changes": {
+      "stack_changed": false,
+      "project_toml_updated": false,
+      "isa_updated": false
+    },
+    "agent_sessions": 0
+  }
+}
+```
+
+**Parcial** (un paso falló):
+```json
+{
+  "status": "ok",
+  "data": {
+    "steps": [
+      { "name": "last_session.md", "success": true, "message": "updated" },
+      { "name": "progress.json", "success": true, "message": "no git repo found (skipped)" },
+      { "name": "memory", "success": false, "message": "database not found" },
+      { "name": "config_sync", "success": true, "message": "project.toml updated" },
+      { "name": "agent_sync", "success": true, "message": "3 agent sessions" }
+    ],
+    "decisions_saved": 0,
+    "config_changes": {
+      "stack_changed": true,
+      "project_toml_updated": true,
+      "isa_updated": false
+    },
+    "agent_sessions": 3
+  }
+}
+```
+
+**Error** (todos los pasos fallaron):
+```json
+{
+  "status": "error",
+  "message": "All session end steps failed",
+  "data": {
+    "steps": [
+      { "name": "last_session.md", "success": false, "message": "failed to generate summary: ..." },
+      { "name": "progress.json", "success": false, "message": "..." },
+      { "name": "memory", "success": false, "message": "..." },
+      { "name": "config_sync", "success": false, "message": "..." },
+      { "name": "agent_sync", "success": false, "message": "..." }
+    ],
+    "decisions_saved": 0,
+    "config_changes": {
+      "stack_changed": false,
+      "project_toml_updated": false,
+      "isa_updated": false
+    },
+    "agent_sessions": 0
+  }
+}
 ```

@@ -1,6 +1,6 @@
 # Technical Research — .dec/ System
 > *Documenta decisiones técnicas sobre el schema, formatos y comportamientos de .dec/*
-> *Last updated: 2026-05-13*
+> *Last updated: 2026-06-02*
 
 ---
 

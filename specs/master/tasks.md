@@ -1,7 +1,7 @@
 # Implementation Tasks — dectl
 > *Atomic, ordered, trackable tasks derived from plan.md.*
 > *Each task = independently implementable + testable + reviewable as single PR.*
-> *Last updated: 2026-05-19*
+> *Last updated: 2026-06-02*
 
 ---
 
@@ -66,7 +66,7 @@
 - [x] [T021] Write end-to-end integration test: init project → add 3 memories → list → search → show, all via binary invocation; verify `--json` output is valid parseable JSON on every command — L
 - [x] [T022] Verify binary size on release build does not exceed 20MB (`cargo build --release` + `strip`); document result in `specs/master/research.md` — S
 
-**Result**: 3.6MB → 4.4MB (well under 20MB limit)
+**Result**: 3.6MB → ~4.5MB (well under 20MB limit)
 - [x] [T023] Write `--help` text review: run every Phase 1 command with `--help`, verify output is accurate, includes usage example, and lists all flags — S
 
 **All help text verified**: main, project, memory, workflow, init, add, search, run
@@ -109,10 +109,14 @@
 
 ---
 
-### Agent Module (basic)
+### Agent Module (Phase 6)
 
-- [ ] [T037] Implement `dectl agent list`: display hardcoded agent types (`coder`, `reviewer`, `researcher`) with description — S
-- [ ] [T038] Implement `dectl agent run <type> --task "<description>"`: load agent prompt template from `.dec/prompts/tasks/<type>.md`, substitute `{{task}}` placeholder, print composed prompt for model to act on — M
+> Full specification in `specs/agents/`. Tasks A001-A019.
+
+- [ ] See `specs/agents/tasks.md` for complete agent implementation tasks
+- [ ] A001-A009: Individual agents (schema, loader, built-ins, list, describe, log, runner, run, tests)
+- [ ] A010-A014: Parallelism + custom agents + workflow integration
+- [ ] A015-A019: Session end integration + polish
 
 ---
 
@@ -145,14 +149,64 @@
 
 - [x] [T045] Implement auto-fill in `dectl project init`:
   - `is_project_empty()` — detect if project has existing code
-  - `detect_stack()` — detect language/framework from config files
-  - `scan_docs_for_context()` — extract name and vision from README
+  - `detect_stack()` — detect language from config files
+  - `scan_docs_for_context()` — extract project name from README (basic fallback)
   - `fill_project_files()` — update `.dec/` with detected context
   > Implemented in `project/auto_fill.rs`
 - [x] [T046] Interactive init for empty projects: prompt for project name, type, languages, description, vision — M
 - [x] [T047] Memory context-aware: auto-detect project from `.dec/config/project.toml`, filter `memory list/search` by project by default, `--global` flag to bypass filter — M
 
 **Phase 3 COMPLETE** (except T040 and T043) ✅
+
+---
+
+## Phase 7 — Polish & Adopción ✅ COMPLETE
+
+| ID | Tarea | Archivos | Status |
+|----|-------|----------|--------|
+| P001 | Proportional token budget for project context | `context.rs` | ✅ |
+| P002 | `--format compact` for project context | `context.rs` | ✅ |
+| P003 | Recent changes prioritization | `context.rs` | ✅ |
+| P004 | E2E anchor moment test script | `tests/e2e_anchor.rs` | ✅ |
+| P005 | Onboarding quickstart + README update | `README.md`, `docs/user/quickstart.md` | ✅ |
+| P006 | Update specs, tasks.md, CLAUDE.md | varios | ✅ |
+
+**Phase 7 COMPLETE** ✅
+
+---
+
+## Phase 8 — SDD Spec Generator ✅ COMPLETE
+
+| ID | Tarea | Archivos | Esfuerzo | Depende de | Estado |
+|----|-------|----------|----------|------------|--------|
+| SPC001 | spec module scaffold + CLI command | spec/mod.rs, spec/init.rs, main.rs | S | Phase 7 | ✅ |
+| SPC002 | SDD templates embebidos + bridge | spec/templates.rs, spec/bridge.rs, spec/init.rs | M | SPC001 | ✅ |
+| SPC003 | Integrar sdd/ en project init --standard | project/templates.rs | S | SPC002 | ✅ |
+| SPC004 | Tests + polish | tests/spec_init.rs, config.rs | M | SPC003 | ✅ |
+
+**Total tasks**: 4/4 ✅
+**111 tests passing** (25 unit + 86 integration)
+
+---
+
+## Phase 4 — Session Management ✅ COMPLETE
+
+### Session Module
+
+- [x] [S001] Create `session/` module structure: `mod.rs`, register in `main.rs` — S
+- [x] [S002] Define session data types: `SessionSummary`, `GitChanges`, `CapturedDecision`, `SessionEndResult` — S (REQ-008)
+- [x] [S003] Implement `session_summary.rs`: `generate_session_summary()` from git log + previous session — M (REQ-008)
+- [x] [S004] Implement `write_last_session()`: format and write `.dec/state/last_session.md`, support `--dry-run` — S (REQ-008)
+- [x] [S005] Implement `git_sync.rs`: `detect_git_changes()` via `git diff` + `git log` — M (REQ-008)
+- [x] [S006] Implement `sync_progress()`: update `progress.json` from git changes, detect new features — M (REQ-008)
+- [x] [S007] Implement `decision_capture.rs`: `capture_decisions()` via regex patterns on session text — M (REQ-008)
+- [x] [S008] Implement `save_decisions()`: INSERT new decisions into memory.db, avoid duplicates — S (REQ-008)
+- [x] [S009] Wire `dectl session end` in `main.rs` with `--dry-run`, `--skip-git` flags — S (REQ-008)
+- [x] [S010] Implement `session/end.rs`: orchestrate 3 steps independently, collect results, output summary — M (REQ-008)
+- [x] [S011] Write integration tests for session end: dry-run, skip-git, JSON output, no git repo, with .dec/ — M
+- [x] [S012] Update documentation: README.md, CLAUDE.md, last_session.md — S
+
+**Phase 4 COMPLETE** ✅
 
 ---
 
@@ -163,9 +217,16 @@
 | Phase 1 — MVP | 24 | 24 | 0 | 0 |
 | Phase 2 — Workflows | 10 | 10 | 0 | 0 |
 | Phase 3 — Polish | 13 | 13 | 0 | 0 |
-| **Total** | **47** | **47** | **0** | **0** |
+| Phase 4 — Session | 12 | 12 | 0 | 0 |
+| Phase 5 — Config Sync | 15 | 15 | 0 | 0 |
+| Phase 6 — Agents | 19 | 19 | 0 | 0 |
+| Phase 7 — Polish & Adopción | 6 | 6 | 0 | 0 |
+| Phase 8 — SDD Spec Generator | 4 | 4 | 0 | 0 |
+| Phase 10 — Code Quality | 4 | 4 | 0 | 0 |
+| Agent Cycle — SDD Pipeline | 11 | 11 | 0 | 0 |
+| **Total** | **118** | **118** | **0** | **0** |
 
-**Phase 3 COMPLETE** ✅
+**Phase 5 COMPLETE** ✅
 
 ---
 
@@ -174,11 +235,11 @@
 | ID | Descripción | Prioridad | Status |
 |----|-------------|-----------|--------|
 | T034-T036 | Embeddings (semantic search) — opcional, requiere Ollama | Low | Pending |
-| T037-T038 | Agent module (list/run) | Medium | Pending |
+| A001-A019 | Agent module (full spec in `specs/agents/tasks.md`) | Medium | ✅ Complete (19/19) |
 | T043 | Windows full support — documentado, ~5h estimado | Low | Pending (documented) |
 
-**All Phase 1-3 tasks COMPLETE** ✅
+**All phases 1-8 COMPLETE** ✅
 
 ---
 
-*Last sync: 2026-05-19 — CLI SDD (specs/cli/tasks.md) was source of truth for Phase 2-3 implementation status*
+*Last sync: 2026-06-02 — All phases complete, 111 tests passed, auto-trust, install script, CI/CD, docs translated*

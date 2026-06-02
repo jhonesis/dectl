@@ -1,6 +1,6 @@
 # Requirements Validation Checklist — dectl CLI
 > *Valida que spec.md está completo, sin ambigüedad y listo para planificar.*
-> *Last updated: 2026-05-13*
+> *Last updated: 2026-06-02*
 
 ---
 
@@ -29,7 +29,7 @@
 ## Consistencia
 
 - [x] Sin requisitos contradictorios
-- [x] Requisitos numerados secuencialmente (REQ-C-001 a REQ-C-012)
+- [x] Requisitos numerados secuencialmente (REQ-C-001 a REQ-C-020)
 - [x] Sin requisitos duplicados
 - [x] --json definido consistentemente en todos los comandos con mismo envelope
 - [x] Exit codes consistentes entre todos los comandos
@@ -52,6 +52,14 @@
 - [x] REQ-C-012 → REQ-006 del maestro (--json global)
 - [x] stdin en memory add → extiende REQ-C-004 sin contradecir REQ-003 del maestro
 - [x] --from-step en workflow run → extiende REQ-C-010 sin contradecir REQ-004 del maestro
+- [x] REQ-C-013 → REQ-002 del maestro (project context — context reading)
+- [x] REQ-C-014 → REQ-008 del maestro (session end)
+- [x] REQ-C-015 → REQ-006 del maestro (generate-completions)
+- [x] REQ-C-016 → REQ-006 del maestro (version)
+- [x] REQ-C-017 → REQ-008 del maestro (config sync)
+- [x] REQ-C-018 → Nuevo — sistema de agentes (agents list/describe/run)
+- [x] REQ-C-019 → REQ-009 del maestro (spec init)
+- [x] REQ-C-020 → REQ-A-002 del maestro (agent trust)
 
 ---
 
@@ -63,6 +71,9 @@
 - [x] --non-interactive especificado en REQ-C-012 (principio "predecible")
 - [x] Mensajes de error incluyen qué/por qué/qué hacer (principio "fallar rápido y claramente")
 - [x] Ningún comando asume un modelo específico (principio "el modelo puede leer cualquier output")
+- [x] agent run implementa timeout y trust check (principio "predecible ante todo")
+- [x] agent run --parallel usa threads con mpsc (principio "un comando hace una cosa")
+- [x] session end integra 5 pasos independientes (principio "fallar rápido y claramente")
 
 ---
 
@@ -72,6 +83,9 @@
 - [x] workflow run implementa el schema de inputs/variables de dot-dec/data-model.md
 - [x] --from-step no contradice el modelo de trust definido en master/data-model.md
 - [x] memory add auto-detecta proyecto desde .dec/config/project.toml (consistente con dot-dec)
+- [x] session end actualiza last_session.md, progress.json, memory.db (consistente con master/data-model.md)
+- [x] agent list/describe/run/trust siguen el schema de agentes definido en agents/spec.md
+- [x] generate-completions implementa bash/zsh/fish (consistente con constitution.md)
 
 ---
 

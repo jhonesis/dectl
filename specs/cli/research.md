@@ -1,6 +1,6 @@
 # Technical Research — dectl CLI
 > *Investiga incógnitas técnicas específicas del CLI no cubiertas en master/research.md.*
-> *Last updated: 2026-05-13*
+> *Last updated: 2026-06-02*
 
 ---
 

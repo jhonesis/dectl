@@ -1,6 +1,6 @@
 # Technical Implementation Plan — .dec/ System
 > *Describe CÓMO construir lo que spec.md define. Technology-specific.*
-> *Version: 1.0 | Status: Draft | Last updated: 2026-05-13*
+> *Version: 1.0 | Status: Updated | Last updated: 2026-06-02*
 
 ---
 
@@ -63,7 +63,7 @@ Dos archivos. Suficiente para que cualquier modelo entienda el proyecto.
 
 ### Nivel 2 — Estándar (`dectl project init --standard`)
 
-Agrega el sistema de pensamiento: decisiones, workflows base, prompt del sistema y estado.
+Agrega el sistema de pensamiento: decisiones, workflows base, prompt del sistema, integración y estado.
 
 ```
 .dec/
@@ -74,7 +74,9 @@ Agrega el sistema de pensamiento: decisiones, workflows base, prompt del sistema
 ├── workflows/
 │   ├── implement_feature.yaml
 │   └── design_architecture.yaml
-├── prompts/system/base.md
+├── prompts/system/
+│   ├── base.md
+│   └── integration.md       ← instrucciones de ciclo de sesión
 └── state/
     ├── progress.json
     └── last_session.md
@@ -407,6 +409,45 @@ Estás trabajando en [nombre del proyecto]. Lee .dec/isa/project.isa.md para ent
 - Inventar términos del dominio que no están en el glosario
 - Proponer cambios que contradigan decisiones en .dec/decisions/
 - Asumir requisitos no documentados — pregunta
+```
+
+---
+
+### `prompts/system/integration.md`
+
+```markdown
+# Instrucciones de Sesión — [Nombre del Proyecto]
+> **Para el modelo**: Lee y sigue estas instrucciones en cada sesión de trabajo.
+> Actualiza este archivo si el equipo quiere cambiar el comportamiento del modelo.
+
+---
+
+## Al iniciar sesión
+
+1. Lee `.dec/config/project.toml` y `.dec/isa/project.isa.md` para entender el proyecto
+2. Lee `.dec/state/last_session.md` y retoma desde "Próximo paso recomendado"
+3. Ejecuta `dectl project info --json` y escala al developer si hay warnings
+4. Confirma en 2-3 líneas qué entendiste antes de preguntar qué hacer hoy
+
+## Antes de actuar
+
+1. Para cambios de arquitectura: lee `.dec/decisions/` primero
+2. Para implementar una feature: busca su workflow en `.dec/workflows/`
+3. Para términos de dominio: consulta `.dec/knowledge/glossary.md` si existe
+4. Describe lo que vas a hacer antes de hacerlo — nunca actúes en silencio
+
+## Al completar una tarea
+
+1. Si completaste o avanzaste una feature: actualiza `.dec/state/progress.json`
+2. Para decisiones importantes: ejecuta `dectl memory add "[resumen de la decisión]"`
+3. Para decisiones arquitectónicas: crea `.dec/decisions/XXXX-nombre.md`
+
+## Al finalizar sesión
+
+1. Ejecuta `dectl session end` para automatizar el cierre de sesión
+2. O manualmente:
+   - Escribe `.dec/state/last_session.md` con resumen
+   - Ejecuta `dectl memory add "Sesión [fecha]: [resumen en una línea]"`
 ```
 
 ---

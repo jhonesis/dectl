@@ -1,7 +1,7 @@
 # Technical Implementation Plan — Integration Layer
 > *Define los patrones concretos, flujos y artefactos de integración entre los tres actores.*
 > *La integración no tiene código propio — produce artefactos (templates, flujos, documentación).*
-> *Version: 1.0 | Status: Draft | Last updated: 2026-05-13*
+> *Version: 1.0 | Status: Updated | Last updated: 2026-05-26*
 
 ---
 
@@ -127,6 +127,35 @@ Done: 2 | In progress: 1 | Pending: 3 | Blocked: 0
 ---
 
 ## Flujos de Integración
+
+### Flujo 0 — El momento ancla (proyecto legacy, primera vez)
+
+```
+Developer abre proyecto legacy que no tocaba hace 6 meses
+    │
+    developer ejecuta: dectl project init --standard
+    │   → Detecta stack (Rust + Axum + SQLite)
+    │   → Auto-genera .dec/config/project.toml, .dec/isa/project.isa.md
+    │   → Crea AGENTS.md en la raíz
+    │
+    developer abre su IA en el proyecto
+    │
+    modelo lee .dec/ → protocolo de inicio (REQ-I-001)
+    ├── .dec/config/project.toml → "REST API, Rust, Axum, SQLite"
+    ├── .dec/isa/project.isa.md → "User account management"
+    ├── .dec/state/last_session.md → (vacío, primera vez)
+    ├── .dec/state/progress.json → "0/10 features"
+    │
+    modelo: "Este proyecto es una REST API para gestión de usuarios
+             construida con Rust + Axum + SQLite. Aún no hay features
+             completadas. ¿Por dónde empezamos?"
+    │
+    developer: *no necesita explicar nada — el modelo ya entendió*
+```
+
+Verificado por: `cargo test --test e2e_anchor` (P004)
+
+---
 
 ### Flujo 1 — Proyecto nuevo, primera sesión
 
@@ -285,6 +314,173 @@ Pega el contexto en el chat de la IA:
 
 ---
 
+### Flujo 8 — Cierre de sesión automatizado
+
+```
+Developer: "Terminé por hoy"
+    │
+    modelo ejecuta: dectl session end
+    │
+    Paso 1: session_summary
+    ├── lee last_session.md anterior (pendientes, próximo paso)
+    ├── git log --oneline -20 (acciones realizadas)
+    ├── git diff --name-only (archivos modificados)
+    └── escribe .dec/state/last_session.md con:
+        - Qué se hizo (de git log)
+        - Qué quedó pendiente (de sesión anterior)
+        - Decisiones tomadas
+        - Próximo paso recomendado
+    │
+    Paso 2: git_sync (si hay repo git)
+    ├── git diff --name-status (archivos modificados)
+    ├── lee progress.json
+    ├── marca features como "done" si sus archivos fueron modificados
+    ├── detecta nuevas features de commits (feat:, feature:, add:)
+    └── escribe progress.json actualizado
+    │
+    Paso 3: decision_capture
+    ├── lee last_session.md + git log
+    ├── regex para patrones de decisión (ES/EN)
+    ├── compara con memorias existentes (evitar duplicados)
+    └── INSERT nuevas decisiones en memory.db
+    │
+    Paso 4: config_sync
+    ├── detect_stack() → escanea filesystem por config files (Cargo.toml, package.json, etc.)
+    ├── lee .dec/config/project.toml → stack registrado
+    ├── compara: items en filesystem pero no en toml = nuevos
+    ├── Si hay diferencias:
+    │    ├── merge_stack_into_toml() → agrega nuevos items sin remover existentes
+    │    └── check_isa_coherence() → verifica si isa.md menciona stack detectado
+    └── Reporta cambios al modelo
+    │
+    Output al developer:
+    ✅ last_session.md updated
+    ✅ progress.json synced with git
+    ✅ 2 decisions saved to memory
+    ✅ project.toml updated (1 new language)
+    ⚠ 1 isa coherence warning: project.isa.md may be outdated
+    │
+    modelo reporta: "Sesión cerrada. 2 decisiones guardadas.
+                     Stack actualizado: rust agregado.
+                     Próximo paso: revisar project.isa.md"
+```
+
+**Flags**:
+- `--dry-run`: muestra qué se actualizaría sin escribir nada
+- `--skip-git`: omite el paso 2 (útil si no hay repo o el developer no quiere sync)
+- `--json`: output machine-readable para scripts
+
+---
+
+### Flujo 9 — Invocación de agentes por el modelo
+
+```
+Developer: "Implementa el módulo de usuarios con registro y login"
+    │
+    modelo decide delegar tareas a agentes
+    │
+    modelo: "Voy a dividir esto en tareas paralelas"
+    modelo: "Primero investigo contexto, luego implemento código"
+    │
+    modelo ejecuta:
+    │
+    dectl agent run researcher --task "Buscar decisiones previas sobre auth en este proyecto"
+    │
+    ├── agente busca en memory.db + .dec/decisions/
+    ├── encuentra 001-auth-choice.md (JWT + refresh tokens)
+    └── devuelve resumen al modelo
+    │
+    modelo interpreta resultado:
+    "Ya hay una decisión de usar JWT. Voy a implementar consistente con eso."
+    │
+    modelo ejecuta:
+    │
+    dectl agent run coder --task "Implementar registro y login de usuarios con JWT"
+      --file src/auth.rs
+    │
+    ├── agente lee contexto del proyecto
+    ├── implementa siguiendo convenciones
+    └── devuelve código generado
+    │
+    modelo revisa el output del agente:
+    ├── verifica que sigue las decisiones de arquitectura
+    ├── verifica que usa el stack correcto
+    └── integra en el flujo principal
+    │
+    modelo: "Listo. Implementé registro y login con JWT consistente con la decisión
+             arquitectónica 001. ¿Quieres que revise el código con un agente reviewer?"
+    │
+    developer: "sí"
+    │
+    modelo: dectl agent run reviewer --task "Revisar src/auth.rs"
+    │
+    modelo reporta resultados de la review al developer
+```
+
+**Comportamiento esperado del modelo**:
+- El modelo principal SIEMPRE mantiene el contexto global y la coordinación
+- Los agentes ejecutan tareas autónomas y devuelven resultados
+- El modelo revisa el output del agente antes de integrarlo
+- Para tareas independientes, el modelo puede proponer `--parallel`
+- El modelo usa `dectl agent list` para descubrir agentes disponibles
+- El modelo usa `dectl agent describe <type>` para entender inputs y steps
+
+---
+
+### Flujo 11 — SDD Spec Generator (creación de documentos de especificación)
+
+```
+Developer ha creado .dec/ con project init --standard
+    │   (incluye .dec/sdd/ con SKILL.md + references/)
+    │
+    developer ejecuta: dectl spec init
+    │
+    CLI: ✓ .dec/sdd/ ready
+         ✓ .dec/config/project.toml updated
+         ✓ .dec/isa/project.isa.md updated
+         ▶ Agent: interview the user and create specs/ with real content
+    │
+    modelo lee .dec/sdd/SKILL.md
+    ├── entiende metodología: tareas atómicas, Build+Verify+Gate
+    ├── cada tarea debe compilar antes de pasar a la siguiente
+    └── fases con Gates que validan todo antes de continuar
+    │
+    modelo lee .dec/sdd/references/templates.md
+    ├── conoce formato de constitution.md
+    ├── conoce formato de spec.md (technology-agnostic)
+    ├── conoce formato de requirements.md (checklist validation)
+    ├── conoce formato de research.md (technical investigation)
+    ├── conoce formato de plan.md (implementation plan)
+    ├── conoce formato de data-model.md (schemas and types)
+    └── conoce formato de tasks.md (Build+Verify+Gate tracking)
+    │
+    modelo entrevista al usuario:
+    ├── "¿Qué estás construyendo?"
+    ├── "¿Quiénes son los usuarios?"
+    ├── "¿Cuál es el stack tecnológico?"
+    ├── "¿Cuál es la visión del proyecto?"
+    └── "¿Hay limitaciones o contexto importante?"
+    │
+    modelo crea specs/ en la raíz del proyecto:
+    ├── specs/master/constitution.md
+    ├── specs/master/spec.md
+    ├── specs/master/requirements.md
+    ├── specs/master/research.md
+    ├── specs/master/plan.md
+    ├── specs/master/data-model.md
+    ├── specs/master/tasks.md
+    ├── specs/cli/ (similar)
+    ├── specs/dot-dec/ (similar)
+    ├── specs/integration/ (similar)
+    └── specs/agents/ (similar)
+    │
+    modelo: "Documentos SDD creados en specs/. Ahora podemos comenzar
+             la implementación siguiendo el plan y las tareas definidas."
+    modelo: dectl memory add "Documentos SDD creados en specs/ para [proyecto]"
+```
+
+---
+
 ## Fases de Implementación
 
 ### Fase 1 — Template integration.md
@@ -294,7 +490,16 @@ Agregar template de `prompts/system/integration.md` al nivel 2 de `dectl project
 Implementar el comando en el CLI como parte de Phase 2. Tarea C043 en cli/tasks.md.
 
 ### Fase 3 — Documentación pública
-Documentar los 7 flujos en el README del proyecto como casos de uso reales. Incluir los flujos 1, 2 y 3 como quickstart.
+Documentar los 8 flujos en el README del proyecto como casos de uso reales. Incluir los flujos 1, 2 y 3 como quickstart.
+
+### Fase 4 — Session End Protocol
+Documentar Flujo 8 (cierre de sesión automatizado) y actualizar integration.md para referenciar `dectl session end` como método preferido de cierre.
+
+### Fase 5 — Agent System Integration
+Documentar Flujo 9 (agent invocation) y actualizar integration.md para incluir protocolo de interacción modelo → agentes. Agregar `dectl agent list/run/describe` al command reference en integration.md.
+
+### Fase 6 — SDD Spec Generator Integration
+Documentar Flujo 11 (SDD spec generator) en integration/plan.md. Agregar REQ-I-013 a integration/spec.md. Actualizar integration.md para incluir `dectl spec init` como paso opcional después de `project init --standard`.
 
 ---
 
@@ -323,6 +528,24 @@ Agregar tarea C043:
 ```
 [C043] Implementar dectl project context: leer archivos .dec/ en orden de prioridad,
        respetar límite de tokens, soportar --format text|json — M (REQ-C-013)
+```
+
+### master/spec.md
+Agregar REQ-009:
+```
+REQ-009: SDD Spec Generator (spec init)
+Crea .dec/sdd/ con SKILL.md + references/.
+Actualiza project.toml e isa.md.
+Idempotente. Soporta --json.
+```
+
+### cli/spec.md
+Agregar REQ-C-019:
+```
+REQ-C-019: Comando dectl spec init
+Crea .dec/sdd/ con templates embebidos.
+Actualiza bridge en project.toml e isa.md.
+Soporta --json con envelope.
 ```
 
 ---

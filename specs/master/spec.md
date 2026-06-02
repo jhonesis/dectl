@@ -1,6 +1,6 @@
 # Project Specification — dectl (Dev Environment Control)
 > *Technology-agnostic. Describes WHAT to build, not HOW.*
-> *Version: 1.0 | Status: Draft | Last updated: 2026-05-13*
+> *Version: 1.0 | Status: Updated | Last updated: 2026-06-02*
 
 ---
 
@@ -36,6 +36,10 @@ dec solves this by separating concerns cleanly: the model thinks, the CLI execut
 - WHEN the developer runs the init command in a directory THEN dec SHALL create a `.dec/` folder with the base structure (config, isa, decisions, workflows, prompts, knowledge, state)
 - WHEN the `.dec/` folder already exists THEN dec SHALL abort and inform the developer without overwriting anything
 - WHEN init completes THEN dec SHALL display a summary of what was created and the next recommended step
+- WHEN the project has existing code THEN dec SHALL auto-detect languages from config files and write them to `.dec/config/project.toml`, then create `.dec/prompts/tasks/auto-fill.md` so the AI completes the semantic context (frameworks, tools, description, vision) in the first session
+- WHEN the project is empty THEN dec SHALL offer interactive prompts for project name, type, languages, description, and vision (if TTY is available)
+- WHEN the developer specifies `--type api|cli|microservice|other` THEN dec SHALL create type-specific workflows and prompts
+- WHEN init completes on a non-empty project THEN dec SHALL create `AGENTS.md` at the project root
 
 ---
 
@@ -110,6 +114,40 @@ dec solves this by separating concerns cleanly: the model thinks, the CLI execut
 
 ---
 
+### REQ-008: Session end automation
+**User Story**:
+> As a developer or AI model, I want to run a single command at the end of a session so that all session context is automatically captured and persisted for the next session.
+
+**Acceptance Criteria**:
+- WHEN the developer runs `dectl session end` THEN dec SHALL perform five actions in sequence:
+  1. Update `.dec/state/last_session.md` with a structured session summary (date, actions performed, pending items, decisions taken, next recommended step)
+  2. Sync git changes to `.dec/state/progress.json` (mark features as done based on modified files, detect new features from commits)
+  3. Capture uncaptured decisions and save them to memory (using pattern matching on commit messages and session files)
+- WHEN a step fails THEN the remaining steps SHALL continue independently (one failure does not stop others)
+- WHEN `--dry-run` is specified THEN dec SHALL preview all changes without writing any files
+- WHEN `--skip-git` is specified THEN dec SHALL skip the git synchronization step without error
+- WHEN no git repository exists THEN dec SHALL skip the git step gracefully (not an error)
+- WHEN `--json` is specified THEN dec SHALL output a structured result with per-step status and decision count
+- WHEN all steps fail THEN dec SHALL exit with a non-zero exit code
+- WHEN at least one step succeeds THEN dec SHALL exit with code 0
+
+---
+
+### REQ-009: SDD Spec Generator (spec init)
+**User Story**:
+> As a developer or AI model, I want to generate the SDD methodology inside .dec/ so that the AI agent can follow a structured process (Build+Verify+Gate) to create specs/ documents.
+
+**Acceptance Criteria**:
+- WHEN the developer runs `dectl spec init` THEN dec SHALL ensure `.dec/sdd/` exists with SKILL.md, references/templates.md, and references/examples.md
+- WHEN `.dec/sdd/` already exists THEN dec SHALL be idempotent and do nothing
+- WHEN `spec init` runs THEN it SHALL update `.dec/config/project.toml` with `[specs] dir = "specs"`
+- WHEN `spec init` runs THEN it SHALL update `.dec/isa/project.isa.md` with a link to "See specs/ for SDD artifacts"
+- WHEN `spec init` runs with `--json` THEN dec SHALL output `{status: "ok", data: {message: ".dec/sdd/ ready", bridge: {project_toml: true, project_isa: true}, next: "Interview the user and create specs/"}}`
+- WHEN `.dec/` does not exist THEN dec SHALL error with ".dec/ not found. Run `dectl project init` first."
+- WHEN `.dec/config/project.toml` does not exist THEN dec SHALL error with clear message
+
+---
+
 ## Non-Functional Requirements
 
 - **Performance**: all CLI commands SHALL complete in under 500ms on a standard developer machine (excluding external command execution in workflows)
@@ -128,7 +166,18 @@ dec solves this by separating concerns cleanly: the model thinks, the CLI execut
 - Multi-user collaboration features
 - Windows native support (may work but not guaranteed)
 - Semantic search / embeddings (Phase 2)
-- Agent coordination (Phase 2)
+- Agent coordination (Phase 6) — see `specs/agents/spec.md`
+
+## Implemented (post-v1)
+
+- **Session Management** (Phase 4): `dectl session end` — automated session closure with 5 steps (summary, git sync, decisions, config sync, agent sync)
+- **Auto-fill + Interactive Init** (Phase 3b): automatic stack detection, interactive prompts for empty projects, type-specific templates
+- **Project Context** (Phase 3b): `dectl project context` — compact project summary for stateless AI environments
+- **Config Sync** (Phase 5): `dectl session end` Paso 4 — automatic stack detection and project.toml merge
+- **SDD Spec Generator** (Phase 8): `dectl spec init` — SDD methodology in .dec/sdd/, bridge updates, agent interview flow
+- **Auto-Trust Interactive** (Phase 4): `dectl agent trust <type>` — trust an agent without running it, path canonicalization, improved `--non-interactive` error messages
+- **Install Script**: `scripts/install.sh` — curl-based installation for Linux, macOS, and WSL
+- **CI/CD Pipeline**: GitHub Actions workflow with fmt, clippy, test, and build steps
 
 ---
 

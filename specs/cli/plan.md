@@ -1,6 +1,6 @@
 # Technical Implementation Plan — dectl CLI
 > *Describe CÓMO implementar el CLI. Technology-specific.*
-> *Version: 1.0 | Status: Draft | Last updated: 2026-05-13*
+> *Version: 1.0 | Status: Updated | Last updated: 2026-06-02*
 
 ---
 
@@ -64,6 +64,12 @@ enum Commands {
     Memory(MemoryArgs),
     Workflow(WorkflowArgs),
     ExecFromFile(ExecFromFileArgs),
+    GenerateCompletions(GenerateCompletionsArgs),
+    Session(SessionArgs),
+    Spec(SpecArgs),
+    Agent(AgentArgs),
+    Migrate(MigrateArgs),
+    Version,
 }
 
 // --- Project ---
@@ -81,6 +87,8 @@ enum ProjectCommands {
     Info,
     /// Show project file tree
     Scan(ProjectScanArgs),
+    /// Compact context summary for stateless AI environments
+    Context(ProjectContextArgs),
 }
 
 #[derive(Args)]
@@ -91,6 +99,9 @@ struct ProjectInitArgs {
     /// Create full structure (level 3)
     #[arg(long)]
     full: bool,
+    /// Project type for type-specific templates
+    #[arg(long, default_value = "other")]
+    r#type: String,
 }
 
 #[derive(Args)]
@@ -98,6 +109,16 @@ struct ProjectScanArgs {
     /// Maximum depth to display
     #[arg(long, short)]
     depth: Option<usize>,
+}
+
+#[derive(Args)]
+struct ProjectContextArgs {
+    /// Maximum tokens for output
+    #[arg(long)]
+    max_tokens: Option<usize>,
+    /// Output format
+    #[arg(long, default_value = "text")]
+    format: String,
 }
 
 // --- Memory ---
@@ -192,6 +213,59 @@ struct WorkflowRunArgs {
 struct ExecFromFileArgs {
     path: String,
 }
+
+// --- Completions ---
+#[derive(Args)]
+struct GenerateCompletionsArgs {
+    /// Shell to generate completions for
+    shell: String,
+}
+
+// --- Session ---
+#[derive(Args)]
+struct SessionArgs {
+    #[command(subcommand)]
+    command: SessionCommands,
+}
+
+#[derive(Subcommand)]
+enum SessionCommands {
+    /// End current session: update last_session.md, sync git, capture decisions
+    End(SessionEndArgs),
+}
+
+#[derive(Args)]
+struct SessionEndArgs {
+    /// Preview changes without writing
+    #[arg(long)]
+    dry_run: bool,
+    /// Skip git synchronization
+    #[arg(long)]
+    skip_git: bool,
+}
+
+// --- Spec ---
+#[derive(Args)]
+struct SpecArgs {
+    #[command(subcommand)]
+    command: SpecCommands,
+}
+
+#[derive(Subcommand)]
+enum SpecCommands {
+    /// Initialize SDD methodology in .dec/sdd/
+    Init(SpecInitArgs),
+}
+
+#[derive(Args)]
+struct SpecInitArgs {
+    /// Output as JSON
+    #[arg(long)]
+    json: bool,
+}
+
+// --- Version ---
+// `dectl version` is handled as a top-level command in main.rs
 ```
 
 ---
@@ -453,8 +527,29 @@ Depende de: D001–D015 (templates de `.dec/`) completados primero.
 
 Depende de: D016–D025 (motor de interpolación) completados primero.
 
-### Fase 3 — Polish
-Shell completions, `--non-interactive` validado en todos los caminos, colores refinados, mensajes de error revisados con developers reales.
+### Fase 3 — Polish + Auto-fill + Project Context
+Shell completions, `--non-interactive` validado, `dectl project context`, auto-fill en init, `--type` flag, `--global` flag en memory.
+
+### Fase 4 — Session Management
+`dectl session end` con 5 pasos independientes (session_summary, git_sync, decision_capture, config_sync, agent_sync), `--dry-run`, `--skip-git`, `--json`.
+
+Módulo `session/`:
+- `types.rs` — SessionSummary, GitChanges, CapturedDecision, SessionEndResult
+- `session_summary.rs` — generate + write last_session.md
+- `git_sync.rs` — detect git changes + sync progress.json
+- `decision_capture.rs` — regex-based decision extraction + save to memory
+- `end.rs` — orquestador de los 5 pasos
+
+### Fase 5 — Spec Generator
+`dectl spec init` con templates embebidos (SKILL.md + references/) y bridge a project.toml e isa.md.
+
+Módulo `spec/`:
+- `mod.rs` — entry point, exporta init/templates/bridge
+- `init.rs` — run(): ensure sdd dir + bridge + output
+- `templates.rs` — consts embebidos (3 archivos SDD) + ensure_sdd_dir()
+- `bridge.rs` — update_project_toml() + update_project_isa()
+
+Depende de: D001–D025 (templates de `.dec/`) completados primero.
 
 ---
 

@@ -24,7 +24,7 @@
 ## Consistency
 
 - [x] No contradictory requirements
-- [x] Requirements are numbered sequentially (REQ-001 through REQ-007)
+- [x] Requirements are numbered sequentially (REQ-001 through REQ-009)
 - [x] No duplicate requirements
 
 ---
@@ -40,6 +40,8 @@
 - [x] REQ-005 → inspection commands (solo developer + AI coding environment)
 - [x] REQ-006 → machine-readable output (AI coding environment)
 - [x] REQ-007 → global configuration (solo developer)
+- [x] REQ-008 → session end automation (solo developer + AI coding environment)
+- [x] REQ-009 → SDD Spec Generator (model + developer)
 
 ---
 

@@ -1,6 +1,6 @@
 # Requirements Validation Checklist — Integration Layer
 > *Valida que spec.md está completo, sin ambigüedad y listo para planificar.*
-> *Last updated: 2026-05-13*
+> *Last updated: 2026-05-29*
 
 ---
 
@@ -33,7 +33,7 @@
 ## Consistencia
 
 - [x] Sin requisitos contradictorios
-- [x] Requisitos numerados secuencialmente (REQ-I-001 a REQ-I-008)
+- [x] Requisitos numerados secuencialmente (REQ-I-001 a REQ-I-012)
 - [x] Sin requisitos duplicados
 - [x] REQ-I-007 (compatibilidad) no contradice REQ-I-003 (invocación de comandos) — modo lectura es un subset válido
 
@@ -49,6 +49,10 @@
 - [x] REQ-I-006 → developer (manejo de errores transparente)
 - [x] REQ-I-007 → developer (compatibilidad con cualquier entorno)
 - [x] REQ-I-008 → modelo/scripts (batch via exec-from-file)
+- [x] REQ-I-009 → developer (session end protocol — 5 steps)
+- [x] REQ-I-010 → modelo (project context en modo stateless)
+- [x] REQ-I-011 → developer (config sync entre sesiones)
+- [x] REQ-I-012 → modelo/developer (agent interaction protocol)
 
 ---
 
@@ -62,6 +66,10 @@
 - [x] REQ-I-008 usa `dectl exec-from-file` definido en cli/spec.md (REQ-C-011)
 - [x] integration.md añadido al nivel 2 de `.dec/` — debe reflejarse en dot-dec/plan.md (templates nivel 2)
 - [x] Schema check vía `warnings` en `dectl project info --json` — consistente con cli/data-model.md
+- [x] REQ-I-009 usa session end definido en cli/spec.md (REQ-C-014) y master/spec.md (REQ-008)
+- [x] REQ-I-010 usa project context definido en cli/spec.md (REQ-C-013)
+- [x] REQ-I-011 usa config sync definido en cli/spec.md (REQ-C-017)
+- [x] REQ-I-012 usa agent commands definidos en cli/spec.md (REQ-C-018) y agents/spec.md
 
 ---
 
@@ -72,12 +80,15 @@
 - [x] REQ-I-006 implementa "Los errores de integración son recuperables"
 - [x] REQ-I-003 implementa "Todo output del CLI es consumible por el modelo"
 - [x] Ningún requisito crea acoplamiento entre actores fuera del contrato
+- [x] REQ-I-009 implementa 5 pasos independientes — "los errores son recuperables"
+- [x] REQ-I-010 implementa "la integración no requiere instalación extra" (modo stateless)
+- [x] REQ-I-012 implementa "el modelo lidera, el CLI sigue" (el modelo invoca agentes)
 
 ---
 
 ## Acción Pendiente antes de plan.md
 
-- [ ] Agregar template de `prompts/system/integration.md` al nivel 2 en `specs/dot-dec/plan.md`
+- [x] Agregar template de `prompts/system/integration.md` al nivel 2 en `specs/dot-dec/plan.md`
   *(cambio menor — no invalida las tareas D ya definidas, solo agrega D015b)*
 
 ---

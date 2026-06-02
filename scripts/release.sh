@@ -103,7 +103,7 @@ if command -v gh &>/dev/null && ! $DRY_RUN; then
     echo "        \"$RELEASE_DIR\"/*.tar.gz \"$RELEASE_DIR\"/SHA256SUMS.txt"
     echo ""
     echo -n "    Proceed? [Y/n] "
-    read -r CONFIRM
+    read -r CONFIRM < /dev/tty
     if [[ "$CONFIRM" =~ ^[Nn] ]]; then
         echo "    Skipped. Artifacts at: $RELEASE_DIR"
     else
