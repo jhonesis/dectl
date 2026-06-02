@@ -101,6 +101,55 @@ install_rust() {
     echo "✓ Rust installed: $(cargo --version)"
 }
 
+ensure_cc() {
+    if command -v cc &>/dev/null; then
+        return 0
+    fi
+
+    echo "→ C compiler (cc) not found."
+
+    if $DRY_RUN; then
+        echo "[DRY-RUN] Would install C compiler via system package manager"
+        return 0
+    fi
+
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        if ! xcode-select -p &>/dev/null; then
+            echo "✗ Xcode Command Line Tools not installed."
+            echo "   Run: xcode-select --install"
+            echo "   Then re-run this script."
+            exit 1
+        fi
+        return 0
+    fi
+
+    echo "→ Installing C compiler (may need sudo)..."
+    if command -v apt-get &>/dev/null; then
+        sudo apt-get update -qq && sudo apt-get install -y -qq build-essential
+    elif command -v dnf &>/dev/null; then
+        sudo dnf install -y gcc
+    elif command -v yum &>/dev/null; then
+        sudo yum install -y gcc
+    elif command -v pacman &>/dev/null; then
+        sudo pacman -S --noconfirm base-devel
+    elif command -v apk &>/dev/null; then
+        apk add build-base
+    elif command -v zypper &>/dev/null; then
+        sudo zypper install -y gcc
+    else
+        echo "✗ Could not detect package manager."
+        echo "   Install a C compiler (gcc or clang), then re-run."
+        exit 1
+    fi
+
+    if ! command -v cc &>/dev/null; then
+        echo "✗ C compiler installation failed."
+        exit 1
+    fi
+
+    echo "✓ C compiler ready: $(cc --version | head -1)"
+}
+
 install_from_source() {
     local tmpdir ver
 
@@ -110,6 +159,8 @@ install_from_source() {
     if ! command -v cargo &>/dev/null; then
         install_rust
     fi
+
+    ensure_cc
 
     echo "→ Cloning repository..."
     tmpdir="$(mktemp -d)"
