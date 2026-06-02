@@ -97,15 +97,15 @@ impl Templates {
             ),
             (
                 ".dec/sdd/SKILL.md",
-                include_str!("../../../../sdd/SKILL.md"),
+                include_str!("txt/sdd_skill.md"),
             ),
             (
                 ".dec/sdd/references/templates.md",
-                include_str!("../../../../sdd/references/templates.md"),
+                include_str!("txt/sdd_templates.md"),
             ),
             (
                 ".dec/sdd/references/examples.md",
-                include_str!("../../../../sdd/references/examples.md"),
+                include_str!("txt/sdd_examples.md"),
             ),
         ]);
         files
