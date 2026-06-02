@@ -16,7 +16,10 @@ pub fn run(agent_type: &str, project: &str, mode: crate::core::output::OutputMod
     crate::workflow::trust::grant_trust(&project_str, agent_type)?;
 
     if !mode.is_json() {
-        println!("Agent '{}' trusted for project '{}'", agent_type, project_str);
+        println!(
+            "Agent '{}' trusted for project '{}'",
+            agent_type, project_str
+        );
     }
     Ok(())
 }

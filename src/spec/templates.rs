@@ -5,12 +5,10 @@ use std::path::Path;
 pub struct SddTemplates;
 
 impl SddTemplates {
-    pub const SKILL_MD: &'static str =
-        include_str!("../project/templates/txt/sdd_skill.md");
+    pub const SKILL_MD: &'static str = include_str!("../project/templates/txt/sdd_skill.md");
     pub const TEMPLATES_MD: &'static str =
         include_str!("../project/templates/txt/sdd_templates.md");
-    pub const EXAMPLES_MD: &'static str =
-        include_str!("../project/templates/txt/sdd_examples.md");
+    pub const EXAMPLES_MD: &'static str = include_str!("../project/templates/txt/sdd_examples.md");
 
     pub fn sdd_files() -> Vec<(&'static str, &'static str)> {
         vec![

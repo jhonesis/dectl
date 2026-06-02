@@ -123,7 +123,8 @@ fn execute_agent_inner(
                     "Agent '{}' is not trusted for this project.\n\
                      Run without --non-interactive to trust interactively, or use:\n\
                      dectl agent trust {} --project .",
-                    agent_def.name, agent_def.name
+                    agent_def.name,
+                    agent_def.name
                 );
             }
             crate::workflow::trust::TrustDecision::AskUser => {

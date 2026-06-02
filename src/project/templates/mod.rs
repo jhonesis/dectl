@@ -95,10 +95,7 @@ impl Templates {
                 ".dec/state/last_session.md",
                 include_str!("txt/last_session.md"),
             ),
-            (
-                ".dec/sdd/SKILL.md",
-                include_str!("txt/sdd_skill.md"),
-            ),
+            (".dec/sdd/SKILL.md", include_str!("txt/sdd_skill.md")),
             (
                 ".dec/sdd/references/templates.md",
                 include_str!("txt/sdd_templates.md"),
