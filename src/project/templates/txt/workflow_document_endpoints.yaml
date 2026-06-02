@@ -1,0 +1,27 @@
+name: document_endpoints
+description: Generate API documentation from code or schema
+inputs:
+  - name: format
+    description: Output format (openapi, swagger, markdown)
+    required: false
+    default: "markdown"
+
+steps:
+  - type: prompt
+    description: Analyze API structure
+    content: |
+      Scan the codebase for route handlers, controllers, or route definitions.
+      Identify: endpoints, methods, request/response schemas, auth requirements.
+
+  - type: prompt
+    description: Generate documentation
+    content: |
+      Generate {{format}} documentation based on the analysis.
+      Include: endpoint, method, path params, query params, request body, response codes.
+
+  - type: write
+    description: Save API docs
+    path: .dec/knowledge/api-docs.md
+    content: |
+      # API Documentation
+      (generated content)

@@ -1,0 +1,55 @@
+name: design_architecture
+description: Guide the model to design or review the project architecture
+inputs:
+  - name: focus
+    description: Specific aspect to design (e.g. "auth", "database", "api") or "general" for full architecture
+    required: false
+    default: "general"
+
+steps:
+  - type: prompt
+    description: Load full context
+    content: |
+      Read .dec/isa/project.isa.md, .dec/config/project.toml and .dec/decisions/.
+      Identify the main components and their responsibilities.
+      Focus of this session: {{focus}}.
+
+  - type: action
+    description: Search for previous architecture decisions
+    cmd: ["dectl", "memory", "search", "architecture"]
+
+  - type: prompt
+    description: Propose architecture
+    content: |
+      Propose the architecture for "{{focus}}".
+      Include: modules, responsibilities, main flows and trade-offs.
+      If there are previous decisions in decisions/ that apply, reference them.
+
+  - type: write
+    description: Document the architecture decision
+    path: .dec/decisions/XXXX-architecture-{{focus}}.md
+    content: |
+      # [XXXX] Architecture: {{focus}}
+      **Date**: (fill in)
+      **Status**: active
+
+      ## Context
+      (fill in)
+
+      ## Decision
+      (fill in)
+
+      ## Alternatives Considered
+      (fill in)
+
+      ## Justification
+      (fill in)
+
+      ## Consequences
+      (fill in)
+
+  - type: prompt
+    description: Update architecture ISA
+    content: |
+      Update .dec/isa/architecture.isa.md with the designed architecture.
+      Then run: dectl memory add "Architecture {{focus}} designed and documented"

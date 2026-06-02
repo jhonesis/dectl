@@ -1,0 +1,23 @@
+# dectl project configuration
+# This file defines the project for the model and tools.
+# The model should read it at the start of every session.
+
+[dec]
+schema_version = "1.0"
+
+[project]
+name = "project-name"
+# Project type: api | cli | microservice | monolith | library | other
+type = "other"
+description = "Brief project description in one sentence."
+
+[stack]
+# List of main project technologies
+languages = []
+frameworks = []
+databases = []
+tools = []
+
+[conventions]
+# Special conventions the model must follow for this project.
+rules = []

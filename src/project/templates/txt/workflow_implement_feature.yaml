@@ -1,0 +1,54 @@
+name: implement_feature
+description: Implement a complete feature with tests and documentation
+inputs:
+  - name: feature_name
+    description: Name of the feature (e.g. "user_authentication", "payment_processing")
+    required: true
+  - name: module
+    description: Module or folder where it will be implemented
+    required: true
+  - name: include_tests
+    description: Generate tests automatically (true/false)
+    required: false
+    default: "true"
+
+steps:
+  - type: prompt
+    description: Load project context
+    content: |
+      Read .dec/isa/project.isa.md and .dec/config/project.toml.
+      Read .dec/decisions/ to understand architectural constraints.
+      Confirm you understand the project before continuing.
+
+  - type: action
+    description: Search for relevant decisions in memory
+    cmd: ["dectl", "memory", "search", "{{feature_name}}"]
+
+  - type: prompt
+    description: Design the implementation
+    content: |
+      Design the implementation of "{{feature_name}}" in the "{{module}}" module.
+      - Follow conventions in .dec/config/project.toml
+      - Respect decisions in .dec/decisions/
+      - Describe the files you will create/modify before doing so
+
+  - type: prompt
+    description: Implement
+    content: |
+      Implement "{{feature_name}}" in "{{module}}".
+      Include tests: {{include_tests}}.
+      After each file, confirm it compiles/passes lint.
+
+  - type: action
+    description: Record decisions made during implementation
+    cmd: ["dectl", "memory", "add", "Implemented feature {{feature_name}} in {{module}}"]
+
+  - type: write
+    description: Update project state
+    path: .dec/state/last_session.md
+    content: |
+      # Last Session
+      **Date**: (fill in)
+      **What was done**: Implemented feature {{feature_name}} in {{module}}
+      **Pending**: (fill in)
+      **Decisions made**: (fill in)

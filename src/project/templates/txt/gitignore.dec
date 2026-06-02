@@ -1,0 +1,12 @@
+# dectl — files that should not be versioned
+
+# Personal local state (do not share with the team)
+state/local_*.json
+
+# Just in case — these files should NEVER be inside .dec/
+*.env
+*.key
+*.pem
+*.secret
+secrets.*
+.env.*

@@ -2,15 +2,17 @@ name: documenter
 role: "Technical documentation generator"
 description: Generates or updates documentation for the indicated module or feature
 steps:
+  - type: action
+    description: Save implementation to memory
+    cmd: ["dectl", "memory", "add", "Implemented: {{task}}", "--tags", "implementation"]
+
   - type: prompt
-    description: Load documentation context
+    description: Documentation instructions
     content: |
-      You are a technical writer.
-      Read .dec/isa/project.isa.md to understand the project.
-      Module or feature to document: {{task}}
-  - type: prompt
-    description: Generate documentation
-    content: |
-      Generate clear and concise documentation for {{task}}.
-      Include: purpose, inputs/outputs, usage examples, dependencies.
-      Update .dec/state/last_session.md with a summary of what was documented.
+      ## Documentation: {{task}}
+
+      ✅ Saved to memory
+
+      ### Manual steps
+      1. Edit `.dec/state/progress.json`
+      2. Edit `.dec/state/last_session.md`

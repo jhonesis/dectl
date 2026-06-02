@@ -37,7 +37,3 @@ pub fn ensure_sdd_dir(project_dir: &Path) -> Result<()> {
 
     Ok(())
 }
-
-pub fn sdd_dir_exists(project_dir: &Path) -> bool {
-    project_dir.join(".dec/sdd").exists()
-}

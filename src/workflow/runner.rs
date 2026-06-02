@@ -3,7 +3,7 @@ use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Command;
 
 use super::interpolate::interpolate;
 
@@ -35,7 +35,7 @@ impl Runner {
 
     pub fn execute(
         workflow: &Workflow,
-        vars: &HashMap<String, String>,
+        vars: &mut HashMap<String, String>,
         dry_run: bool,
         from_step: Option<usize>,
         output: &crate::core::output::OutputMode,
@@ -59,7 +59,7 @@ impl Runner {
             if dry_run {
                 println!("[DRY-RUN] Step {}: {}", step_num, step.description);
                 if let Some(content) = &step.content {
-                    let interp = interpolate(content, vars).context("Interpolation error")?;
+                    let interp = interpolate(content, vars).unwrap_or_else(|_| content.clone());
                     for line in interp.lines() {
                         println!("  > {}", line);
                     }
@@ -67,12 +67,12 @@ impl Runner {
                 if let Some(cmd) = &step.cmd {
                     let mut interp_cmd: Vec<String> = Vec::new();
                     for c in cmd {
-                        interp_cmd.push(interpolate(c, vars).context("Interpolation error")?);
+                        interp_cmd.push(interpolate(c, vars).unwrap_or_else(|_| c.clone()));
                     }
                     println!("  > CMD: {}", interp_cmd.join(" "));
                 }
                 if let Some(path) = &step.path {
-                    let interp_path = interpolate(path, vars).context("Interpolation error")?;
+                    let interp_path = interpolate(path, vars).unwrap_or_else(|_| path.clone());
                     println!("  > WRITE: {}", interp_path);
                 }
                 println!();
@@ -104,22 +104,33 @@ impl Runner {
 
                     let output_str = if shell {
                         let full_cmd = interp_cmd.join(" ");
-                        let mut child = Command::new("sh")
+                        let shell_output = Command::new("sh")
                             .args(["-c", &full_cmd])
-                            .stdout(Stdio::inherit())
-                            .stderr(Stdio::inherit())
-                            .spawn()
+                            .output()
                             .with_context(|| format!("Failed to execute: {}", full_cmd))?;
 
-                        let status = child.wait().with_context(|| "Failed to wait for command")?;
+                        let captured_out =
+                            String::from_utf8_lossy(&shell_output.stdout).to_string();
+                        let captured_err =
+                            String::from_utf8_lossy(&shell_output.stderr).to_string();
 
-                        if !status.success() {
+                        if !captured_out.is_empty() {
+                            print!("{}", captured_out);
+                        }
+                        if !captured_err.is_empty() {
+                            eprint!("{}", captured_err);
+                        }
+
+                        if !shell_output.status.success() {
                             all_success = false;
                             results.push(StepResult {
                                 step_num,
                                 step_type: "action".to_string(),
                                 success: false,
-                                output: Some(format!("Exit code: {:?}", status.code())),
+                                output: Some(format!(
+                                    "Exit code: {:?}",
+                                    shell_output.status.code()
+                                )),
                             });
                             eprintln!(
                                 "\n⚠️  Step {} failed. Resume with --from-step {}",
@@ -128,7 +139,7 @@ impl Runner {
                             break;
                         }
 
-                        None
+                        Some(captured_out)
                     } else {
                         let program = &interp_cmd[0];
                         let args = &interp_cmd[1..];
@@ -157,12 +168,21 @@ impl Runner {
                         Some(String::from_utf8_lossy(&output.stdout).to_string())
                     };
 
+                    let captured = output_str.clone();
+
                     results.push(StepResult {
                         step_num,
                         step_type: "action".to_string(),
                         success: true,
                         output: output_str,
                     });
+
+                    if let Some(ref out) = captured {
+                        if !out.is_empty() {
+                            vars.insert(format!("step_{}_output", step_num), out.clone());
+                            vars.insert("last_output".to_string(), out.clone());
+                        }
+                    }
                 }
                 StepType::Write => {
                     let path = step.path.as_ref().unwrap();

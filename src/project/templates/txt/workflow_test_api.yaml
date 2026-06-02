@@ -1,0 +1,38 @@
+name: test_api
+description: Test a REST API endpoint with proper validation
+inputs:
+  - name: method
+    description: HTTP method (GET, POST, PUT, DELETE)
+    required: true
+  - name: endpoint
+    description: API endpoint path
+    required: true
+  - name: body
+    description: Request body (JSON string)
+    required: false
+    default: "{}"
+  - name: expected_status
+    description: Expected HTTP status code
+    required: false
+    default: "200"
+
+steps:
+  - type: prompt
+    description: Load API context
+    content: |
+      Read .dec/config/project.toml to understand the API structure.
+      Check if there's OpenAPI/Swagger documentation.
+
+  - type: action
+    description: Execute API request
+    cmd: ["curl", "-X", "{{method}}", "{{endpoint}}", "-H", "Content-Type: application/json"{{#if body}}, "-d", "{{body}}"{{/if}}]
+
+  - type: prompt
+    description: Validate response
+    content: |
+      Validate the response matches expected status {{expected_status}}.
+      Check for proper error handling in the response.
+
+  - type: action
+    description: Log test result
+    cmd: ["dectl", "memory", "add", "API test: {{method}} {{endpoint}} - status {{expected_status}}"]

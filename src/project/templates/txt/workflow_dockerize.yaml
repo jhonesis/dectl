@@ -1,0 +1,25 @@
+name: dockerize
+description: Containerize a microservice
+inputs:
+  - name: service_name
+    description: Name of the service
+    required: true
+
+steps:
+  - type: prompt
+    description: Analyze service requirements
+    content: |
+      Identify runtime dependencies, ports, environment variables.
+      Determine optimal base image.
+
+  - type: prompt
+    description: Generate Dockerfile
+    content: |
+      Create a Dockerfile with multi-stage build if needed.
+      Include: build stage, runtime stage, health checks.
+
+  - type: write
+    description: Save Docker config
+    path: .dec/docker/{{service_name}}/Dockerfile
+    content: |
+      # Generated Dockerfile

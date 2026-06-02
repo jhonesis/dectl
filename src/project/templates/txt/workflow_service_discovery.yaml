@@ -1,0 +1,27 @@
+name: service_discovery
+description: Discover and register microservices
+inputs:
+  - name: service_name
+    description: Name of the service to register
+    required: true
+  - name: port
+    description: Port the service listens on
+    required: true
+
+steps:
+  - type: prompt
+    description: Analyze service topology
+    content: |
+      Map out the microservices architecture.
+      Identify: service dependencies, communication patterns, data flow.
+
+  - type: action
+    description: Register service
+    cmd: ["dectl", "memory", "add", "Service {{service_name}} registered on port {{port}}"]
+
+  - type: write
+    description: Document service registry
+    path: .dec/knowledge/service-registry.md
+    content: |
+      # Service Registry
+      (generated content)

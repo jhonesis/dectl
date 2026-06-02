@@ -1,11 +1,10 @@
-#![allow(dead_code)]
-
 use clap::{CommandFactory, Parser, Subcommand};
 use std::path::PathBuf;
 
 mod agent;
 mod core;
 mod memory;
+mod migrate;
 mod project;
 mod protocol;
 mod session;
@@ -14,7 +13,7 @@ mod workflow;
 
 #[derive(Parser)]
 #[command(name = "dectl")]
-#[command(version = "0.1.0")]
+#[command(version = "0.1.0 (schema 1.0)")]
 #[command(about = "Dev Environment Control", long_about = None)]
 struct Cli {
     #[arg(long, global = true)]
@@ -58,6 +57,10 @@ enum Commands {
     Spec {
         #[command(subcommand)]
         command: Option<SpecCommands>,
+    },
+    Migrate {
+        #[arg(long)]
+        dry_run: bool,
     },
     Version,
 }
@@ -199,8 +202,19 @@ fn main() {
     let mode = core::output::OutputMode::from_json_flag(cli.json);
 
     match &cli.command {
+        Some(Commands::Migrate { dry_run }) => {
+            if let Err(e) = migrate::run(*dry_run, mode) {
+                core::output::Output::print_error(&e.to_string(), None, mode);
+                std::process::exit(1);
+            }
+        }
         Some(Commands::Version) => {
-            core::output::Output::print_success("dectl v0.1.0", mode);
+            let version = format!(
+                "dectl v{} (schema {})",
+                env!("CARGO_PKG_VERSION"),
+                crate::migrate::engine::SCHEMA_VERSION
+            );
+            core::output::Output::print_success(&version, mode);
         }
         Some(Commands::Project { command }) => match command {
             Some(ProjectCommands::Init {

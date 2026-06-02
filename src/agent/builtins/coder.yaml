@@ -2,18 +2,21 @@ name: coder
 role: "Feature implementer following project conventions"
 description: Implements code respecting the stack and conventions from .dec/
 steps:
-  - type: prompt
-    description: Load project context
-    content: |
-      You are a developer implementing features in this project.
-      Read .dec/config/project.toml for stack and conventions.
-      Read .dec/decisions/ to respect prior architectural decisions.
-      Task: {{task}}
   - type: action
-    description: Search for relevant context in memory
-    cmd: ["dectl", "memory", "search", "{{task}}"]
+    description: Search memory for context
+    cmd: ["dectl", "memory", "search", "--json", "{{task}}"]
+
+  - type: write
+    description: Save memory context for implementation
+    path: ".dec/agent-output/{{task_id}}-coder-memory.json"
+    content: "{{step_1_output}}"
+
   - type: prompt
-    description: Implement
+    description: Implementation brief
     content: |
-      Implement the task respecting the project stack and conventions.
-      When done run: dectl memory add "Implemented: {{task}}"
+      ## Code: {{task}}
+
+      Context saved to `.dec/agent-output/{{task_id}}-coder-memory.json`
+
+      Use your editing tools to implement the task.
+      When done, run: dectl agent run reviewer --task "{{task}}" --var task_id={{task_id}}

@@ -1,0 +1,31 @@
+name: build_release
+description: Build and release a CLI tool
+inputs:
+  - name: version
+    description: Semantic version (e.g., v1.0.0)
+    required: true
+  - name: target
+    description: Target platform (linux, macos, windows)
+    required: false
+    default: "all"
+
+steps:
+  - type: prompt
+    description: Load build configuration
+    content: |
+      Read .dec/config/project.toml for build targets and tools.
+      Check existing release artifacts.
+
+  - type: action
+    description: Run build
+    cmd: ["cargo", "build", "--release"]
+
+  - type: action
+    description: Create release
+    cmd: ["dectl", "memory", "add", "Release {{version}} built for {{target}}"]
+
+  - type: prompt
+    description: Update changelog
+    content: |
+      Generate release notes based on recent commits.
+      Update CHANGELOG.md if it exists.

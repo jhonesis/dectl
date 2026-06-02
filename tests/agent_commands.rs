@@ -88,13 +88,21 @@ fn test_agent_describe_unknown_agent() {
 fn test_agent_run_dry_run() {
     let tmp = TempDir::new().unwrap();
     let output = run_dectl(
-        &["agent", "run", "coder", "--task", "test", "--dry-run"],
+        &[
+            "agent",
+            "run",
+            "coder",
+            "--task",
+            "test",
+            "--var",
+            "task_id=test",
+            "--dry-run",
+        ],
         tmp.path(),
     );
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("[DRY-RUN]"));
-    assert!(stdout.contains("Task: test"));
 }
 
 #[test]
@@ -108,6 +116,8 @@ fn test_agent_run_parallel_dry_run() {
             "reviewer,documenter",
             "--task",
             "test",
+            "--var",
+            "task_id=test",
             "--dry-run",
         ],
         tmp.path(),

@@ -1,0 +1,26 @@
+name: run_migrations
+description: Run database migrations safely
+inputs:
+  - name: direction
+    description: up or down
+    required: false
+    default: "up"
+  - name: name
+    description: Migration name (for down migrations)
+    required: false
+    default: ""
+
+steps:
+  - type: prompt
+    description: Check migration status
+    content: |
+      Check current migration state in the database.
+      Identify pending migrations.
+
+  - type: action
+    description: Run migrations
+    cmd: ["dectl", "exec-from-file", ".dec/workflows/run_migrations.yaml"]
+
+  - type: action
+    description: Verify migration
+    cmd: ["dectl", "memory", "add", "Database migration: {{direction}} - {{name}}"]

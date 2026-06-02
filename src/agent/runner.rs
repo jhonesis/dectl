@@ -157,7 +157,7 @@ fn execute_agent_inner(
     let mut merged = all_vars.clone();
     merged.extend(resolved);
 
-    let execution_result = Runner::execute(&workflow, &merged, dry_run, None, mode)?;
+    let execution_result = Runner::execute(&workflow, &mut merged, dry_run, None, mode)?;
     let duration_ms = start.elapsed().as_millis() as i64;
 
     let error_msg_owned: Option<String> = if !execution_result.success {

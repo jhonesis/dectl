@@ -12,6 +12,7 @@ impl DbConn {
         Self::open(&db_path)
     }
 
+    #[allow(dead_code)]
     pub fn in_memory() -> Result<Self> {
         let conn = Connection::open_in_memory()?;
         let db = DbConn { conn };

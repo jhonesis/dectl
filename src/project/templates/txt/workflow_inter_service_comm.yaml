@@ -1,0 +1,23 @@
+name: inter_service_comm
+description: Document inter-service communication patterns
+inputs:
+  - name: from_service
+    description: Source service
+    required: true
+  - name: to_service
+    description: Target service
+    required: true
+
+steps:
+  - type: prompt
+    description: Analyze communication
+    content: |
+      Identify: protocol (HTTP, gRPC, message queue), data format, auth mechanism.
+      Document: endpoints, contracts, error handling.
+
+  - type: write
+    description: Save communication docs
+    path: .dec/knowledge/service-communication.md
+    content: |
+      # Inter-Service Communication
+      (generated content)

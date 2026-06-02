@@ -79,7 +79,7 @@ pub fn run(
         }
     }
 
-    let vars = Runner::resolve_inputs(&workflow, &provided_vars)?;
+    let mut vars = Runner::resolve_inputs(&workflow, &provided_vars)?;
 
     if !mode.is_json() {
         println!("\n🔄 Running workflow: {}", workflow.name);
@@ -92,7 +92,7 @@ pub fn run(
         println!();
     }
 
-    let result = Runner::execute(&workflow, &vars, dry_run, from_step, &mode)?;
+    let result = Runner::execute(&workflow, &mut vars, dry_run, from_step, &mode)?;
 
     if mode.is_json() {
         let json_result = if result.success {

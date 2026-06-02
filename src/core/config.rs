@@ -90,12 +90,27 @@ impl GlobalConfig {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ProjectConfig {
+    #[serde(default)]
+    pub dec: DecConfig,
     pub project: ProjectDetails,
     pub stack: StackDetails,
     #[serde(default)]
     pub conventions: ProjectConventions,
     #[serde(default)]
     pub specs: SpecsConfig,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct DecConfig {
+    pub schema_version: String,
+}
+
+impl Default for DecConfig {
+    fn default() -> Self {
+        DecConfig {
+            schema_version: "1.0".to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -155,5 +170,17 @@ impl ProjectConfig {
 
     pub fn current_project_name() -> Option<String> {
         Self::load().ok().flatten().map(|c| c.project.name)
+    }
+
+    pub fn save(&self) -> Result<()> {
+        let config_path = Self::config_path()?;
+        if let Some(parent) = config_path.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("Failed to create config directory {:?}", parent))?;
+        }
+        let content = toml::to_string_pretty(self).context("Failed to serialize project config")?;
+        std::fs::write(&config_path, content)
+            .with_context(|| format!("Failed to write project config to {:?}", config_path))?;
+        Ok(())
     }
 }

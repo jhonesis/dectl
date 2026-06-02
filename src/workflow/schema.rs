@@ -66,24 +66,13 @@ pub struct Workflow {
 }
 
 impl Workflow {
+    #[allow(dead_code)]
     pub fn required_input_names(&self) -> HashSet<&str> {
         self.inputs
             .iter()
             .filter(|i| i.is_required)
             .map(|i| i.name.as_str())
             .collect()
-    }
-
-    pub fn optional_input_names(&self) -> HashSet<&str> {
-        self.inputs
-            .iter()
-            .filter(|i| !i.is_required)
-            .map(|i| i.name.as_str())
-            .collect()
-    }
-
-    pub fn all_input_names(&self) -> HashSet<&str> {
-        self.inputs.iter().map(|i| i.name.as_str()).collect()
     }
 }
 

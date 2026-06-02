@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Format check
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy -- -D warnings
+
+      - name: Test
+        run: cargo test
+
+      - name: Build release
+        run: cargo build --release
+
+      - name: Verify binary size
+        run: |
+          SIZE=$(stat --format=%s target/release/dectl)
+          MAX_SIZE=$((20 * 1024 * 1024))
+          if [ "$SIZE" -gt "$MAX_SIZE" ]; then
+            echo "Binary too large: $SIZE bytes (max 20MB)"
+            exit 1
+          fi
+          echo "Binary size: $SIZE bytes (limit 20MB)"

@@ -73,12 +73,16 @@ Pre-configured workflows and prompts based on project type:
 - All data stored locally
 - AGENTS.md auto-generated for AI configuration
 
-### Specialized Agents
-- 4 built-in agent roles: coder, reviewer, researcher, documenter
-- Execute agents individually or in parallel
-- Agents are prompt templates with reusable steps (prompt, action, write)
-- All executions are logged to memory.db for auditing
-- Custom agents via `.dec/agents/*.yaml`
+### Specialized Agents (Pipeline)
+- 4 built-in agent roles: **researcher → coder → reviewer → documenter**
+- Agents are **executable pipelines** — they run real commands (`action`), write files (`write`), and generate prompts (`prompt`)
+- One command starts the full workflow: `dectl agent run researcher --task "T0XX: desc" --var task_id=T0XX`
+- The researcher scans the project, searches memory, and saves context to `.dec/agent-output/`
+- The coder searches memory for relevant context before implementation
+- The reviewer compiles the project (`[build] command` in project.toml), runs `git diff`, and generates a review report
+- The documenter persists progress to memory and updates state files
+- All agent artifacts are saved to `.dec/agent-output/{{task_id}}-*` for cross-session persistence
+- Custom agents via `.dec/agents/*.yaml` (override builtins)
 - Configurable timeout per agent (default 5 min)
 - Trust system for action steps (same as workflows)
 
@@ -90,6 +94,13 @@ Pre-configured workflows and prompts based on project type:
 - Reports agent activity during the session (Paso 5)
 - Each step is independent; failures don't stop other steps
 - `--dry-run` to preview, `--skip-git` to bypass git sync
+
+### Spec-Driven Development
+- `dectl spec init` — ensure `.dec/sdd/` exists with SDD methodology
+- Auto-creates SKILL.md (atomic tasks, Build+Verify+Gate) + references/
+- Updates `.dec/config/project.toml` and `.dec/isa/project.isa.md`
+- Built into `project init --standard` (no extra command needed)
+- Signals the AI model to interview you and generate `specs/` documents
 
 ## Installation
 
@@ -179,24 +190,31 @@ Run it:
 dectl workflow run test --var coverage=--cov
 ```
 
-### 5. Use Agents
+### 5. Use Agents (Pipeline)
+
+The built-in agents form an **end-to-end pipeline**: `researcher → coder → reviewer → documenter`.
+Run a single agent to start the chain — the model reads the output and invokes the next agent automatically.
 
 ```bash
-# List available agents
-dectl agent list
+# Full pipeline from research to documentation (single command)
+dectl agent run researcher --task "T011: Implement Telegram notifications" --var task_id=T011
 
-# Describe an agent (see its role, steps, inputs)
-dectl agent describe coder
-
-# Run an agent for a specific task
-dectl agent run coder --task "Add input validation to the API"
-
-# Run multiple agents in parallel
-dectl agent run --parallel reviewer,documenter --task "src/auth/"
-
-# Preview without side effects
-dectl agent run coder --task "test" --dry-run
+# Or run individual agents
+dectl agent list                                        # List available agents
+dectl agent describe coder                              # Describe an agent
+dectl agent run coder --task "Add input validation"     # Run a single agent
+dectl agent run --parallel reviewer,documenter --task "src/auth/"  # Parallel
+dectl agent run coder --task "test" --dry-run           # Preview only
 ```
+
+**Required project config** for the reviewer agent — add this to `.dec/config/project.toml`:
+```toml
+[build]
+command = "cargo build"
+```
+The reviewer runs this command to validate your code compiles before reporting.
+
+Agent artifacts are written to `.dec/agent-output/{{task_id}}-*` and persist between sessions.
 
 ## Commands
 
@@ -230,9 +248,12 @@ dectl agent run coder --task "test" --dry-run
 |---------|-------------|
 | `dectl agent list` | List available agents (built-in + custom) |
 | `dectl agent describe <type>` | Show agent definition (role, steps, inputs) |
-| `dectl agent run <type> --task <desc>` | Execute an agent for a task |
+| `dectl agent run researcher --task <desc> --var task_id=<id>` | Start full research→review→document pipeline |
+| `dectl agent run <type> --task <desc>` | Execute a single agent for a task |
 | `dectl agent run --parallel t1,t2 --task <desc>` | Run multiple agents in parallel |
 | `[--file <path>] [--var k=v] [--timeout <secs>] [--dry-run]` | Optional flags for agent run |
+
+Pipeline: `researcher` saves context to `.dec/agent-output/`, chains to `coder` (implement), then `reviewer` (compile via `[build] command`), then `documenter` (persist progress).
 
 ### Workflows
 
@@ -256,6 +277,13 @@ When executed, `dectl session end` performs five actions:
 3. Captures uncaptured decisions and saves them to memory
 4. Detects stack changes and syncs `project.toml`
 5. Reports agent activity during the session from `agent_log`
+
+### Spec-Driven Development
+
+| Command | Description |
+|---------|-------------|
+| `dectl spec init` | Ensure `.dec/sdd/` exists with SKILL.md + references/, update bridge |
+| `dectl spec init --json` | JSON output with envelope |
 
 ### Shell Completions
 
@@ -322,40 +350,6 @@ CLOSE
 | Trust registry | `~/.dectl/trust.toml` |
 | Project context | `.dec/` (in project root) |
 
-## dectl Agents vs IDE AI Agents
-
-Tools like **Claude Code agents** and **opencode agents** are extensions of their conversational model — the AI uses them internally to delegate subtasks, read files, or run commands. They are tightly coupled to a specific provider and IDE.
-
-**dectl agents** solve a different problem:
-
-| Aspect | IDE Agents (Claude Code, opencode) | dectl Agents |
-|--------|-----------------------------------|--------------|
-| **What they are** | Tool-calling functions the model uses internally | Prompt templates + step recipes in YAML |
-| **Model dependency** | Tied to a specific AI provider | Model-agnostic — any model or human can follow them |
-| **Portability** | Stay inside the IDE/chat | Portable across any environment |
-| **Audit trail** | Usually none | Every execution logged to SQLite with timestamp |
-| **Customization** | Requires provider-specific config | Just drop a `.yaml` file in `.dec/agents/` |
-| **Composability** | Single-model internal calls | Can be chained in workflows (`type: agent`) |
-| **Persistence** | Session-only | Full memory integration via `dectl memory` |
-
-**They complement each other.** An IDE agent can invoke `dectl agent run coder --task "..."` as part of its workflow, benefiting from standardized prompts and auditable execution. dectl is the "what to do" (the recipe); IDE agents are the "who does it" (the executor with IDE access).
-
-## Why dectl?
-
-| Feature | Claude Code | Gemini CLI | Ollama | dectl |
-|---------|-------------|------------|--------|-------|
-| Persistent memory | ❌ | ❌ | ❌ | ✅ |
-| Local storage | ⚠️ | ❌ | ❌ | ✅ |
-| Model-agnostic | ❌ | ❌ | ❌ | ✅ |
-| Workflows | ⚠️ | ❌ | ❌ | ✅ |
-| Specialized agents | ⚠️ | ❌ | ❌ | ✅ |
-| No telemetry | ⚠️ | ❌ | ❌ | ✅ |
-| Project templates | ❌ | ❌ | ❌ | ✅ |
-| Auto-fill on init | ❌ | ❌ | ❌ | ✅ |
-| Session management | ❌ | ❌ | ❌ | ✅ |
-
-dectl complements any AI coding tool by providing the memory they lack.
-
 ## Configuration
 
 ### Global Config (`~/.dectl/config.toml`)
@@ -386,7 +380,12 @@ languages = ["Rust", "TypeScript"]
 
 [settings]
 auto_init = true
+
+[build]
+command = "cargo build"
 ```
+
+The `[build]` section is used by the reviewer agent to compile your project and validate changes.
 
 ## Security
 
@@ -404,7 +403,7 @@ auto_init = true
 
 ```bash
 cd dectl
-cargo test        # Run all tests (83 passing)
+cargo test        # Run all tests (102 passing)
 cargo fmt         # Format code
 cargo clippy      # Lint check
 cargo build --release  # Build binary (~4.5MB)

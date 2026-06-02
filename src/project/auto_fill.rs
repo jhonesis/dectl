@@ -35,7 +35,6 @@ pub struct OptionalContext {
     pub name: Option<String>,
     pub description: Option<String>,
     pub vision: Option<String>,
-    pub objectives: Option<String>,
 }
 
 pub fn is_project_empty() -> bool {

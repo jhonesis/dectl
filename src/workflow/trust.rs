@@ -68,6 +68,7 @@ impl TrustConfig {
         }
     }
 
+    #[allow(dead_code)]
     pub fn untrust(&mut self, project_path: &str, workflow_name: &str) {
         self.trusted_entries
             .retain(|e| !(e.project_path == project_path && e.workflow_name == workflow_name));
@@ -101,27 +102,6 @@ pub fn grant_trust(project_path: &str, workflow_name: &str) -> Result<()> {
     let mut config = TrustConfig::load()?;
     config.trust(project_path.to_string(), workflow_name.to_string());
     config.save()
-}
-
-pub fn revoke_trust(project_path: &str, workflow_name: &str) -> Result<()> {
-    let mut config = TrustConfig::load()?;
-    config.untrust(project_path, workflow_name);
-    config.save()
-}
-
-pub fn list_trusted() -> Result<Vec<TrustEntry>> {
-    let config = TrustConfig::load()?;
-    Ok(config.trusted_entries)
-}
-
-pub fn get_trusted_for_project(project_path: &str) -> Result<Vec<String>> {
-    let config = TrustConfig::load()?;
-    Ok(config
-        .trusted_entries
-        .iter()
-        .filter(|e| e.project_path == project_path)
-        .map(|e| e.workflow_name.clone())
-        .collect())
 }
 
 #[derive(Debug, Clone)]

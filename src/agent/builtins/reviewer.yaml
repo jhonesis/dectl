@@ -2,19 +2,32 @@ name: reviewer
 role: "Code quality reviewer"
 description: Reviews code for bugs, code smells, and convention violations
 steps:
-  - type: prompt
-    description: Load review criteria
+  - type: action
+    description: Compile Code
+    shell: true
+    cmd: ["cmd=$(grep -A1 '\\[build\\]' .dec/config/project.toml 2>/dev/null | grep 'command' | cut -d'\"' -f2); if [ -n \"$cmd\" ]; then echo '━━━ Build ━━━' && eval \"$cmd\" && echo '✅ Build OK' || echo '❌ Build FAILED'; elif [ -f Makefile ] && grep -q '^build:' Makefile; then make build; else echo 'No build command in project.toml [build]'; exit 1; fi"]
+
+
+  - type: action
+    description: Show changes
+    cmd: ["git", "diff", "--stat"]
+
+  - type: write
+    description: Save review report
+    path: ".dec/agent-output/{{task_id}}-review.json"
     content: |
-      You are a senior code reviewer.
-      Read .dec/config/project.toml for expected conventions.
-      File or module to review: {{task}}
+      {"build":"{{step_1_output}}","diff":"{{step_2_output}}"}
+
   - type: prompt
-    description: Review and report
+    description: Review report
     content: |
-      Review {{task}} and report:
-      - Potential bugs
-      - Convention violations
-      - Code smells
-      - Improvement suggestions
-      Be specific with lines and files.
-      Run: dectl memory add "Review {{task}}: [findings summary]"
+      ## Review: {{task}}
+
+      ### Build
+      {{step_1_output}}
+
+      ### Changes
+      {{step_2_output}}
+
+      If build passed, run: dectl agent run documenter --task "{{task}}" --var task_id={{task_id}}
+      If build failed, fix errors and re-run the reviewer.

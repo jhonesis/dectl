@@ -1,0 +1,25 @@
+name: document_args
+description: Generate CLI argument documentation
+inputs:
+  - name: command
+    description: Command to document (or "all")
+    required: false
+    default: "all"
+
+steps:
+  - type: action
+    description: Get command help
+    cmd: ["{{binary_name}}", "--help"]
+
+  - type: prompt
+    description: Generate documentation
+    content: |
+      Parse the help output and generate markdown documentation.
+      Include: description, positional args, options, examples.
+
+  - type: write
+    description: Save CLI docs
+    path: .dec/knowledge/cli-commands.md
+    content: |
+      # CLI Commands
+      (generated content)

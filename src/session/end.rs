@@ -8,19 +8,14 @@ pub fn run(dry_run: bool, skip_git: bool, _non_interactive: bool, mode: OutputMo
 
     // Step 1: Update last_session.md
     match session_summary::generate_session_summary() {
-        Ok(summary) => {
-            match session_summary::write_last_session(&summary, dry_run) {
-                Ok(()) => {
-                    result.add_step("last_session.md", true, "updated");
-                    if mode.is_json() {
-                        // decisions_saved will be set later
-                    }
-                }
-                Err(e) => {
-                    result.add_step("last_session.md", false, &e.to_string());
-                }
+        Ok(summary) => match session_summary::write_last_session(&summary, dry_run) {
+            Ok(()) => {
+                result.add_step("last_session.md", true, "updated");
             }
-        }
+            Err(e) => {
+                result.add_step("last_session.md", false, &e.to_string());
+            }
+        },
         Err(e) => {
             result.add_step(
                 "last_session.md",

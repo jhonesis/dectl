@@ -3,11 +3,38 @@ role: "Context and prior decisions investigator"
 description: Searches memory and decisions for all context relevant to a task
 steps:
   - type: action
+    description: Scan project structure
+    cmd: ["dectl", "project", "scan", "--depth", "4", "--json"]
+
+  - type: action
     description: Search memory
-    cmd: ["dectl", "memory", "search", "{{task}}"]
+    cmd: ["dectl", "memory", "search", "--json", "{{task}}"]
+
+  - type: action
+    description: Get project context
+    cmd: ["dectl", "project", "context", "--max-tokens", "2500"]
+
+  - type: write
+    description: Save project tree
+    path: ".dec/agent-output/{{task_id}}-tree.json"
+    content: "{{step_1_output}}"
+
+  - type: write
+    description: Save memory results
+    path: ".dec/agent-output/{{task_id}}-memory.json"
+    content: "{{step_2_output}}"
+
+  - type: write
+    description: Save project context
+    path: ".dec/agent-output/{{task_id}}-context.txt"
+    content: "{{step_3_output}}"
+
   - type: prompt
-    description: Analyze relevant decisions
+    description: Research brief
     content: |
-      Read .dec/decisions/ and find all decisions relevant to: {{task}}
-      Summarize context found in memory and decisions.
-      Run: dectl memory add "Context researched for {{task}}: [summary]"
+      ## Research Brief: {{task}}
+
+      Files written to `.dec/agent-output/{{task_id}}-*`
+
+      Next step:
+        dectl agent run coder --task "{{task}}" --var task_id={{task_id}}
