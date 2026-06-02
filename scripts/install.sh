@@ -123,19 +123,40 @@ ensure_cc() {
         return 0
     fi
 
-    echo "→ Installing C compiler (may need sudo)..."
+    echo "→ Installing C compiler..."
+
+    local PRIV=""
+    if [[ $(id -u) -eq 0 ]]; then
+        PRIV=""
+    elif command -v sudo &>/dev/null; then
+        PRIV="sudo"
+    elif command -v doas &>/dev/null; then
+        PRIV="doas"
+    else
+        echo "✗ Need root privileges to install packages."
+        if command -v apt-get &>/dev/null; then
+            echo "   Run: apt-get install build-essential"
+        elif command -v dnf &>/dev/null; then
+            echo "   Run: dnf install gcc"
+        elif command -v pacman &>/dev/null; then
+            echo "   Run: pacman -S base-devel"
+        fi
+        echo "   Then re-run this script."
+        exit 1
+    fi
+
     if command -v apt-get &>/dev/null; then
-        sudo apt-get update -qq && sudo apt-get install -y -qq build-essential
+        $PRIV apt-get update -qq && $PRIV apt-get install -y -qq build-essential
     elif command -v dnf &>/dev/null; then
-        sudo dnf install -y gcc
+        $PRIV dnf install -y gcc
     elif command -v yum &>/dev/null; then
-        sudo yum install -y gcc
+        $PRIV yum install -y gcc
     elif command -v pacman &>/dev/null; then
-        sudo pacman -S --noconfirm base-devel
+        $PRIV pacman -S --noconfirm base-devel
     elif command -v apk &>/dev/null; then
         apk add build-base
     elif command -v zypper &>/dev/null; then
-        sudo zypper install -y gcc
+        $PRIV zypper install -y gcc
     else
         echo "✗ Could not detect package manager."
         echo "   Install a C compiler (gcc or clang), then re-run."
