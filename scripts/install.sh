@@ -3,7 +3,13 @@ set -euo pipefail
 
 REPO="jhonesis/dectl"
 VERSION=""
-INSTALL_DIR="${HOME}/.local/bin"
+
+if [[ $(id -u) -eq 0 ]]; then
+    INSTALL_DIR="/usr/local/bin"
+else
+    INSTALL_DIR="${HOME}/.local/bin"
+fi
+
 DRY_RUN=false
 BUILD_FROM_SOURCE=false
 

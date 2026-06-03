@@ -22,6 +22,10 @@ dectl project init --standard
 # → The model already has all the context. It responds without you explaining anything.
 ```
 
+<p align="center">
+  <img src="../landing/output.gif" alt="dectl in action" width="700">
+</p>
+
 *No external APIs. No telemetry. No manual configuration.*
 
 ## The Problem
