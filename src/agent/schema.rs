@@ -7,6 +7,14 @@ pub struct AgentDef {
     pub name: String,
     pub role: String,
     pub description: String,
+    /// Optional list of predecessor agents (informational only, does not block execution).
+    /// Use to document the recommended pipeline order. Agents are fault-tolerant
+    /// and will execute even if predecessors fail.
+    #[serde(default)]
+    pub requires: Vec<String>,
+    /// Context files to automatically load and pass as variables.
+    /// Each file is read and made available as {{context_<filename>}} in steps.
+    /// Example: ".dec/config/project.toml" → {{context_dec_config_project_toml}}
     #[serde(default)]
     pub context_files: Vec<String>,
     #[serde(default)]

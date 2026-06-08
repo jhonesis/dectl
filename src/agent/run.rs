@@ -118,6 +118,7 @@ fn run_single_agent(
         non_interactive,
         &mode,
         false,
+        false,
     )?;
 
     if mode.is_json() {

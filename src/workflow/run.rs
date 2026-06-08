@@ -98,14 +98,23 @@ pub fn run(
         println!();
     }
 
-    let result = Runner::execute(&workflow, &mut vars, dry_run, from_step, auto, &mode)?;
+    let result = Runner::execute(&workflow, &mut vars, dry_run, from_step, auto, &mode, true)?;
 
     if mode.is_json() {
-        let json_result = if result.success {
+        let json_result = if result.success && !result.paused {
             serde_json::json!({
                 "status": "ok",
                 "workflow": workflow.name,
                 "steps_executed": result.steps_executed,
+                "results": result.results
+            })
+        } else if result.paused {
+            serde_json::json!({
+                "status": "paused",
+                "workflow": workflow.name,
+                "steps_executed": result.steps_executed,
+                "next_step": result.steps_executed + 1,
+                "hint": format!("Resume with: dectl workflow run {} --from-step {}", name, result.steps_executed + 1),
                 "results": result.results
             })
         } else {
@@ -125,7 +134,17 @@ pub fn run(
         };
         crate::core::output::Output::print(&json_result, mode);
     } else {
-        if result.success {
+        if result.paused {
+            println!(
+                "\n⏸️  Workflow '{}' paused at step {} (researcher + coder completed)",
+                workflow.name, result.steps_executed
+            );
+            println!(
+                "   Resume after implementing: dectl workflow run {} --from-step {}",
+                name,
+                result.steps_executed + 1
+            );
+        } else if result.success {
             println!(
                 "\n✓ Workflow '{}' completed successfully ({} steps)",
                 workflow.name, result.steps_executed

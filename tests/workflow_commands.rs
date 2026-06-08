@@ -41,8 +41,8 @@ fn test_execute_task_workflow_describe() {
     let output = run_dectl(&["workflow", "describe", "execute_task"], tmp.path());
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("execute-task"));
-    assert!(stdout.contains("[6]"));
+    assert!(stdout.contains("execute_task"));
+    assert!(stdout.contains("[5]"));
 }
 
 #[test]
@@ -70,7 +70,7 @@ fn test_workflow_run_auto_flag() {
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Step 1"));
-    assert!(stdout.contains("Step 6"));
+    assert!(stdout.contains("Step 5"));
 }
 
 #[test]

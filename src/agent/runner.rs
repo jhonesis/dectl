@@ -17,6 +17,7 @@ pub fn run_agent(
     non_interactive: bool,
     mode: &crate::core::output::OutputMode,
     auto: bool,
+    called_from_workflow: bool,
 ) -> Result<AgentResult> {
     let agent_def = agent_def.clone();
     let agent_name = agent_def.name.clone();
@@ -39,6 +40,7 @@ pub fn run_agent(
             non_interactive,
             auto,
             &mode,
+            called_from_workflow,
         );
         let _ = tx.send(result);
     });
@@ -83,6 +85,7 @@ fn execute_agent_inner(
     non_interactive: bool,
     auto: bool,
     mode: &crate::core::output::OutputMode,
+    called_from_workflow: bool,
 ) -> Result<AgentResult> {
     let start = std::time::Instant::now();
 
@@ -102,11 +105,21 @@ fn execute_agent_inner(
         all_vars.insert(k.clone(), v.clone());
     }
 
+    // Load context files automatically
+    for context_file in &agent_def.context_files {
+        if let Ok(content) = std::fs::read_to_string(context_file) {
+            let var_name = normalize_context_filename(context_file);
+            all_vars.insert(format!("context_{}", var_name), content);
+        }
+    }
+
+    // When called from a workflow step, trust is checked at the workflow level
+    // (src/workflow/run.rs). Skip the per-agent trust check to avoid redundant prompts.
     let has_action = agent_def
         .steps
         .iter()
         .any(|s| s.step_type == StepType::Action);
-    if has_action && !dry_run && !auto {
+    if has_action && !dry_run && !auto && !called_from_workflow {
         let project_path = std::env::current_dir()
             .and_then(|p| std::fs::canonicalize(&p))
             .map(|p| p.to_string_lossy().to_string())
@@ -164,17 +177,37 @@ fn execute_agent_inner(
     let mut merged = all_vars.clone();
     merged.extend(resolved);
 
-    let execution_result = Runner::execute(&workflow, &mut merged, dry_run, None, auto, mode)?;
+    let execution_result = Runner::execute(&workflow, &mut merged, dry_run, None, auto, mode, false)?;
     let duration_ms = start.elapsed().as_millis() as i64;
 
-    let error_msg_owned: Option<String> = if !execution_result.success {
+    let agent_ok = if !execution_result.success {
+        let any_write_ok = execution_result
+            .results
+            .iter()
+            .any(|r| r.success && r.step_type == "write");
+        if any_write_ok {
+            for failed in execution_result.results.iter().filter(|r| !r.success) {
+                eprintln!(
+                    "  ⚠ Non-critical step {} ({}) failed — main output was produced",
+                    failed.step_num, failed.step_type
+                );
+            }
+            true
+        } else {
+            false
+        }
+    } else {
+        true
+    };
+
+    let error_msg_owned: Option<String> = if agent_ok {
+        None
+    } else {
         execution_result
             .results
             .iter()
             .find(|r| !r.success)
             .map(|r| format!("Step {} ({}) failed", r.step_num, r.step_type))
-    } else {
-        None
     };
 
     let status_str = if error_msg_owned.is_some() {
@@ -194,7 +227,7 @@ fn execute_agent_inner(
 
     Ok(AgentResult {
         agent_type: agent_def.name.clone(),
-        status: if execution_result.success {
+        status: if agent_ok {
             AgentRunStatus::Ok
         } else {
             AgentRunStatus::Error {
@@ -204,4 +237,56 @@ fn execute_agent_inner(
         steps_executed: execution_result.steps_executed,
         log_id: Some(log_id),
     })
+}
+
+/// Normalize a context file path to a valid variable name.
+/// Examples:
+///   ".dec/config/project.toml" → "dec_config_project_toml"
+///   ".dec/isa/project.isa.md" → "dec_isa_project_isa_md"
+fn normalize_context_filename(path: &str) -> String {
+    path.chars()
+        .map(|c| match c {
+            '.' | '/' | '-' => '_',
+            c => c,
+        })
+        .collect::<String>()
+        .trim_start_matches('_')
+        .to_lowercase()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_normalize_context_filename_basic() {
+        assert_eq!(
+            normalize_context_filename(".dec/config/project.toml"),
+            "dec_config_project_toml"
+        );
+    }
+
+    #[test]
+    fn test_normalize_context_filename_with_isa() {
+        assert_eq!(
+            normalize_context_filename(".dec/isa/project.isa.md"),
+            "dec_isa_project_isa_md"
+        );
+    }
+
+    #[test]
+    fn test_normalize_context_filename_with_hyphen() {
+        assert_eq!(
+            normalize_context_filename("my-config-file.json"),
+            "my_config_file_json"
+        );
+    }
+
+    #[test]
+    fn test_normalize_context_filename_no_leading_dot() {
+        assert_eq!(
+            normalize_context_filename("config/project.toml"),
+            "config_project_toml"
+        );
+    }
 }

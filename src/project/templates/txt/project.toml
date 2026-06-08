@@ -21,3 +21,18 @@ tools = []
 [conventions]
 # Special conventions the model must follow for this project.
 rules = []
+
+[build]
+# Command to build the project. Used by reviewer agent for verification.
+# Example: "cargo build --release"
+command = ""
+
+[test]
+# Command to run tests. Optional. Used by reviewer agent to validate changes.
+# Example: "cargo test" or "npm test"
+command = ""
+
+[lint]
+# Command to run linter. Optional. Used by reviewer agent for code quality checks.
+# Example: "cargo clippy" or "npx eslint ."
+command = ""

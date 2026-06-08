@@ -91,7 +91,7 @@ Pre-configured workflows and prompts based on project type:
 
 ### Executable Task Pipeline (Workflow)
 
-The `execute-task` workflow (auto-created with `dectl project init --standard`) orchestrates the full SDD cycle in one command:
+The `execute_task` workflow (auto-created with `dectl project init --standard`) orchestrates the full SDD cycle in one command:
 
 ```bash
 dectl workflow run execute_task --var task_id=T001 --var description="Add user auth"
@@ -101,12 +101,11 @@ dectl workflow run execute_task --var task_id=T001 --var description="Add user a
 
 | Step | Type | Description |
 |------|------|-------------|
-| 1 | `agent: researcher` | Scans project, searches memory, saves context to `.dec/agent-output/` |
-| 2 | `agent: coder` | Prepares implementation context |
-| 3 | `prompt` | **Pause** — the AI model implements the code manually using its editing tools |
-| 4 | `agent: reviewer` | Builds project (`[build] command`), runs `git diff`, generates review report |
-| 5 | `agent: documenter` | Saves task decision to memory (runs **even if step 4 fails** via `run_always: true`) |
-| 6 | `action` | Marks task as completed in memory |
+| 1 | `agent: researcher` | Scans project, searches memory, reads decisions, saves context to `.dec/agent-output/` |
+| 2 | `agent: coder` | Loads research context, checks git log, prepares implementation brief |
+| 3 | `prompt` | **Pause** — the AI model implements the changes using its editing tools, then resumes with `--from-step 4` |
+| 4 | `agent: reviewer` | Builds project, runs tests + linter, shows diff, generates review report |
+| 5 | `agent: documenter` | Records task completion + decisions in memory, writes summary, lists artifacts (`run_always: true`) |
 
 **Why this saves tokens and keeps the model focused:**
 
@@ -120,7 +119,7 @@ Each agent ends with a **next-step hint** guiding the model to the next command:
 ```
 → Next in pipeline: dectl agent run coder --task T001 --var task_id=T001
 → After implementing, run: dectl agent run reviewer --task T001 --var task_id=T001
-→ Task cycle complete. Log it: dectl memory add 'Task T001 completed' --tags task,sdd
+→ Task cycle complete. Verify: dectl memory search T001 --json
 ```
 
 Use `--auto` to skip trust confirmation prompts (once agents are trusted):
@@ -164,7 +163,7 @@ curl -fsSL https://raw.githubusercontent.com/jhonesis/dectl/main/scripts/install
 git clone https://github.com/jhonesis/dectl.git
 cd dectl
 cargo build --release
-sudo install target/release/dectl /usr/local/bin/
+cp target/release/dectl "$(which dectl | xargs dirname)"/
 ```
 
 
@@ -246,7 +245,7 @@ dectl workflow run test --var coverage=--cov
 
 ### 5. Use the Task Pipeline (Recommended)
 
-The fastest way to execute a full SDD task cycle is with the `execute-task` workflow
+The fastest way to execute a full SDD task cycle is with the `execute_task` workflow
 (auto-created with `dectl project init --standard`):
 
 ```bash
@@ -444,16 +443,128 @@ type = "api|cli|microservice|other"
 description = "A Rust CLI tool"
 
 [stack]
-languages = ["Rust", "TypeScript"]
+languages = ["Rust"]
+frameworks = []
+databases = []
+tools = []
 
-[settings]
-auto_init = true
+[conventions]
+rules = []
 
 [build]
-command = "cargo build"
+# Command to build the project. Used by reviewer agent for verification.
+command = "cargo build --release"
+
+[test]
+# Command to run tests. Optional. Used by reviewer agent to validate changes.
+command = "cargo test"
+
+[lint]
+# Command to run linter. Optional. Used by reviewer agent for code quality checks.
+command = "cargo clippy"
 ```
 
-The `[build]` section is used by the reviewer agent to compile your project and validate changes.
+The `[build]`, `[test]`, and `[lint]` sections are used by the reviewer agent to compile, test, and validate your project. Fill in the commands according to your project's stack:
+
+#### Examples by Stack
+
+**Rust (Cargo)**
+```toml
+[build]
+command = "cargo build --release"
+
+[test]
+command = "cargo test"
+
+[lint]
+command = "cargo clippy"
+```
+
+**Node.js (npm)**
+```toml
+[build]
+command = "npm run build"
+
+[test]
+command = "npm test"
+
+[lint]
+command = "npx eslint ."
+```
+
+**Node.js (pnpm)**
+```toml
+[build]
+command = "pnpm build"
+
+[test]
+command = "pnpm test"
+
+[lint]
+command = "pnpm lint"
+```
+
+**Python (Poetry)**
+```toml
+[build]
+command = "poetry build"
+
+[test]
+command = "poetry run pytest"
+
+[lint]
+command = "poetry run flake8"
+```
+
+**Python (pip)**
+```toml
+[build]
+command = "python -m pip install -e ."
+
+[test]
+command = "pytest"
+
+[lint]
+command = "flake8"
+```
+
+**Go**
+```toml
+[build]
+command = "go build -o bin/app ./cmd/main.go"
+
+[test]
+command = "go test ./..."
+
+[lint]
+command = "golangci-lint run"
+```
+
+**Java (Maven)**
+```toml
+[build]
+command = "mvn clean package -DskipTests"
+
+[test]
+command = "mvn test"
+
+[lint]
+command = "mvn checkstyle:check"
+```
+
+**Java (Gradle)**
+```toml
+[build]
+command = "gradle build -x test"
+
+[test]
+command = "gradle test"
+
+[lint]
+command = "gradle checkstyleMain"
+```
+
+If a command is not applicable to your project, leave it empty or omit the section entirely. The reviewer agent will skip it gracefully.
 
 ## Security
 
@@ -475,10 +586,10 @@ The `[build]` section is used by the reviewer agent to compile your project and 
 
 ```bash
 cd dectl
-cargo test        # Run all tests (111 passing)
+cargo test        # Run all tests (115 passing)
 cargo fmt         # Format code
 cargo clippy      # Lint check
-cargo build --release  # Build binary (~4.5MB)
+cargo build --release  # Build binary (~4.9MB)
 ```
 
 ## Contributing

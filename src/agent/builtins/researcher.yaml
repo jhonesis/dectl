@@ -1,41 +1,101 @@
 name: researcher
-role: "Context and prior decisions investigator"
-description: "Research phase: analyze context, scan files, and gather relevant memory for the task. First step in the SDD task pipeline."
-next_step_hint: "Next in pipeline: dectl agent run coder --task {{task}} --var task_id={{task_id}}"
+role: "Deep context analyst for SDD-driven tasks"
+description: >
+  Research phase: deep-scan project structure, prior decisions, SDD specs,
+  progress state, knowledge base, and memory to build comprehensive context
+  for the task. First step in the SDD pipeline. Agents are fault-tolerant
+  and continue even if predecessors fail.
+requires: []
+context_files:
+  - ".dec/config/project.toml"
+  - ".dec/isa/project.isa.md"
+  - ".dec/state/progress.json"
+next_step_hint: "Next: dectl agent run coder --task {{task}} --var task_id={{task_id}}"
 steps:
   - type: action
-    description: Scan project structure
-    cmd: ["dectl", "project", "scan", "--depth", "4", "--json"]
+    description: Get project info and warnings
+    cmd: ["dectl", "project", "info", "--json"]
 
   - type: action
-    description: Search memory
+    description: Scan project structure
+    cmd: ["dectl", "project", "scan", "--depth", "5", "--json"]
+
+  - type: action
+    description: Get project context summary
+    cmd: ["dectl", "project", "context", "--max-tokens", "4000", "--format", "compact"]
+
+  - type: action
+    description: Search memory for task context
     cmd: ["dectl", "memory", "search", "--json", "{{task}}"]
 
   - type: action
-    description: Get project context
-    cmd: ["dectl", "project", "context", "--max-tokens", "2500"]
+    description: Search memory for task_id history
+    cmd: ["dectl", "memory", "search", "--json", "{{task_id}}"]
+
+  - type: action
+    description: Read current progress state
+    shell: true
+    cmd: ["cat .dec/state/progress.json 2>/dev/null || echo '{}'"]
+
+  - type: action
+    description: List architectural decisions
+    shell: true
+    cmd: ["ls -1 .dec/decisions/ 2>/dev/null | head -20 || echo 'No decisions found'"]
 
   - type: write
-    description: Save project tree
-    path: ".dec/agent-output/{{task_id}}-tree.json"
-    content: "{{step_1_output}}"
+    description: Save comprehensive research context
+    path: ".dec/agent-output/{{task_id}}-research.md"
+    content: |
+      # Research Context: {{task}}
+      ## Task ID: {{task_id}}
 
-  - type: write
-    description: Save memory results
-    path: ".dec/agent-output/{{task_id}}-memory.json"
-    content: "{{step_2_output}}"
+      ### Project Info
+      {{step_1_output}}
 
-  - type: write
-    description: Save project context
-    path: ".dec/agent-output/{{task_id}}-context.txt"
-    content: "{{step_3_output}}"
+      ### Project Tree
+      {{step_2_output}}
+
+      ### Project Context
+      {{step_3_output}}
+
+      ### Memory: Task Context
+      {{step_4_output}}
+
+      ### Memory: Task History
+      {{step_5_output}}
+
+      ### Progress State
+      {{step_6_output}}
+
+      ### Architectural Decisions
+      {{step_7_output}}
+
+  - type: action
+    description: Record research in memory
+    cmd: ["dectl", "memory", "add", "Research completed for {{task_id}}: {{task}}", "--tags", "research,{{task_id}}"]
 
   - type: prompt
-    description: Research brief
+    description: Research analysis brief
     content: |
       ## Research Brief: {{task}}
+      **Task ID**: {{task_id}}
 
-      Files written to `.dec/agent-output/{{task_id}}-*`
+      ### Context compiled to: `.dec/agent-output/{{task_id}}-research.md`
 
-      Next step:
+      ### Your analysis steps:
+      1. Read `.dec/agent-output/{{task_id}}-research.md` — contains project tree,
+         memory, progress state, and decisions
+      2. Read `.dec/config/project.toml` — for stack conventions and build commands
+      3. Read `.dec/decisions/` files listed above — respect prior architectural decisions
+      4. If specs exist, read the relevant spec in `specs/` for this task's requirements
+      5. Read `.dec/isa/project.isa.md` — project identity and architecture
+
+      ### Deliverable:
+      Summarize findings that the **coder agent** will need:
+      - Related code files and their purpose
+      - Constraints from decisions and specs
+      - Dependencies and import patterns to follow
+      - Known risks or edge cases from memory
+
+      ### Next step:
         dectl agent run coder --task "{{task}}" --var task_id={{task_id}}

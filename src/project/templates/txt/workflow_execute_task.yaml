@@ -1,4 +1,4 @@
-name: execute-task
+name: execute_task
 description: "Full SDD task execution pipeline: research -> code context -> implement -> review -> document -> close"
 inputs:
   - name: task_id
@@ -19,10 +19,16 @@ steps:
     task: "{{description}}"
 
   - type: prompt
-    description: "Implement the changes manually"
+    description: "AI model implements the changes"
     content: |
-      Implement the changes for task {{task_id}}: {{description}}.
-      When done, run: dectl workflow run execute-task --var task_id={{task_id}} --var description="{{description}}" --from-step 4
+      Task {{task_id}}: {{description}}
+
+      You (the AI model) must now implement this task using your editing tools.
+      Read the context prepared by the coder agent in `.dec/agent-output/{{task_id}}-coder-context.md`
+      and implement the changes following the project conventions.
+
+      When implementation is complete, run:
+        dectl workflow run execute_task --var task_id={{task_id}} --var description="{{description}}" --from-step 4
 
   - type: agent
     description: "Build + diff + verification"
@@ -34,7 +40,3 @@ steps:
     agent_type: documenter
     task: "{{description}}"
     run_always: true
-
-  - type: action
-    description: "Mark task as completed in memory"
-    cmd: ["dectl", "memory", "add", "Task {{task_id}} completed: {{description}}", "--tags", "task,sdd"]

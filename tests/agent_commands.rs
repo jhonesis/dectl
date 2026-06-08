@@ -56,7 +56,7 @@ fn test_agent_describe_shows_full_definition() {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("coder"));
-    assert!(stdout.contains("Feature implementer"));
+    assert!(stdout.contains("feature implementer"));
     assert!(stdout.contains("Steps"));
     assert!(stdout.contains("[prompt]"));
     assert!(stdout.contains("[action]"));

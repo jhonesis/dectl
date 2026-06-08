@@ -1,19 +1,104 @@
 name: documenter
-role: "Technical documentation generator"
-description: "Documentation phase: register task decision in memory, update progress files, close the task cycle. Final step in the SDD task pipeline. Run after reviewer (even on failure)."
-next_step_hint: "Task cycle complete. Log it: dectl memory add 'Task {{task_id}} completed: {{task}}' --tags task,sdd"
+role: "Task cycle closer: document, register, and update project state"
+description: >
+  Documentation phase: read review results, register decision in memory,
+  update progress state, write session summary, and close the task cycle.
+  Final step in the SDD pipeline. Runs after reviewer (even on failure via run_always).
+  Note: Agents are fault-tolerant and non-blocking. Documenter always executes
+  to ensure task is recorded, regardless of prior agent outcomes.
+requires:
+  - reviewer
+context_files:
+  - ".dec/config/project.toml"
+  - ".dec/state/progress.json"
+next_step_hint: "Task cycle complete. Verify: dectl memory search {{task_id}} --json"
 steps:
   - type: action
-    description: Save implementation to memory
-    cmd: ["dectl", "memory", "add", "Implemented: {{task}}", "--tags", "implementation"]
+    description: Read review results
+    shell: true
+    cmd: ["cat .dec/agent-output/{{task_id}}-review.md 2>/dev/null || echo 'No review report found'"]
+
+  - type: action
+    description: Read research context
+    shell: true
+    cmd: ["head -50 .dec/agent-output/{{task_id}}-research.md 2>/dev/null || echo 'No research context'"]
+
+  - type: action
+    description: Get current timestamp
+    shell: true
+    cmd: ["date -u '+%Y-%m-%dT%H:%M:%SZ'"]
+
+  - type: action
+    description: Save implementation record to memory
+    cmd: ["dectl", "memory", "add", "Task {{task_id}} completed: {{task}}", "--tags", "implementation,completed,{{task_id}}"]
+
+  - type: action
+    description: Save technical decisions to memory
+    cmd: ["dectl", "memory", "add", "Decision for {{task_id}}: Implementation approach for {{task}} — see .dec/agent-output/{{task_id}}-* for details", "--tags", "decision,{{task_id}}"]
+
+  - type: write
+    description: Write task completion summary
+    path: ".dec/agent-output/{{task_id}}-summary.md"
+    content: |
+      # Task Completion: {{task_id}}
+      ## Description: {{task}}
+      ## Completed: {{step_3_output}}
+
+      ### Review Results
+      {{step_1_output}}
+
+      ### Original Research
+      {{step_2_output}}
+
+      ### Pipeline Artifacts
+      - Research: `.dec/agent-output/{{task_id}}-research.md`
+      - Coder context: `.dec/agent-output/{{task_id}}-coder-context.md`
+      - Review: `.dec/agent-output/{{task_id}}-review.md`
+      - Summary: `.dec/agent-output/{{task_id}}-summary.md`
+
+  - type: action
+    description: List all task artifacts
+    shell: true
+    cmd: ["ls -la .dec/agent-output/{{task_id}}-* 2>/dev/null || echo 'No artifacts'"]
 
   - type: prompt
-    description: Documentation instructions
+    description: Documentation and state update instructions
+    run_always: true
     content: |
       ## Documentation: {{task}}
+      **Task ID**: {{task_id}}
 
-      ✅ Saved to memory
+      ### Already done automatically:
+      - Memory updated with implementation record
+      - Memory updated with technical decisions
+      - Task summary written to `.dec/agent-output/{{task_id}}-summary.md`
 
-      ### Manual steps
-      1. Edit `.dec/state/progress.json`
-      2. Edit `.dec/state/last_session.md`
+      ### Your documentation tasks:
+      1. **Update progress.json** — mark this task as `done` in `.dec/state/progress.json`
+         ```json
+         { "id": "{{task_id}}", "status": "done", "description": "{{task}}" }
+         ```
+      2. **Update tasks.md** — change `[ ]` to `[x]` for task {{task_id}} in the relevant `specs/*/tasks.md`
+      3. **Add decision file** (if architectural) — write `.dec/decisions/{{task_id}}-<name>.md`
+      4. **Update last_session.md** — add {{task_id}} to the completed tasks list
+
+      ### Task artifacts for reference:
+      {{step_7_output}}
+
+      ### Task cycle complete
+      To verify everything was recorded:
+        dectl memory search "{{task_id}}" --json
+
+  - type: prompt
+    description: Pipeline completion notice
+    run_always: true
+    content: |
+      ---
+      ## SDD Pipeline Complete for {{task_id}}
+
+      Pipeline: researcher -> coder -> reviewer -> documenter
+
+      All artifacts saved to `.dec/agent-output/{{task_id}}-*`
+      Memory entries tagged with `{{task_id}}`
+
+      To end the session: `dectl session end`

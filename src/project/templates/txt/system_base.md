@@ -12,6 +12,7 @@ You are working on [project name]. Read .dec/isa/project.isa.md to understand wh
 **Before acting**:
 - Read the relevant context in .dec/ before making important decisions
 - Consult .dec/decisions/ before proposing architectural changes
+- Follow the coding discipline guidelines in `AGENTS.md` § Coding Discipline (think before coding, simplicity first, surgical changes, goal-driven execution)
 - If something is unclear, ask before assuming
 
 **When writing code**:

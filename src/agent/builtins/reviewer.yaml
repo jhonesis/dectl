@@ -1,34 +1,111 @@
 name: reviewer
-role: "Code quality reviewer"
-description: "Review phase: build project, run tests, verify implementation quality. Third step in the SDD task pipeline. Run after implementing."
-next_step_hint: "If satisfied, run: dectl agent run documenter --task {{task}} --var task_id={{task_id}}"
+role: "Quality gate: build + test + lint + convention verification"
+description: >
+  Review phase: compile, run tests, check linting, verify git changes,
+  validate against project conventions. Quality gate before documentation.
+  Third step in the SDD pipeline. Run after implementing.
+  Note: Agents are fault-tolerant. Reviewer runs even if coder fails
+  (but will report compilation errors).
+requires:
+  - coder
+context_files:
+  - ".dec/config/project.toml"
+next_step_hint: "If all checks pass: dectl agent run documenter --task {{task}} --var task_id={{task_id}}"
 steps:
   - type: action
-    description: Compile Code
+    description: Build project
     shell: true
-    cmd: ["cmd=$(grep -A1 '\\[build\\]' .dec/config/project.toml 2>/dev/null | grep 'command' | cut -d'\"' -f2); if [ -n \"$cmd\" ]; then echo '━━━ Build ━━━' && eval \"$cmd\" && echo '✅ Build OK' || echo '❌ Build FAILED'; elif [ -f Makefile ] && grep -q '^build:' Makefile; then make build; else echo 'No build command in project.toml [build]'; exit 1; fi"]
-
+    cmd: ["cmd=$(grep -A1 '\\[build\\]' .dec/config/project.toml 2>/dev/null | grep 'command' | cut -d'\"' -f2); if [ -n \"$cmd\" ]; then eval \"$cmd\" 2>&1; else echo 'NO_BUILD_COMMAND'; fi"]
 
   - type: action
-    description: Show changes
-    cmd: ["git", "diff", "--stat"]
+    description: Run test suite
+    shell: true
+    cmd: ["cmd=$(grep -A1 '\\[test\\]' .dec/config/project.toml 2>/dev/null | grep 'command' | cut -d'\"' -f2); if [ -n \"$cmd\" ]; then eval \"$cmd\" 2>&1; elif [ -f Cargo.toml ]; then cargo test 2>&1; elif [ -f package.json ]; then npm test 2>&1; else echo 'NO_TEST_COMMAND'; fi"]
+
+  - type: action
+    description: Run linter
+    shell: true
+    cmd: ["cmd=$(grep -A1 '\\[lint\\]' .dec/config/project.toml 2>/dev/null | grep 'command' | cut -d'\"' -f2); if [ -n \"$cmd\" ]; then eval \"$cmd\" 2>&1; elif [ -f Cargo.toml ]; then cargo clippy 2>&1; elif [ -f package.json ]; then npx eslint . 2>&1; else echo 'NO_LINT_COMMAND'; fi"]
+
+  - type: action
+    description: Show detailed changes
+    cmd: ["git", "diff", "--stat", "--no-color"]
+
+  - type: action
+    description: Show full diff for review
+    shell: true
+    cmd: ["git diff --no-color | head -500"]
+
+  - type: action
+    description: Count changes
+    shell: true
+    cmd: ["git diff --shortstat 2>/dev/null || echo 'No changes'"]
+
+  - type: action
+    description: Check untracked files
+    shell: true
+    cmd: ["git ls-files --others --exclude-standard | head -20 || echo 'No untracked files'"]
 
   - type: write
     description: Save review report
-    path: ".dec/agent-output/{{task_id}}-review.json"
+    path: ".dec/agent-output/{{task_id}}-review.md"
     content: |
-      {"build":"{{step_1_output}}","diff":"{{step_2_output}}"}
-
-  - type: prompt
-    description: Review report
-    content: |
-      ## Review: {{task}}
+      # Review Report: {{task}}
+      ## Task ID: {{task_id}}
 
       ### Build
       {{step_1_output}}
 
-      ### Changes
+      ### Tests
       {{step_2_output}}
 
-      If build passed, run: dectl agent run documenter --task "{{task}}" --var task_id={{task_id}}
-      If build failed, fix errors and re-run the reviewer.
+      ### Lint
+      {{step_3_output}}
+
+      ### Change Summary
+      {{step_4_output}}
+
+      ### Change Stats
+      {{step_6_output}}
+
+      ### Untracked Files
+      {{step_7_output}}
+
+  - type: action
+    description: Record review in memory
+    cmd: ["dectl", "memory", "add", "Review {{task_id}}: build+test+lint completed", "--tags", "review,{{task_id}}"]
+
+  - type: prompt
+    description: Review analysis
+    content: |
+      ## Review: {{task}}
+      **Task ID**: {{task_id}}
+
+      ### Automated Check Results
+      See full report: `.dec/agent-output/{{task_id}}-review.md`
+
+      ### Build Result
+      {{step_1_output}}
+
+      ### Test Result
+      {{step_2_output}}
+
+      ### Lint Result
+      {{step_3_output}}
+
+      ### Your review tasks:
+      1. Analyze the diff below for:
+         - Logic errors or edge cases not covered by tests
+         - Convention violations (check `.dec/config/project.toml`)
+         - Security concerns (input validation, error handling)
+         - Performance issues (unnecessary allocations, O(n^2) loops)
+      2. Check untracked files — should any be committed?
+
+      ### Diff (first 500 lines):
+      ```
+      {{step_5_output}}
+      ```
+
+      ### Verdict:
+      - PASS: `dectl agent run documenter --task "{{task}}" --var task_id={{task_id}}`
+      - FAIL: Fix issues and re-run: `dectl agent run reviewer --task "{{task}}" --var task_id={{task_id}}`

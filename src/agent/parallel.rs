@@ -50,6 +50,7 @@ pub fn run_parallel(
                     non_interactive,
                     &mode,
                     false,
+                    false,
                 )
             }));
 

@@ -1,23 +1,93 @@
 name: coder
-role: "Feature implementer following project conventions"
-description: "Code generation phase: produce implementation files based on research context. Second step in the SDD task pipeline. Run after researcher."
+role: "SDD-driven feature implementer with verification"
+description: >
+  Code generation phase: load research context, project conventions, and
+  relevant specs to produce implementation files. Includes post-write
+  verification. Second step in the SDD pipeline. Run after researcher.
+  Note: Agents are fault-tolerant. Coder runs even if researcher fails
+  (but will lack research context).
+requires:
+  - researcher
+context_files:
+  - ".dec/config/project.toml"
+  - ".dec/isa/project.isa.md"
 next_step_hint: "After implementing, run: dectl agent run reviewer --task {{task}} --var task_id={{task_id}}"
 steps:
   - type: action
-    description: Search memory for context
+    description: Check research context exists
+    shell: true
+    cmd: ["cat .dec/agent-output/{{task_id}}-research.md 2>/dev/null || echo 'NO_RESEARCH_CONTEXT'"]
+
+  - type: action
+    description: Search memory for implementation patterns
     cmd: ["dectl", "memory", "search", "--json", "{{task}}"]
 
+  - type: action
+    description: Read project conventions
+    shell: true
+    cmd: ["cat .dec/config/project.toml 2>/dev/null || echo 'No project.toml'"]
+
+  - type: action
+    description: Check recent git changes
+    shell: true
+    cmd: ["git log --oneline -10 2>/dev/null || echo 'No git history'"]
+
   - type: write
-    description: Save memory context for implementation
-    path: ".dec/agent-output/{{task_id}}-coder-memory.json"
-    content: "{{step_1_output}}"
+    description: Save implementation context
+    path: ".dec/agent-output/{{task_id}}-coder-context.md"
+    content: |
+      # Implementation Context: {{task}}
+      ## Task ID: {{task_id}}
+
+      ### Research Context
+      {{step_1_output}}
+
+      ### Memory Patterns
+      {{step_2_output}}
+
+      ### Project Conventions
+      {{step_3_output}}
+
+      ### Recent Git Changes
+      {{step_4_output}}
 
   - type: prompt
     description: Implementation brief
     content: |
-      ## Code: {{task}}
+      ## Implement: {{task}}
+      **Task ID**: {{task_id}}
 
-      Context saved to `.dec/agent-output/{{task_id}}-coder-memory.json`
+      ### Before coding, read:
+      1. `.dec/agent-output/{{task_id}}-coder-context.md` — full implementation context
+      2. `.dec/agent-output/{{task_id}}-research.md` — research findings (if exists)
+      3. `.dec/config/project.toml` — stack, build command, conventions
 
-      Use your editing tools to implement the task.
-      When done, run: dectl agent run reviewer --task "{{task}}" --var task_id={{task_id}}
+      ### Implementation rules:
+      - Follow existing code patterns found in the research context
+      - Respect all decisions in `.dec/decisions/`
+      - Include unit tests for new public functions
+      - Use existing error handling patterns (anyhow, no panics in prod paths)
+      - Maintain existing comments and docstrings
+
+      ### When implementation is complete:
+      1. Verify your files compile/parse correctly
+      2. Run: `dectl agent run reviewer --task "{{task}}" --var task_id={{task_id}}`
+
+  - type: action
+    description: Record implementation start
+    cmd: ["dectl", "memory", "add", "Implementing {{task_id}}: {{task}}", "--tags", "implementation,{{task_id}},in-progress"]
+
+  - type: prompt
+    description: Post-implementation checklist
+    run_always: true
+    content: |
+      ## Post-Implementation Checklist
+
+      Before running the reviewer, verify:
+      - [ ] New files are in the correct location per project structure
+      - [ ] Imports follow existing patterns
+      - [ ] Public APIs have documentation
+      - [ ] Tests cover the happy path + at least one error case
+      - [ ] No `#[allow(dead_code)]` or `// TODO` left uncommented
+
+      Run: `dectl agent run reviewer --task "{{task}}" --var task_id={{task_id}}`

@@ -40,8 +40,9 @@ impl Runner {
         from_step: Option<usize>,
         auto: bool,
         output: &crate::core::output::OutputMode,
+        pause_on_prompt: bool,
     ) -> Result<ExecutionResult> {
-        let start_idx = from_step.unwrap_or(0);
+        let start_idx = from_step.map(|s| s.saturating_sub(1)).unwrap_or(0);
 
         if start_idx >= workflow.steps.len() {
             anyhow::bail!(
@@ -53,6 +54,7 @@ impl Runner {
 
         let mut results: Vec<StepResult> = Vec::new();
         let mut all_success = true;
+        let mut paused = false;
 
         let has_remaining_run_always = |current_idx: usize| -> bool {
             workflow.steps[current_idx + 1..]
@@ -109,6 +111,16 @@ impl Runner {
                         success: true,
                         output: None,
                     });
+                    if pause_on_prompt {
+                        paused = true;
+                        println!(
+                            "\n⏸️  Workflow paused at step {}. Resume with:\n   dectl workflow run {} --from-step {}",
+                            step_num,
+                            workflow.name,
+                            step_num + 1
+                        );
+                        break;
+                    }
                 }
                 StepType::Action => {
                     let cmd = step.cmd.as_ref().unwrap();
@@ -201,10 +213,8 @@ impl Runner {
                     });
 
                     if let Some(ref out) = captured {
-                        if !out.is_empty() {
-                            vars.insert(format!("step_{}_output", step_num), out.clone());
-                            vars.insert("last_output".to_string(), out.clone());
-                        }
+                        vars.insert(format!("step_{}_output", step_num), out.clone());
+                        vars.insert("last_output".to_string(), out.clone());
                     }
                 }
                 StepType::Write => {
@@ -304,7 +314,7 @@ impl Runner {
                         };
 
                         crate::agent::runner::run_agent(
-                            &agent_def, &task, vars, None, dry_run, None, auto, output, auto,
+                            &agent_def, &task, vars, None, dry_run, None, auto, output, auto, true,
                         )
                         .map(|r| vec![r])
                     };
@@ -326,6 +336,25 @@ impl Runner {
                                     )),
                                 });
                             } else {
+                                let failed_details: Vec<String> = results_list
+                                    .iter()
+                                    .filter(|r| !matches!(r.status, crate::agent::schema::AgentRunStatus::Ok))
+                                    .map(|r| {
+                                        let detail = match &r.status {
+                                            crate::agent::schema::AgentRunStatus::Error { message } => {
+                                                format!("{}: {:?}", r.agent_type, message)
+                                            }
+                                            crate::agent::schema::AgentRunStatus::Timeout => {
+                                                format!("{}: timeout", r.agent_type)
+                                            }
+                                            _ => r.agent_type.clone(),
+                                        };
+                                        detail
+                                    })
+                                    .collect();
+                                for detail in &failed_details {
+                                    eprintln!("  ✗ {}", detail);
+                                }
                                 let failed: Vec<&str> = results_list
                                     .iter()
                                     .filter(|r| {
@@ -379,6 +408,7 @@ impl Runner {
             workflow_name: workflow.name.clone(),
             success: all_success,
             steps_executed: results.len(),
+            paused,
             results,
         })
     }
@@ -401,6 +431,8 @@ pub struct ExecutionResult {
     pub success: bool,
     #[serde(rename = "steps_executed")]
     pub steps_executed: usize,
+    #[serde(default)]
+    pub paused: bool,
     pub results: Vec<StepResult>,
 }
 

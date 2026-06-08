@@ -187,8 +187,9 @@ fn print_next_steps(level: InitLevel, project_type: ProjectType) {
         Templates::files_for_level(level).len()
     );
     println!("\nNext steps:");
-    println!("  1. Open the project with your AI tool (Claude Code, opencode, etc.)");
-    println!("  2. The AI will read .dec/prompts/tasks/auto-fill.md and auto-fill the context");
-    println!("  3. Run 'dectl project info --json' to verify the setup");
-    println!("  4. AGENTS.md was created in the project root — the AI reads it automatically");
+    println!("  1. Open the project with your AI tool (Claude Code, opencode, Gemini CLI, etc.)");
+    println!("  2. The AI reads .dec/ automatically — no manual context loading needed");
+    println!("  3. Inside the AI, run: dectl project info --json");
+    println!("     → The AI sees your project stack, frameworks, and description instantly");
+    println!("  4. AGENTS.md guides the AI on how to work with this project");
 }
