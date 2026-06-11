@@ -338,10 +338,17 @@ impl Runner {
                             } else {
                                 let failed_details: Vec<String> = results_list
                                     .iter()
-                                    .filter(|r| !matches!(r.status, crate::agent::schema::AgentRunStatus::Ok))
+                                    .filter(|r| {
+                                        !matches!(
+                                            r.status,
+                                            crate::agent::schema::AgentRunStatus::Ok
+                                        )
+                                    })
                                     .map(|r| {
                                         let detail = match &r.status {
-                                            crate::agent::schema::AgentRunStatus::Error { message } => {
+                                            crate::agent::schema::AgentRunStatus::Error {
+                                                message,
+                                            } => {
                                                 format!("{}: {:?}", r.agent_type, message)
                                             }
                                             crate::agent::schema::AgentRunStatus::Timeout => {
