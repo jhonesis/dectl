@@ -104,6 +104,9 @@ enum MemoryCommands {
 
         #[arg(long)]
         global: bool,
+
+        #[arg(long, short = 'T', default_value = "note")]
+        r#type: String,
     },
     List {
         #[arg(long)]
@@ -135,6 +138,18 @@ enum MemoryCommands {
     },
     Edit {
         id: i64,
+    },
+    Query {
+        query: String,
+
+        #[arg(long)]
+        project: Option<String>,
+
+        #[arg(long)]
+        global: bool,
+
+        #[arg(long, short = 'l')]
+        limit: Option<usize>,
     },
 }
 
@@ -283,11 +298,16 @@ fn main() {
                 tags,
                 project,
                 global,
+                r#type,
             }) => {
                 let resolved_project = resolve_project(project.as_deref(), *global);
-                if let Err(e) =
-                    memory::add::run(content.clone(), tags.clone(), resolved_project, mode)
-                {
+                if let Err(e) = memory::add::run(
+                    content.clone(),
+                    tags.clone(),
+                    resolved_project,
+                    r#type.clone(),
+                    mode,
+                ) {
                     core::output::Output::print_error(&e.to_string(), None, mode);
                     std::process::exit(1);
                 }
@@ -328,6 +348,18 @@ fn main() {
             }
             Some(MemoryCommands::Edit { id }) => {
                 if let Err(e) = memory::edit::run(*id, mode) {
+                    core::output::Output::print_error(&e.to_string(), None, mode);
+                    std::process::exit(1);
+                }
+            }
+            Some(MemoryCommands::Query {
+                query,
+                project,
+                global,
+                limit,
+            }) => {
+                let resolved_project = resolve_project(project.as_deref(), *global);
+                if let Err(e) = memory::query::run(query.clone(), resolved_project, *limit, mode) {
                     core::output::Output::print_error(&e.to_string(), None, mode);
                     std::process::exit(1);
                 }

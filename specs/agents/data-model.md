@@ -1,11 +1,15 @@
 # Data Model — Agent System
 
 > Defines agent schemas, agent_log table, and extensions to existing model.
-> Last updated: 2026-06-02
+> Last updated: 2026-06-12
 
 ---
 
-## 1. agent_log Table (in memory.db)
+## 1. Agent Tables in memory.db
+
+### 1.1 — agent_log
+
+Execution log for all agent runs. Created in migration `0003_agent_log`.
 
 ```sql
 CREATE TABLE IF NOT EXISTS agent_log (
@@ -24,12 +28,36 @@ CREATE INDEX idx_agent_log_timestamp ON agent_log(timestamp);
 CREATE INDEX idx_agent_log_type ON agent_log(agent_type);
 ```
 
-**Migration**: `0003_agent_log` — creates table and indexes. Runs on first agent execution if not present.
+### 1.2 — agent_outputs
 
-**Relationship with existing tables**:
+Links successful agent executions to their auto-generated memory entries. Created in migration `0003_agent_outputs` (note: this is the same migration version as `agent_log`, both were created in the same phase).
+
+```sql
+CREATE TABLE IF NOT EXISTS agent_outputs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent_type TEXT NOT NULL,
+    task_id TEXT,
+    task_description TEXT,
+    output_file TEXT,
+    memory_id INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (memory_id) REFERENCES memories(id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_agent_outputs_agent ON agent_outputs(agent_type);
+CREATE INDEX idx_agent_outputs_task ON agent_outputs(task_id);
 ```
-memories 1 ──── 0..* agent_log    (no FK, independent tables)
+
+**Relationship with memories**:
 ```
+memories 1 ──── 0..1 agent_outputs    (memory_id FK, ON DELETE SET NULL)
+```
+
+**Notes**:
+- `memory_id` links to the memory summary auto-inserted when the agent completes successfully.
+- `ON DELETE SET NULL` — if the memory entry is deleted, the link is preserved but nulled.
+- `task_id` is an opaque identifier (e.g. "T119", "A020") provided by the caller.
+- `output_file` is a path relative to `.dec/agent-output/<task_id>/`.
 
 ---
 
@@ -39,8 +67,14 @@ memories 1 ──── 0..* agent_log    (no FK, independent tables)
 name              string    required    Identifier. kebab-case.
 role              string    required    Role description for the model. 1-2 sentences.
 description       string    required    Shown in dectl agent list. Max 200 chars.
-context_files     array     optional    Relative paths to project files the model reads
-                                        before executing steps.
+requires          array     optional    List of agent names that should run before this one.
+                                        Informational only—does not block execution. Agents are
+                                        fault-tolerant and run even if predecessors fail.
+context_files     array     optional    Relative paths to project files to auto-load and expose
+                                        as {{context_VARNAME}} variables in steps.
+                                        Example: ".dec/config/project.toml" becomes
+                                        "{{context_dec_config_project_toml}}". Files are loaded
+                                        silently if readable; unreadable files are skipped.
 inputs            array     optional    Same as workflows (InputDef).
 steps             array     required    Same as workflows (Step).
                                         Valid types: prompt, action, write.
@@ -56,6 +90,29 @@ steps:
     description: Audit
     content: "Review {{task}} for common security vulnerabilities."
 ```
+
+**Example with requires and context_files**:
+```yaml
+name: reviewer
+role: "Code quality gate: build, test, lint, conventions"
+description: Validates implementation against project rules
+requires:
+  - coder
+context_files:
+  - ".dec/config/project.toml"
+  - ".dec/isa/project.isa.md"
+steps:
+  - type: action
+    description: Read build configuration
+    shell: true
+    cmd: ["cat {{context_dec_config_project_toml}} | grep -A1 '\\[build\\]'"]
+  - type: action
+    description: Build project
+    shell: true
+    cmd: ["cargo build --release"]
+```
+
+**Note on fault-tolerance**: The `requires` field is informational only and does not block agent execution. All agents are designed to be fault-tolerant and will execute even if their predecessors fail. This ensures the workflow never stalls due to a single agent's errors.
 
 ---
 
@@ -192,7 +249,33 @@ parallel      boolean         Optional. Default: false.
 
 ---
 
-## 5. Relationships with Existing Data Models
+## 5. Data Flow: Auto-Link agent → memory
+
+When an agent completes successfully (`status = 'ok'`), `runner.rs` automatically:
+
+1. **Inserts a summary into `memories`** with dynamic type:
+   - `'research'` if agent_type is `"researcher"`
+   - `'note'` for all other agent types
+2. **Inserts a link into `agent_outputs`** with the FK pointing to the new memory entry
+3. **Inserts a log entry into `agent_log`** with execution metrics
+
+This ensures every agent execution is traceable from both the memory system and the agent log.
+
+```rust
+// Pseudocode of runner.rs auto-link on completion:
+let memory_id = insert_memory(
+    conn,
+    format!("Agent {}: {}", agent_type, task_description),
+    type_, // "research" or "note"
+    project,
+)?;
+insert_agent_output(conn, agent_type, task_id, task_description, &artifact, memory_id)?;
+insert_agent_log(conn, agent_type, task, "ok", steps, duration)?;
+```
+
+---
+
+## 6. Relationships with Existing Data Models
 
 ```
 .dec/agents/*.yaml
@@ -201,10 +284,13 @@ parallel      boolean         Optional. Default: false.
                                      + new StepType "agent"
 
 memory.db
-    ├── memories table             (existing)
-    ├── migrations table           (existing)
-    └── agent_log table            (NEW — migration 0003)
+    ├── memories table             (existing, with new type column)
+    ├── memories_fts table         (FTS5 — migration v2)
+    ├── agent_log table            (migration 0003)
+    ├── agent_outputs table        (migration 0003 — FK to memories.id)
+    ├── tag_taxonomy table         (migration v4)
+    └── migrations table           (existing)
 
 session end
-    └── Paso 5: agent_sync ───────► queries agent_log since last session
+    └── Paso 5: agent_sync ───────► queries agent_log + agent_outputs since last session
 ```

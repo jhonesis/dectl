@@ -124,3 +124,261 @@ fn test_memory_global_non_interactive() {
     let output = run_dectl(&["--non-interactive", "memory", "list"], tmp.path());
     assert!(output.status.success());
 }
+
+#[test]
+fn test_memory_add_with_type() {
+    let tmp = TempDir::new().unwrap();
+    let output = run_dectl(
+        &[
+            "memory",
+            "add",
+            "Test type decision",
+            "--tags",
+            "test",
+            "--type",
+            "decision",
+        ],
+        tmp.path(),
+    );
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let id_line = stdout
+        .lines()
+        .find(|l| l.contains("Added memory entry #"))
+        .unwrap_or_default();
+    let id_str = id_line
+        .replace("Added memory entry #", "")
+        .trim()
+        .to_string();
+
+    let output = run_dectl(&["memory", "show", &id_str], tmp.path());
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Type: decision"));
+}
+
+#[test]
+fn test_memory_type_default() {
+    let tmp = TempDir::new().unwrap();
+    let output = run_dectl(&["memory", "add", "Default type note"], tmp.path());
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let id_line = stdout
+        .lines()
+        .find(|l| l.contains("Added memory entry #"))
+        .unwrap_or_default();
+    let id_str = id_line
+        .replace("Added memory entry #", "")
+        .trim()
+        .to_string();
+
+    let output = run_dectl(&["memory", "show", &id_str], tmp.path());
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Type: note"));
+}
+
+#[test]
+fn test_memory_search_fts5() {
+    let tmp = TempDir::new().unwrap();
+    let output = run_dectl(&["memory", "add", "FTS5 search test query"], tmp.path());
+    assert!(output.status.success());
+
+    let output = run_dectl(&["memory", "search", "FTS5 search", "--json"], tmp.path());
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("FTS5 search test query"));
+}
+
+#[test]
+fn test_memory_search_no_results_fts5() {
+    let tmp = TempDir::new().unwrap();
+    let output = run_dectl(
+        &["memory", "search", "xyznonexistent12345", "--json"],
+        tmp.path(),
+    );
+    assert!(output.status.success());
+}
+
+#[test]
+fn test_memory_query_type_filter() {
+    let tmp = TempDir::new().unwrap();
+    let proj = "type_filter_test";
+    let output = run_dectl(
+        &[
+            "memory",
+            "add",
+            "Architecture decision",
+            "--type",
+            "decision",
+            "--tags",
+            "architecture",
+            "--project",
+            proj,
+        ],
+        tmp.path(),
+    );
+    assert!(output.status.success());
+
+    let output = run_dectl(
+        &["memory", "add", "General note", "--project", proj],
+        tmp.path(),
+    );
+    assert!(output.status.success());
+
+    let output = run_dectl(
+        &[
+            "memory",
+            "query",
+            &format!("type:decision AND project:{}", proj),
+            "--json",
+        ],
+        tmp.path(),
+    );
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Architecture decision"));
+    assert!(!stdout.contains("General note"));
+}
+
+#[test]
+fn test_memory_query_tags_filter() {
+    let tmp = TempDir::new().unwrap();
+    let proj = "tags_filter_test";
+    let output = run_dectl(
+        &[
+            "memory",
+            "add",
+            "Rust entry",
+            "--tags",
+            "rust,cli",
+            "--project",
+            proj,
+        ],
+        tmp.path(),
+    );
+    assert!(output.status.success());
+
+    let output = run_dectl(
+        &[
+            "memory",
+            "add",
+            "Python entry",
+            "--tags",
+            "python",
+            "--project",
+            proj,
+        ],
+        tmp.path(),
+    );
+    assert!(output.status.success());
+
+    let output = run_dectl(
+        &[
+            "memory",
+            "query",
+            &format!("tags:rust AND project:{}", proj),
+            "--json",
+        ],
+        tmp.path(),
+    );
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Rust entry"));
+    assert!(!stdout.contains("Python entry"));
+}
+
+#[test]
+fn test_memory_query_boolean_and() {
+    let tmp = TempDir::new().unwrap();
+    let proj = "bool_and_test";
+    let output = run_dectl(
+        &[
+            "memory",
+            "add",
+            "Architecture design decision",
+            "--type",
+            "decision",
+            "--tags",
+            "architecture",
+            "--project",
+            proj,
+        ],
+        tmp.path(),
+    );
+    assert!(output.status.success());
+
+    let output = run_dectl(
+        &[
+            "memory",
+            "add",
+            "Plain decision",
+            "--type",
+            "decision",
+            "--tags",
+            "general",
+            "--project",
+            proj,
+        ],
+        tmp.path(),
+    );
+    assert!(output.status.success());
+
+    let output = run_dectl(
+        &[
+            "memory",
+            "query",
+            &format!("type:decision AND tags:architecture AND project:{}", proj),
+            "--json",
+        ],
+        tmp.path(),
+    );
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Architecture design decision"));
+    assert!(!stdout.contains("Plain decision"));
+}
+
+#[test]
+fn test_memory_query_order_limit() {
+    let tmp = TempDir::new().unwrap();
+    let proj = "order_limit_test";
+    let output = run_dectl(
+        &["memory", "add", "First entry", "--project", proj],
+        tmp.path(),
+    );
+    assert!(output.status.success());
+
+    let output = run_dectl(
+        &["memory", "add", "Second entry", "--project", proj],
+        tmp.path(),
+    );
+    assert!(output.status.success());
+
+    let output = run_dectl(
+        &[
+            "memory",
+            "query",
+            &format!("project:{} ORDER BY created DESC LIMIT 1", proj),
+            "--json",
+        ],
+        tmp.path(),
+    );
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("\"count\": 1"), "Should return exactly 1 result, got: {}", stdout);
+}
+
+#[test]
+fn test_memory_query_invalid_syntax() {
+    let tmp = TempDir::new().unwrap();
+    let output = run_dectl(
+        &["memory", "query", "invalid:value", "--json"],
+        tmp.path(),
+    );
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Unknown field"));
+}

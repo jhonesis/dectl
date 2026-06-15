@@ -1,6 +1,6 @@
 # Specification — Integration Layer
 > *Technology-agnostic. Define QUÉ debe ocurrir en la interacción entre los tres actores.*
-> *Version: 1.0 | Status: Updated | Last updated: 2026-05-26*
+> *Version: 1.1 | Status: Updated | Last updated: 2026-06-12*
 
 ---
 
@@ -75,7 +75,8 @@ La capa de integración define el ciclo completo de una sesión de trabajo con d
 - WHEN completa una tarea significativa THEN el modelo SHALL actualizar `.dec/state/progress.json` si afecta el estado de una feature
 - WHEN finaliza una sesión THEN el modelo SHALL escribir `.dec/state/last_session.md` con: qué se hizo, qué quedó pendiente, decisiones tomadas y próximo paso recomendado
 - WHEN toma una decisión arquitectónica THEN el modelo SHALL crear un archivo en `.dec/decisions/` con el formato ADR definido en dot-dec/research.md
-- WHEN completa una tarea que vale la pena recordar THEN el modelo SHALL ejecutar `dectl memory add` con un resumen conciso
+- WHEN completa una tarea que vale la pena recordar THEN el modelo SHALL ejecutar `dectl memory add` con un resumen conciso, usando `--type decision` para decisiones arquitectónicas o `--type incident` para bugs/incidentes
+- WHEN necesita buscar memoria con filtros avanzados (por tipo, tags, fecha) THEN el modelo SHALL usar `dectl memory query "<query>"` como alternativa más potente a `dectl memory search`
 
 ---
 
@@ -184,7 +185,10 @@ La capa de integración define el ciclo completo de una sesión de trabajo con d
 - WHEN el modelo necesita revisar código THEN SHALL usar `dectl agent run reviewer --task "..."`
 - WHEN el modelo necesita contexto THEN SHALL usar `dectl agent run researcher --task "..."`
 - WHEN el modelo necesita documentar THEN SHALL usar `dectl agent run documenter --task "..."`
+- WHEN el modelo necesita capturar una decisión arquitectónica THEN SHALL usar `dectl memory add "Decisión: ..." --type decision`
+- WHEN el modelo necesita registrar un incidente THEN SHALL usar `dectl memory add "Incidente: ..." --type incident`
 - WHEN el modelo recibe output de un agente THEN SHALL interpretarlo y continuar la tarea principal
+- WHEN el modelo ejecuta un agente THEN sus resultados SHALL ser auto-almacenados en memoria (auto-link) — el modelo no necesita invocar `dectl memory add` por separado para el resultado del agente
 - WHEN el modelo detecta que una tarea es independiente THEN SHALL proponer `--parallel` para acelerar
 
 **Referencia**: Ver `specs/agents/spec.md` para detalles técnicos de agentes.

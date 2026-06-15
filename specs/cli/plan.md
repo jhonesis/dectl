@@ -1,6 +1,6 @@
 # Technical Implementation Plan — dectl CLI
 > *Describe CÓMO implementar el CLI. Technology-specific.*
-> *Version: 1.0 | Status: Updated | Last updated: 2026-06-02*
+> *Version: 1.1 | Status: Updated | Last updated: 2026-06-12*
 
 ---
 
@@ -134,10 +134,16 @@ enum MemoryCommands {
     Add(MemoryAddArgs),
     /// List memory entries
     List(MemoryListArgs),
-    /// Search memory entries
+    /// Search memory entries using full-text search
     Search(MemorySearchArgs),
+    /// Query memory entries using field query language
+    Query(MemoryQueryArgs),
     /// Show a memory entry by ID
     Show(MemoryShowArgs),
+    /// Delete a memory entry (soft-delete by default)
+    Delete(MemoryDeleteArgs),
+    /// Edit a memory entry in $EDITOR
+    Edit(MemoryEditArgs),
 }
 
 #[derive(Args)]
@@ -150,25 +156,59 @@ struct MemoryAddArgs {
     /// Project to associate with (auto-detected if in a .dec/ project)
     #[arg(long)]
     project: Option<String>,
+    /// Entry type: note, decision, context, research, incident, code-snippet
+    #[arg(long, short)]
+    r#type: Option<String>,
 }
 
 #[derive(Args)]
 struct MemoryListArgs {
+    /// Filter by project name
     #[arg(long)]
     project: Option<String>,
-    #[arg(long, default_value = "20")]
-    limit: usize,
+    /// Maximum results
+    #[arg(long)]
+    limit: Option<usize>,
 }
 
 #[derive(Args)]
 struct MemorySearchArgs {
     query: String,
+    /// Filter by project name
     #[arg(long)]
     project: Option<String>,
 }
 
 #[derive(Args)]
 struct MemoryShowArgs {
+    id: i64,
+}
+
+#[derive(Args)]
+struct MemoryQueryArgs {
+    /// Field query expression (type:, tags:, project:, created:, AND, OR, NOT)
+    query: String,
+    /// Filter by project (combined with inline query)
+    #[arg(long)]
+    project: Option<String>,
+    /// Maximum results
+    #[arg(long)]
+    limit: Option<usize>,
+}
+
+#[derive(Args)]
+struct MemoryDeleteArgs {
+    id: i64,
+    /// Permanent deletion (default is soft-delete)
+    #[arg(long)]
+    hard: bool,
+    /// Skip confirmation prompt
+    #[arg(long)]
+    non_interactive: bool,
+}
+
+#[derive(Args)]
+struct MemoryEditArgs {
     id: i64,
 }
 
@@ -351,8 +391,33 @@ main.rs
   → memory::add::run(args, output, config)
       → core::config::detect_project()        // auto-detect project name
       → core::stdin::read_content(args.content) // arg or stdin
-      → memory::db::insert(content, tags, project)
+      → memory::db::insert(content, tags, type_, project)
       → output.success(MemoryAddResult { id, preview })
+```
+
+**Ejemplo — `dectl memory query`**:
+```
+main.rs
+  → memory::query::run(query, project, limit, mode)
+      → memory/query: tokenize input string
+          → Tokenizer produces Token stream
+      → memory/query: parse token stream
+          → Parser builds expression tree (AND/OR/NOT, comparators)
+      → memory/query: build parameterized SQL from expression tree
+          → SELECT cols FROM memories WHERE ... ORDER BY ... LIMIT ...
+      → memory/db: execute query with parameters
+      → output.success(MemoryQueryOutput { query, entries, count, parsed })
+```
+
+**Ejemplo — `dectl memory search`** (FTS5):
+```
+main.rs
+  → memory::search::run(query, project, mode)
+      → memory/search: build FTS5 query (terms joined with AND)
+      → memory/db: try FTS5 MATCH query
+          → on success: SELECT ... FROM memories_fts JOIN memories
+          → on failure: fallback to LIKE substring search
+      → output.success(MemorySearchOutput { query, entries, count })
 ```
 
 ---
@@ -540,7 +605,17 @@ Módulo `session/`:
 - `decision_capture.rs` — regex-based decision extraction + save to memory
 - `end.rs` — orquestador de los 5 pasos
 
-### Fase 5 — Spec Generator
+### Fase 5 — Memory Improvements
+`dectl memory` enhancements: FTS5 full-text search engine (migration v2 bundled-fts5), `--type` categorization, `dectl memory delete` (soft/hard), `dectl memory edit` ($EDITOR), `dectl memory query` with field query language (tokenizer → parser → parameterized SQL), agent_outputs table for auto-link agent→memory (migration v3), tag_taxonomy with 9 seed tags (migration v4).
+
+Depende de: rusqlite bundled → bundled-fts5 en Cargo.toml.
+
+Nuevos módulos en `memory/`:
+- `delete.rs` — soft/hard-delete logic
+- `edit.rs` — $EDITOR integration
+- `query.rs` — tokenizer, parser, SQL builder, CLI handler
+
+### Fase 6 — Spec Generator
 `dectl spec init` con templates embebidos (SKILL.md + references/) y bridge a project.toml e isa.md.
 
 Módulo `spec/`:

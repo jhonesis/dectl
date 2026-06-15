@@ -1,5 +1,6 @@
 use anyhow::Result;
 use colored::Colorize;
+use rusqlite::Connection;
 use serde::Serialize;
 
 use super::db::{DbConn, MemoryEntry};
@@ -15,30 +16,16 @@ pub struct MemorySearchOutput {
 pub fn run(query: String, project: Option<String>, mode: OutputMode) -> Result<()> {
     let db = DbConn::new()?;
 
-    let search_pattern = format!("%{}%", query.to_lowercase());
+    let select_cols = super::db::MEMORY_SELECT_COLS;
 
-    let base_query = "SELECT id, content, tags, project, created_at, updated_at FROM memories WHERE deleted_at IS NULL";
-
-    let entries: Vec<MemoryEntry> = if let Some(ref proj) = project {
-        let full_query = format!(
-            "{} AND project = ?1 AND (LOWER(content) LIKE ?2 OR LOWER(tags) LIKE ?2)",
-            base_query
-        );
-        let mut stmt = db.conn().prepare(&full_query)?;
-        let rows = stmt.query_map(
-            rusqlite::params![proj, &search_pattern],
-            MemoryEntry::from_row,
-        )?;
-        rows.filter_map(|r| r.ok()).collect()
-    } else {
-        let full_query = format!(
-            "{} AND (LOWER(content) LIKE ?1 OR LOWER(tags) LIKE ?1)",
-            base_query
-        );
-        let mut stmt = db.conn().prepare(&full_query)?;
-        let rows = stmt.query_map(rusqlite::params![&search_pattern], MemoryEntry::from_row)?;
-        rows.filter_map(|r| r.ok()).collect()
-    };
+    let fts_query = query.split_whitespace().collect::<Vec<_>>().join(" AND ");
+    let entries: Vec<MemoryEntry> = search_entries(
+        db.conn(),
+        select_cols,
+        &query,
+        &fts_query,
+        project.as_deref(),
+    );
 
     let count = entries.len();
     let output = MemorySearchOutput {
@@ -76,4 +63,81 @@ pub fn run(query: String, project: Option<String>, mode: OutputMode) -> Result<(
     }
 
     Ok(())
+}
+
+fn search_entries(
+    conn: &Connection,
+    cols: &str,
+    raw_query: &str,
+    fts_query: &str,
+    project: Option<&str>,
+) -> Vec<MemoryEntry> {
+    if let Ok(result) = fts_search(conn, cols, fts_query, project) {
+        return result;
+    }
+    like_search(conn, cols, raw_query, project)
+}
+
+fn fts_search(
+    conn: &Connection,
+    cols: &str,
+    fts_query: &str,
+    project: Option<&str>,
+) -> Result<Vec<MemoryEntry>> {
+    if let Some(proj) = project {
+        let sql = format!(
+            "SELECT {} FROM memories m
+             JOIN memories_fts fts ON m.id = fts.rowid
+             WHERE m.deleted_at IS NULL AND memories_fts MATCH ?1 AND m.project = ?2
+             ORDER BY rank",
+            cols
+        );
+        let mut stmt = conn.prepare(&sql)?;
+        let rows = stmt.query_map(rusqlite::params![fts_query, proj], MemoryEntry::from_row)?;
+        Ok(rows.filter_map(|r| r.ok()).collect())
+    } else {
+        let sql = format!(
+            "SELECT {} FROM memories m
+             JOIN memories_fts fts ON m.id = fts.rowid
+             WHERE m.deleted_at IS NULL AND memories_fts MATCH ?1
+             ORDER BY rank",
+            cols
+        );
+        let mut stmt = conn.prepare(&sql)?;
+        let rows = stmt.query_map(rusqlite::params![fts_query], MemoryEntry::from_row)?;
+        Ok(rows.filter_map(|r| r.ok()).collect())
+    }
+}
+
+fn like_search(
+    conn: &Connection,
+    cols: &str,
+    raw_query: &str,
+    project: Option<&str>,
+) -> Vec<MemoryEntry> {
+    let search_pattern = format!("%{}%", raw_query.to_lowercase());
+    if let Some(proj) = project {
+        let sql = format!(
+            "SELECT {} FROM memories WHERE deleted_at IS NULL AND project = ?1 AND (LOWER(content) LIKE ?2 OR LOWER(tags) LIKE ?2) ORDER BY created_at DESC",
+            cols
+        );
+        let mut stmt = conn.prepare(&sql).expect("Failed to prepare LIKE query");
+        let rows = stmt
+            .query_map(
+                rusqlite::params![proj, &search_pattern],
+                MemoryEntry::from_row,
+            )
+            .expect("Failed to execute LIKE query");
+        rows.filter_map(|r| r.ok()).collect()
+    } else {
+        let sql = format!(
+            "SELECT {} FROM memories WHERE deleted_at IS NULL AND (LOWER(content) LIKE ?1 OR LOWER(tags) LIKE ?1) ORDER BY created_at DESC",
+            cols
+        );
+        let mut stmt = conn.prepare(&sql).expect("Failed to prepare LIKE query");
+        let rows = stmt
+            .query_map(rusqlite::params![&search_pattern], MemoryEntry::from_row)
+            .expect("Failed to execute LIKE query");
+        rows.filter_map(|r| r.ok()).collect()
+    }
 }

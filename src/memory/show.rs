@@ -13,11 +13,15 @@ pub struct MemoryShowOutput {
 pub fn run(id: i64, mode: OutputMode) -> Result<()> {
     let db = DbConn::new()?;
 
-    let entry = db.conn().query_row(
-        "SELECT id, content, tags, project, created_at, updated_at FROM memories WHERE id = ?1 AND deleted_at IS NULL",
-        rusqlite::params![id],
-        MemoryEntry::from_row,
-    ).context(format!("Memory entry #{} not found", id))?;
+    let cols = super::db::MEMORY_SELECT_COLS;
+    let sql = format!(
+        "SELECT {} FROM memories WHERE id = ?1 AND deleted_at IS NULL",
+        cols
+    );
+    let entry = db
+        .conn()
+        .query_row(&sql, rusqlite::params![id], MemoryEntry::from_row)
+        .context(format!("Memory entry #{} not found", id))?;
 
     let output = MemoryShowOutput { entry };
 
@@ -30,6 +34,8 @@ pub fn run(id: i64, mode: OutputMode) -> Result<()> {
             println!("{}", format!("#{}", output.entry.id).bold().cyan());
             println!("Content:");
             println!("{}", format!("{}\n", output.entry.content).green());
+
+            println!("Type: {}", output.entry.type_);
 
             if !output.entry.tags.is_empty() {
                 println!("Tags: {}", output.entry.tags.join(", ").cyan());

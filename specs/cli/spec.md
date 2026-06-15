@@ -1,7 +1,7 @@
 # Specification — dectl CLI
 > *Technology-agnostic. Describe QUÉ hace el CLI, no cómo se implementa.*
 > *Extiende specs/master/spec.md con el contrato exacto de cada comando.*
-> *Version: 1.0 | Status: Updated | Last updated: 2026-06-02*
+> *Version: 1.1 | Status: Updated | Last updated: 2026-06-12*
 
 ---
 
@@ -81,6 +81,8 @@ El CLI `dectl` es el ejecutor del sistema. Expone una interfaz de línea de coma
 - WHEN se usa `--project <nombre>` THEN SHALL asociar la entrada al proyecto indicado
 - WHEN no se usa `--project` y existe `.dec/config/project.toml` en el directorio actual THEN SHALL auto-detectar el nombre del proyecto y asociarlo
 - WHEN se usa `--global` THEN SHALL NO asociar la entrada a ningún proyecto (memoria global)
+- WHEN se usa `--type <type>` THEN SHALL clasificar la entrada con el tipo indicado. Valores válidos: `note`, `decision`, `context`, `research`, `incident`, `code-snippet`. Default: `note`
+- WHEN se usa `--type` con un valor no válido THEN SHALL abortar con mensaje claro listando los valores aceptados y exit code 1
 - WHEN no se provee argumento de contenido y stdin no es TTY THEN SHALL abortar con mensaje claro y exit code 1
 - WHEN no se provee argumento y stdin es un pipe THEN SHALL leer el contenido completo desde stdin y almacenarlo
 - WHEN se usa `--json` THEN SHALL retornar `{status: "ok", id: 42, preview: "primeros 80 chars..."}`
@@ -93,12 +95,12 @@ El CLI `dectl` es el ejecutor del sistema. Expone una interfaz de línea de coma
 > Como developer o modelo, quiero listar las entradas de memoria más recientes para retomar contexto de sesiones anteriores.
 
 **Acceptance Criteria**:
-- WHEN se ejecuta THEN SHALL mostrar entradas en orden cronológico inverso con: ID, fecha, tags y primeros 100 caracteres del contenido
+- WHEN se ejecuta THEN SHALL mostrar entradas en orden cronológico inverso con: ID, fecha, tipo, tags y primeros 100 caracteres del contenido
 - WHEN se usa `--project <nombre>` THEN SHALL filtrar por proyecto; mostrar solo entradas de ese proyecto y entradas globales (sin proyecto)
 - WHEN se usa `--global` THEN SHALL mostrar todas las entradas sin filtrar por proyecto
 - WHEN se usa `--limit <n>` THEN SHALL mostrar máximo `n` entradas
 - WHEN no hay entradas THEN SHALL mostrar mensaje informativo, no un error
-- WHEN se usa `--json` THEN SHALL retornar `{status: "ok", entries: [{id, created_at, tags, project, preview}], total: n}`
+- WHEN se usa `--json` THEN SHALL retornar `{status: "ok", entries: [{id, type, created_at, tags, project, content}], total: n}`
 
 ---
 
@@ -108,13 +110,14 @@ El CLI `dectl` es el ejecutor del sistema. Expone una interfaz de línea de coma
 > Como developer o modelo, quiero buscar en memoria por palabras clave para encontrar decisiones o notas específicas sin recordar cuándo las almacené.
 
 **Acceptance Criteria**:
-- WHEN se ejecuta `dectl memory search "<query>"` THEN SHALL buscar en `content` y `tags` usando coincidencia de substring case-insensitive
+- WHEN se ejecuta `dectl memory search "<query>"` THEN SHALL buscar en `content` y `tags` usando FTS5 con ranking por relevancia
+- WHEN FTS5 falla (base de datos sin FTS5) THEN SHALL hacer fallback a coincidencia de substring case-insensitive con LIKE
 - WHEN se usa `--project <nombre>` THEN SHALL limitar la búsqueda a entradas de ese proyecto y entradas globales
 - WHEN se usa `--global` THEN SHALL buscar en todas las entradas sin filtrar por proyecto
-- WHEN hay resultados THEN SHALL mostrarlos con ID, fecha, tags y fragmento del contenido que contiene la coincidencia
+- WHEN hay resultados THEN SHALL mostrarlos con ID, fecha, tipo, tags y fragmento del contenido
 - WHEN no hay resultados THEN SHALL mostrar mensaje informativo con la query usada, no un error
 - WHEN la query está vacía THEN SHALL abortar con mensaje claro y exit code 1
-- WHEN se usa `--json` THEN SHALL retornar `{status: "ok", query: "...", entries: [...], total: n}`
+- WHEN se usa `--json` THEN SHALL retornar `{status: "ok", query: "...", entries: [{id, type, content, tags, project, created_at, updated_at}], total: n}`
 
 ---
 
@@ -124,10 +127,35 @@ El CLI `dectl` es el ejecutor del sistema. Expone una interfaz de línea de coma
 > Como developer o modelo, quiero ver el contenido completo de una entrada de memoria por su ID para leer decisiones o notas sin truncamiento.
 
 **Acceptance Criteria**:
-- WHEN se ejecuta `dectl memory show <id>` con un ID existente THEN SHALL mostrar el contenido completo, fecha, tags y proyecto de la entrada
+- WHEN se ejecuta `dectl memory show <id>` con un ID existente THEN SHALL mostrar el contenido completo, tipo, fecha, tags y proyecto de la entrada
 - WHEN el ID no existe THEN SHALL mostrar mensaje claro con el ID buscado y exit code 1
 - WHEN el contenido tiene formato Markdown THEN SHALL renderizarlo como texto plano legible en terminal (no HTML)
-- WHEN se usa `--json` THEN SHALL retornar `{status: "ok", entry: {id, content, tags, project, created_at, updated_at}}`
+- WHEN se usa `--json` THEN SHALL retornar `{status: "ok", entry: {id, type, content, tags, project, created_at, updated_at}}`
+
+---
+
+### REQ-C-021: Comando `dectl memory query`
+
+**User Story**:
+> Como developer o modelo, quiero hacer consultas estructuradas sobre la memoria usando un lenguaje de field query para filtrar por tipo, tags, proyecto y fecha con operadores booleanos.
+
+**Acceptance Criteria**:
+- WHEN se ejecuta `dectl memory query "<query>"` THEN SHALL parsear la query y ejecutar una búsqueda estructurada con filtros, ordenamiento y límite parametrizados
+- WHEN la query contiene `type:<valor>` THEN SHALL filtrar por tipo (note, decision, context, research, incident, code-snippet)
+- WHEN la query contiene `tags:<valor>` THEN SHALL filtrar por tags (coincidencia de substring)
+- WHEN la query contiene `project:<valor>` THEN SHALL filtrar por nombre de proyecto
+- WHEN la query contiene `created:<operador><fecha>` THEN SHALL filtrar por fecha de creación con operadores `=`, `>`, `<`, `>=`, `<=`, `!=`
+- WHEN la query contiene `AND`/`OR`/`NOT` THEN SHALL combinar filtros con la lógica booleana correspondiente
+- WHEN la query contiene `ORDER BY <campo> ASC|DESC` THEN SHALL ordenar resultados por el campo indicado
+- WHEN la query contiene `LIMIT <n>` THEN SHALL limitar resultados a `n` entradas
+- WHEN se usa `--project <nombre>` THEN SHALL filtrar además por proyecto (combinado con la query inline)
+- WHEN se usa `--limit <n>` THEN SHALL limitar además por el flag (el mínimo entre flag e inline)
+- WHEN la query está vacía THEN SHALL abortar con mensaje claro y exit code 1
+- WHEN la query tiene sintaxis inválida THEN SHALL mostrar mensaje de error con la parte problemática y exit code 1
+- WHEN no hay resultados THEN SHALL mostrar mensaje informativo, no un error
+- WHEN hay resultados THEN SHALL mostrar igual que `dectl memory list`
+- WHEN se usa `--json` THEN SHALL retornar `{status: "ok", query: "...", entries: [...], count: n, parsed: {filters: [...], order_by: "...", order_direction: "...", limit: n}}`
+- WHEN la query se construye THEN todos los valores SHALL ser parametrizados (sin SQL injection)
 
 ---
 
@@ -286,6 +314,35 @@ El CLI `dectl` es el ejecutor del sistema. Expone una interfaz de línea de coma
 - WHEN se usa `--json` THEN SHALL retornar `{status:"ok", agent:"coder", project:"/path", already_trusted:false}`
 - WHEN el agente no existe THEN SHALL abortar con mensaje claro y exit code 1
 - WHEN `--non-interactive` y trust necesario en `agent run` THEN el mensaje de error SHALL sugerir `dectl agent trust <type> --project .`
+
+---
+
+### REQ-C-011: Comando `dectl memory delete`
+
+**User Story**:
+> Como developer o modelo, quiero eliminar entradas de memoria por ID para limpiar información obsoleta o incorrecta sin perder el historial.
+
+**Acceptance Criteria**:
+- WHEN se ejecuta `dectl memory delete <id>` con un ID existente THEN SHALL marcar la entrada como eliminada (soft-delete: set `deleted_at`) sin borrar el registro
+- WHEN se usa `--hard` THEN SHALL eliminar permanentemente el registro de la base de datos (hard-delete)
+- WHEN el ID no existe THEN SHALL mostrar mensaje claro con el ID buscado y exit code 1
+- WHEN se usa `--non-interactive` THEN SHALL ejecutar sin pedir confirmación
+- WHEN no se usa `--hard` THEN SHALL pedir confirmación Y/n antes de eliminar (interactivo)
+- WHEN se usa `--json` THEN SHALL retornar `{status: "ok", id: 42, deleted_at: "...", hard: false}`
+
+---
+
+### REQ-C-012: Comando `dectl memory edit`
+
+**User Story**:
+> Como developer o modelo, quiero editar el contenido de una entrada de memoria existente usando mi editor preferido para corregir o actualizar información.
+
+**Acceptance Criteria**:
+- WHEN se ejecuta `dectl memory edit <id>` con un ID existente THEN SHALL abrir el contenido en `$EDITOR` (o `vi` por defecto)
+- WHEN el editor se cierra con cambios THEN SHALL actualizar el contenido y el timestamp `updated_at`
+- WHEN el editor se cierra sin cambios THEN SHALL no modificar nada
+- WHEN el ID no existe THEN SHALL mostrar mensaje claro con el ID buscado y exit code 1
+- WHEN se usa `--json` THEN SHALL retornar `{status: "ok", id: 42, updated_at: "..."}`
 
 ---
 

@@ -1,6 +1,6 @@
 # Technical Implementation Plan — dectl
 > *Technology-specific. Describes HOW to build what spec.md defines.*
-> *Version: 1.0 | Status: Updated | Last updated: 2026-06-02*
+> *Version: 1.1 | Status: Updated | Last updated: 2026-06-12*
 
 ---
 
@@ -57,7 +57,7 @@
                               ┌──────────────────────┐
                               │   ~/.dectl/            │
                               │   config.toml        │
-                              │   memory.db          │
+                               │   memory.db          │  ← memories, memories_fts, agent_outputs, tag_taxonomy
                               │   trust.toml         │
                               └──────────────────────┘
 ```
@@ -102,7 +102,8 @@ dectl/
 │   │   ├── search.rs            ← dectl memory search
 │   │   ├── show.rs              ← dectl memory show <id>
 │   │   ├── delete.rs            ← dectl memory delete (soft/hard)
-│   │   └── edit.rs              ← dectl memory edit ($EDITOR)
+│   │   ├── edit.rs              ← dectl memory edit ($EDITOR)
+│   │   └── query.rs             ← dectl memory query (field query language)
 │   ├── workflow/
 │   │   ├── mod.rs
 │   │   ├── schema.rs            ← Workflow, Step, StepType structs
@@ -154,10 +155,10 @@ dectl/
 
 ### Memory add
 ```
-developer/model → dectl memory add "text" [--tags t1,t2]
+developer/model → dectl memory add "text" [--tags t1,t2] [--type <type>]
   → core: parse args, load config
   → memory/db: open ~/.dectl/memory.db, run migration if needed
-  → memory/add: INSERT INTO memories (content, tags, created_at)
+  → memory/add: INSERT INTO memories (content, tags, type, created_at, updated_at)
   → core/output: print confirmation (id, preview) or --json
 ```
 
@@ -181,6 +182,55 @@ developer → dectl project init
   → project/templates: create folder structure + base files from templates
   → project/auto_fill: detect stack, scan docs, fill files (if non-empty project)
   → core/output: print summary of created files + next steps
+```
+
+### Memory search
+```
+developer/model → dectl memory search "<query>"
+  → core: parse args, load config
+  → memory/db: open ~/.dectl/memory.db
+  → memory/search: build FTS5 query (terms joined with AND)
+    → try FTS5: SELECT ... FROM memories_fts JOIN memories WHERE memories_fts MATCH ?
+    → on FTS5 failure: fallback to SELECT ... FROM memories WHERE content LIKE ? OR tags LIKE ?
+  → core/output: print results with rank (FTS5) or alphabetical (fallback) or --json
+```
+
+### Memory query (field query language)
+```
+developer/model → dectl memory query "type:decision AND project:my-api ORDER BY created DESC"
+  → core: parse args, load config
+  → memory/db: open ~/.dectl/memory.db
+  → memory/query: tokenize input string
+    → tokenizer produces Token stream (Value, Comparator, And, Or, Not, OrderBy, Limit)
+    → parser builds expression tree from tokens
+    → expression builder converts tree to parameterized SQL:
+      SELECT cols FROM memories WHERE type = ?1 AND project = ?2
+      ORDER BY created_at DESC LIMIT ?3
+  → memory/db: execute parameterized query
+  → core/output: print entries with parsed query info or --json
+```
+
+### Memory delete
+```
+developer/model → dectl memory delete <id> [--hard]
+  → core: parse args, load config
+  → memory/db: open ~/.dectl/memory.db
+  → memory/delete: if --hard → DELETE FROM memories WHERE id = ?
+    else → UPDATE memories SET deleted_at = datetime('now') WHERE id = ?
+  → core/output: print confirmation or --json
+```
+
+### Memory edit
+```
+developer/model → dectl memory edit <id>
+  → core: parse args, load config, detect $EDITOR
+  → memory/db: open ~/.dectl/memory.db
+  → memory/edit: SELECT content FROM memories WHERE id = ?
+    → write to temp file
+    → spawn $EDITOR with temp file
+    → wait for editor to close
+    → if changed: UPDATE memories SET content = ?, updated_at = datetime('now') WHERE id = ?
+  → core/output: print confirmation or --json
 ```
 
 ### Session end

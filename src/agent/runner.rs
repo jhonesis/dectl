@@ -57,14 +57,17 @@ pub fn run_agent(
         }),
         Err(_) => {
             let error_msg = format!("Agent '{}' timed out after {}s", agent_name, timeout);
-            let _ = crate::agent::log::record_agent_execution(
-                &agent_name,
-                &task,
-                "timeout",
-                0,
-                (timeout * 1000) as i64,
-                Some(&error_msg),
-            );
+            if let Ok(db) = crate::memory::db::DbConn::new() {
+                let _ = crate::agent::log::record_agent_execution(
+                    db.conn(),
+                    &agent_name,
+                    &task,
+                    "timeout",
+                    0,
+                    (timeout * 1000) as i64,
+                    Some(&error_msg),
+                );
+            }
             Ok(AgentResult {
                 agent_type: agent_name,
                 status: AgentRunStatus::Timeout,
@@ -88,6 +91,7 @@ fn execute_agent_inner(
     called_from_workflow: bool,
 ) -> Result<AgentResult> {
     let start = std::time::Instant::now();
+    let db = crate::memory::db::DbConn::new().ok();
 
     let workflow = Workflow {
         name: agent_def.name.clone(),
@@ -217,14 +221,55 @@ fn execute_agent_inner(
         "ok"
     };
 
-    let log_id = crate::agent::log::record_agent_execution(
-        &agent_def.name,
-        task,
-        status_str,
-        execution_result.steps_executed,
-        duration_ms,
-        error_msg_owned.as_deref(),
-    )?;
+    let log_id = match db.as_ref() {
+        Some(d) => crate::agent::log::record_agent_execution(
+            d.conn(),
+            &agent_def.name,
+            task,
+            status_str,
+            execution_result.steps_executed,
+            duration_ms,
+            error_msg_owned.as_deref(),
+        )?,
+        None => 0,
+    };
+
+    if agent_ok && !dry_run {
+        if let Some(d) = db.as_ref() {
+            let mem_type = if agent_def.name.to_lowercase() == "researcher" {
+                "research"
+            } else {
+                "note"
+            };
+            let summary = format!(
+                "[Agent: {}] Task: {}. Executed {} steps in {}ms. {}",
+                agent_def.name, task, execution_result.steps_executed, duration_ms, agent_def.role,
+            );
+            let now = chrono::Utc::now().to_rfc3339();
+            let tags = format!("agent,{}", agent_def.name);
+            if d.conn()
+                .execute(
+                    "INSERT INTO memories (content, tags, project, created_at, updated_at, type)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                    rusqlite::params![summary, tags, Option::<&str>::None, now, now, mem_type],
+                )
+                .is_ok()
+            {
+                let memory_id = d.conn().last_insert_rowid();
+                let _ = d.conn().execute(
+                    "INSERT INTO agent_outputs (agent_type, task_id, task_description, memory_id, created_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5)",
+                    rusqlite::params![
+                        agent_def.name,
+                        vars.get("task_id").map(|s| s.as_str()),
+                        task,
+                        memory_id,
+                        now,
+                    ],
+                );
+            }
+        }
+    }
 
     Ok(AgentResult {
         agent_type: agent_def.name.clone(),
@@ -258,6 +303,103 @@ fn normalize_context_filename(path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::workflow::schema::StepType;
+
+    fn make_agent(name: &str, step_type: StepType) -> AgentDef {
+        AgentDef {
+            name: name.to_string(),
+            role: "test role".to_string(),
+            description: "test".to_string(),
+            requires: vec![],
+            context_files: vec![],
+            inputs: vec![],
+            next_step_hint: None,
+            steps: vec![crate::workflow::schema::Step {
+                step_type,
+                description: "test step".to_string(),
+                content: Some("hello".to_string()),
+                cmd: None,
+                path: Some("/tmp/dectl-test-write.txt".to_string()),
+                agent_type: None,
+                agent_types: None,
+                parallel: None,
+                shell: None,
+                task: None,
+                run_always: None,
+            }],
+        }
+    }
+
+    fn make_vars(task: &str, task_id: &str) -> HashMap<String, String> {
+        let mut vars = HashMap::new();
+        vars.insert("task".to_string(), task.to_string());
+        vars.insert("task_id".to_string(), task_id.to_string());
+        vars
+    }
+
+    #[test]
+    fn test_agent_auto_insert_memory_research() {
+        let agent = make_agent("researcher", StepType::Write);
+        let vars = make_vars("test research", "T-UT-001");
+        let result = execute_agent_inner(
+            &agent,
+            "test research",
+            &vars,
+            None,
+            false,
+            true,
+            true,
+            &crate::core::output::OutputMode::Human,
+            true,
+        );
+        assert!(result.is_ok(), "agent execution failed: {:?}", result.err());
+
+        let db = crate::memory::db::DbConn::new().expect("failed to open db");
+        let count: i64 = db
+            .conn()
+            .query_row(
+                "SELECT COUNT(*) FROM memories WHERE content LIKE ?1 AND type = 'research'",
+                rusqlite::params!["[Agent: researcher]%"],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        assert!(
+            count > 0,
+            "Expected at least one memory entry with type='research' for researcher agent"
+        );
+    }
+
+    #[test]
+    fn test_agent_auto_insert_memory_note() {
+        let agent = make_agent("coder", StepType::Write);
+        let vars = make_vars("test coding", "T-UT-002");
+        let result = execute_agent_inner(
+            &agent,
+            "test coding",
+            &vars,
+            None,
+            false,
+            true,
+            true,
+            &crate::core::output::OutputMode::Human,
+            true,
+        );
+        assert!(result.is_ok(), "agent execution failed: {:?}", result.err());
+
+        let db = crate::memory::db::DbConn::new().expect("failed to open db");
+        let count: i64 = db
+            .conn()
+            .query_row(
+                "SELECT COUNT(*) FROM memories WHERE content LIKE ?1 AND type = 'note'",
+                rusqlite::params!["[Agent: coder]%"],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        assert!(
+            count > 0,
+            "Expected at least one memory entry with type='note' for coder agent"
+        );
+    }
 
     #[test]
     fn test_normalize_context_filename_basic() {

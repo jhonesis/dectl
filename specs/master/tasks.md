@@ -1,7 +1,7 @@
 # Implementation Tasks — dectl
 > *Atomic, ordered, trackable tasks derived from plan.md.*
 > *Each task = independently implementable + testable + reviewable as single PR.*
-> *Last updated: 2026-06-02*
+> *Last updated: 2026-06-12*
 
 ---
 
@@ -189,6 +189,22 @@
 
 ---
 
+## Phase 9 — Memory Improvements ✅ COMPLETE
+
+*FTS5 full-text search, type categorization, agent→memory auto-link, query language.*
+
+| ID | Tarea | Archivos | Esfuerzo | Estado |
+|----|-------|----------|----------|--------|
+| T119 | Migration v2 (FTS5 + type column): bundled→bundled-fts5, FTS5 virtual table + triggers, ALTER TABLE ADD type | `memory/db.rs` | M | ✅ |
+| T120 | Migration v3 (agent_outputs) + auto-link: CREATE TABLE agent_outputs, auto-INSERT resumen en memories al completar agente | `memory/db.rs`, `agent/runner.rs`, `agent/log.rs` | M | ✅ |
+| T121 | Migration v4 (tag_taxonomy) + query language: CREATE TABLE tag_taxonomy + 9 seed tags, tokenizer → parser → SQL builder parametrizado | `memory/db.rs`, `memory/query.rs` | L | ✅ |
+| T122 | Integration tests (139 total): query language (5 integration + 13 unit), FTS5 search, type system, auto-link tests | tests/ | M | ✅ |
+
+**Total tasks**: 4/4 ✅
+**139 tests passing** (44 unit + 95 integration)
+
+---
+
 ## Phase 4 — Session Management ✅ COMPLETE
 
 ### Session Module
@@ -224,7 +240,8 @@
 | Phase 8 — SDD Spec Generator | 4 | 4 | 0 | 0 |
 | Phase 10 — Code Quality | 4 | 4 | 0 | 0 |
 | Agent Cycle — SDD Pipeline | 11 | 11 | 0 | 0 |
-| **Total** | **118** | **118** | **0** | **0** |
+| Phase 9 — Memory Improvements | 4 | 4 | 0 | 0 |
+| **Total** | **122** | **122** | **0** | **0** |
 
 **Phase 5 COMPLETE** ✅
 
@@ -242,4 +259,4 @@
 
 ---
 
-*Last sync: 2026-06-02 — All phases complete, 111 tests passed, auto-trust, install script, CI/CD, docs translated*
+*Last sync: 2026-06-12 — All phases complete, 139 tests passed, FTS5, type system, query language, auto-link agent→memory, tag taxonomy*

@@ -1,13 +1,13 @@
 # Specification — Agent System
 
 > Technology-agnostic. Defines WHAT the agent system does.
-> Version: 1.0 | Status: Final | Last updated: 2026-06-02
+> Version: 1.1 | Status: Updated | Last updated: 2026-06-12
 
 ---
 
 ## Overview
 
-The agent system extends dectl with specialized roles that the model can invoke for specific tasks. Agents can run individually, in sequence, or in parallel. They communicate via shared memory. All executions are recorded in the agent_log table in memory.db.
+The agent system extends dectl with specialized roles that the model can invoke for specific tasks. Agents can run individually, in sequence, or in parallel. They communicate via shared memory. All executions are recorded in the agent_log table in memory.db. On successful completion, agents automatically persist their results into the memory system (auto-link), creating a traceable connection between agent outputs and memory entries via the agent_outputs table.
 
 ---
 
@@ -136,14 +136,85 @@ The agent system extends dectl with specialized roles that the model can invoke 
 
 ---
 
-## Non-Functional Requirements
+## Fault-Tolerance & Non-Blocking Design
 
-- **Latency**: agent startup overhead (without model execution) must not exceed 100ms
-- **Resilience**: a parallel agent failure must not corrupt memory.db or other agents
-- **Observability**: every agent execution is visible in agent_log with timestamp and duration
-- **Thread safety**: agent_log writes use SQLite WAL mode for safe concurrent writes
+### REQ-A-011: Agents are non-blocking
+
+**Design Principle**:
+Agents are designed to be fault-tolerant and non-blocking. No agent failure stops the workflow or prevents other agents from running. This ensures task completion even when individual agents encounter errors.
+
+**Acceptance Criteria**:
+- WHEN an agent fails (action command returns non-zero, file write fails, timeout) THEN the agent logs the error but the workflow continues
+- WHEN `requires: [coder]` is declared on an agent THEN this is informational only and does NOT block execution
+- WHEN a workflow runs agents in sequence THEN a failed agent does not prevent subsequent agents from starting
+- WHEN a parallel agent fails THEN remaining agents continue in parallel and results are aggregated
+- WHEN documenter or similar agents have `run_always: true` THEN they execute even if all predecessors failed
+
+**Examples**:
+```yaml
+# Coder runs even if researcher fails
+requires: [researcher]  # Only informs the model; does not enforce
+
+# Documenter always records the task
+- type: agent
+  agent_type: documenter
+  task: "Document {{task_id}}"
+  run_always: true  # Runs even if review failed
+```
 
 ---
+
+### REQ-A-012: Context files are auto-loaded
+
+**User Story**:
+> As a developer, I want agents to have automatic access to project config and state files without manual shell commands.
+
+**Acceptance Criteria**:
+- WHEN an agent declares `context_files: [".dec/config/project.toml"]` THEN the file content is auto-loaded before executing steps
+- WHEN a context file is loaded THEN it is exposed as a variable `{{context_NORMALIZED_PATH}}` where path is normalized (dots/slashes→underscores, lowercase)
+- WHEN a context file is unreadable or missing THEN it is silently skipped (no error)
+- WHEN multiple context files are declared THEN all are loaded into separate variables
+- WHEN a step uses `{{context_dec_config_project_toml}}` THEN the content of `.dec/config/project.toml` is substituted
+
+**Examples**:
+```yaml
+context_files:
+  - ".dec/config/project.toml"
+  - ".dec/isa/project.isa.md"
+  - ".dec/state/progress.json"
+
+steps:
+  - type: action
+    description: Show build command
+    shell: true
+    cmd: ["echo '{{context_dec_config_project_toml}}' | grep '\\[build\\]'"]
+
+  - type: prompt
+    description: Review implementation
+    content: |
+      Based on the project ISA ({{context_dec_isa_project_isa_md}}),
+      review the following code changes:
+      {{step_previous_output}}
+```
+
+---
+
+### REQ-A-013: Auto-link agent results to memory
+
+**User Story**:
+> As a developer, I want agent results to be automatically persisted in the memory system so that the outputs of agent executions remain available for future sessions without manual intervention.
+
+**Acceptance Criteria**:
+- WHEN an agent completes successfully (`status = 'ok'`) THEN SHALL auto-insert a summary into the `memories` table with:
+  - `type = 'research'` if agent_type is `"researcher"`
+  - `type = 'note'` for all other agent types
+- WHEN an agent completes successfully THEN SHALL auto-insert a link into the `agent_outputs` table with agent_type, task_id, task_description, output_file path, and memory_id FK
+- WHEN the agent fails THEN SHALL NOT insert into memories or agent_outputs (only agent_log is written)
+- WHEN the agent_log is written THEN it SHALL always be written regardless of success or failure (logging is unconditional)
+- WHEN `--dry-run` is used THEN SHALL NOT insert into any table (no side effects)
+- WHEN the auto-insert happens THEN the memory summary SHALL use the format: `"Agent {agent_type}: {task_description}"`
+
+**Referencia**: Ver `specs/agents/data-model.md` para el schema de `agent_outputs`.
 
 ---
 

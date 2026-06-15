@@ -2,7 +2,7 @@
 > *Define los tipos Rust internos del CLI y el contrato exacto de todos los JSON outputs.*
 > *La persistencia SQLite está en master/data-model.md.*
 > *Los schemas de archivos .dec/ están en dot-dec/data-model.md.*
-> *Last updated: 2026-06-02*
+> *Last updated: 2026-06-12*
 
 ---
 
@@ -109,26 +109,89 @@ pub struct ConventionsConfig {
 
 ```rust
 // Entrada de memoria — mapea la tabla SQLite
-#[derive(Serialize)]
+#[derive(Debug, Clone, Serialize)]
+pub struct MemoryAddOutput {
+    pub id:              i64,
+    pub content_preview: String,
+    pub tags:            Vec<String>,
+    pub project:         Option<String>,
+    pub created_at:      String,
+}
+
+// Output de dectl memory list
+#[derive(Debug, Serialize)]
+pub struct MemoryListOutput {
+    pub entries: Vec<MemoryEntry>,
+    pub count:   usize,
+}
+
+// Output de dectl memory search
+#[derive(Debug, Serialize)]
+pub struct MemorySearchOutput {
+    pub query:   String,
+    pub entries: Vec<MemoryEntry>,
+    pub count:   usize,
+}
+
+// Output de dectl memory query (field query language)
+#[derive(Debug, Serialize)]
+pub struct MemoryQueryOutput {
+    pub query:   String,
+    pub entries: Vec<MemoryEntry>,
+    pub count:   usize,
+    pub parsed:  ParsedQuery,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ParsedQuery {
+    pub filters:          Vec<String>,
+    pub order_by:         Option<String>,
+    pub order_direction:  Option<String>,
+    pub limit:            Option<usize>,
+}
+
+// Output de dectl memory show
+#[derive(Debug, Serialize)]
+pub struct MemoryShowOutput {
+    pub entry: MemoryEntry,
+}
+
+// Output de dectl memory delete
+#[derive(Debug, Serialize)]
+pub struct MemoryDeleteOutput {
+    pub id:         i64,
+    pub deleted_at: String,
+    pub hard:       bool,
+}
+
+// Output de dectl memory edit
+#[derive(Debug, Serialize)]
+pub struct MemoryEditOutput {
+    pub id:         i64,
+    pub updated_at: String,
+}
+
+// Entrada de memoria — mapea la tabla SQLite
+#[derive(Debug, Clone, Serialize)]
 pub struct MemoryEntry {
     pub id:         i64,
     pub content:    String,
-    pub tags:       Option<String>,
+    pub tags:       Vec<String>,       // parsed from comma-separated TEXT
     pub project:    Option<String>,
-    pub created_at: String,   // ISO 8601
-    pub updated_at: Option<String>,
-}
-
-// Vista resumida para list/search
-#[derive(Serialize)]
-pub struct MemoryPreview {
-    pub id:         i64,
-    pub created_at: String,
-    pub tags:       Option<String>,
-    pub project:    Option<String>,
-    pub preview:    String,   // primeros 100 chars del content
+    pub created_at: String,            // ISO 8601
+    pub updated_at: String,            // ISO 8601 — always set (on create and update)
+    #[serde(rename = "type")]
+    pub type_:      String,            // "note" | "decision" | "context" | "research" | "incident" | "code-snippet"
 }
 ```
+
+**Valid types**: `note`, `decision`, `context`, `research`, `incident`, `code-snippet`. Default: `'note'`.
+
+**Notes**:
+- `tags` is `Vec<String>` — parsed from the comma-separated TEXT column on read. Empty string yields an empty vec.
+- `updated_at` is NOT NULL — always set to the creation timestamp on insert and updated on edit.
+- `deleted_at` is filtered server-side (`WHERE deleted_at IS NULL`) — not exposed in the struct.
+- `type_` serializes as `"type"` via `#[serde(rename = "type")]` to match the SQLite column name.
 
 ---
 
@@ -435,6 +498,10 @@ memory_hits: 42
 }
 ```
 
+**Note**: `tags` is `Vec<String>` (JSON array), not `Option<String>`. The `type` field is not included in add output since it defaults to `'note'` unless specified.
+
+---
+
 ---
 
 ### `dectl memory list --json`
@@ -449,6 +516,7 @@ memory_hits: 42
         "content": "Decisión: usar PostgreSQL...",
         "tags": [],
         "project": "my-api",
+        "type": "decision",
         "created_at": "2026-05-26T10:46:08.799091+00:00",
         "updated_at": "2026-05-26T10:46:08.799091+00:00"
       }
@@ -473,6 +541,7 @@ memory_hits: 42
         "content": "Decisión: usar PostgreSQL...",
         "tags": [],
         "project": "my-api",
+        "type": "decision",
         "created_at": "2026-05-26T10:46:08.799091+00:00",
         "updated_at": "2026-05-26T10:46:08.799091+00:00"
       }
@@ -495,9 +564,101 @@ memory_hits: 42
       "content": "# Decisión: Base de datos\n\nUsar PostgreSQL por...",
       "tags": [],
       "project": "my-api",
+      "type": "decision",
       "created_at": "2026-05-26T10:46:08.799091+00:00",
       "updated_at": "2026-05-26T10:46:08.799091+00:00"
     }
+  }
+}
+```
+
+---
+
+### `dectl memory query --json`
+
+Field query language output. Returns entries matching the parsed query expression.
+
+```json
+{
+  "status": "ok",
+  "data": {
+    "query": "type:decision AND project:my-api ORDER BY created DESC LIMIT 5",
+    "entries": [
+      {
+        "id": 42,
+        "content": "# Decisión: usar PostgreSQL",
+        "tags": [],
+        "project": "my-api",
+        "type": "decision",
+        "created_at": "2026-05-26T10:46:08.799091+00:00",
+        "updated_at": "2026-05-26T10:46:08.799091+00:00"
+      }
+    ],
+    "count": 1,
+    "parsed": {
+      "filters": ["type = 'decision'", "project = 'my-api'"],
+      "order_by": "created_at",
+      "order_direction": "DESC",
+      "limit": 5
+    }
+  }
+}
+```
+
+**Supported query syntax**:
+- **Fields**: `type:`, `tags:`, `project:`, `created:`
+- **Comparators**: `=`, `!=`, `>`, `<`, `>=`, `<=`
+- **Boolean operators**: `AND`, `OR`, `NOT` (case-insensitive)
+- **Clauses**: `ORDER BY <field> ASC|DESC`, `LIMIT <N>`
+- All values are parameterized — no SQL injection
+- Supports `--project` and `--limit` CLI flags in addition to inline syntax
+
+---
+
+### `dectl memory delete --json`
+
+**Soft-delete** (default):
+```json
+{
+  "status": "ok",
+  "data": {
+    "id": 42,
+    "deleted_at": "2026-06-12T10:00:00+00:00",
+    "hard": false
+  }
+}
+```
+
+**Hard-delete** (`--hard`):
+```json
+{
+  "status": "ok",
+  "data": {
+    "id": 42,
+    "deleted_at": "2026-06-12T10:00:00+00:00",
+    "hard": true
+  }
+}
+```
+
+**Error** (not found):
+```json
+{
+  "status": "error",
+  "message": "Memory entry #42 not found"
+}
+```
+
+---
+
+### `dectl memory edit --json`
+
+```json
+{
+  "status": "ok",
+  "data": {
+    "id": 42,
+    "updated_at": "2026-06-12T10:00:00+00:00"
   }
 }
 ```
@@ -761,7 +922,7 @@ CLI Structs
     ├── lee ──────────────────► ProjectConfig (.dec/config/project.toml)
     │                            [definido en dot-dec/data-model.md]
     │
-    ├── lee/escribe ──────────► SQLite memories + embeddings
+    ├── lee/escribe ──────────► SQLite memories + memories_fts + agent_outputs + tag_taxonomy
     │                            [definido en master/data-model.md]
     │
     ├── lee ──────────────────► Workflow YAML (.dec/workflows/*.yaml)

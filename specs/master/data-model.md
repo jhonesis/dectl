@@ -1,6 +1,6 @@
 # Data Model — dectl
 > *Defines all persistent entities, their attributes, and relationships.*
-> *Last updated: 2026-06-02*
+> *Last updated: 2026-06-12*
 
 ---
 
@@ -29,21 +29,102 @@ The core memory table. Every entry stored via `dectl memory add` lives here.
 | `content` | TEXT | ✅ | Markdown-supported content of the memory entry |
 | `tags` | TEXT | ❌ | Comma-separated tags. Nullable. e.g. `"architecture,auth"` |
 | `project` | TEXT | ❌ | Project name at time of creation. Nullable (global memory if absent) |
+| `type` | TEXT | ✅ | Entry category. One of: `note`, `decision`, `context`, `research`, `incident`, `code-snippet`. Default: `'note'` |
 | `created_at` | TEXT | ✅ | ISO 8601 timestamp. e.g. `"2026-06-02T14:32:00Z"` |
-| `updated_at` | TEXT | ❌ | ISO 8601 timestamp. Set when content is edited. Nullable |
+| `updated_at` | TEXT | ✅ | ISO 8601 timestamp. Set on create and when content is edited |
+| `deleted_at` | TEXT | ❌ | ISO 8601 timestamp. Set on soft-delete. `NULL` = active entry |
 
 **Indexes**:
 - `idx_memories_project` on `project` — speeds up project-scoped queries
-- `idx_memories_created_at` on `created_at` — speeds up chronological listing
+- `idx_memories_created` on `created_at DESC` — speeds up chronological listing
 
 **Notes**:
 - `content` is stored as raw Markdown. Rendering is the responsibility of the consuming tool.
-- `tags` stored as comma-separated TEXT (not a separate table) for Phase 1 simplicity. Normalized in Phase 3 if needed.
+- `tags` stored as comma-separated TEXT (not a separate table) for simplicity. Parsed as `Vec<String>` on read.
 - A memory with `project = NULL` is considered global and returned in all projects.
+- Soft-delete: `dectl memory delete <id>` sets `deleted_at`, `--hard` removes the row permanently.
+- All queries filter `WHERE deleted_at IS NULL` by default.
 
 ---
 
-### `embeddings` *(Phase 2)*
+### `memories_fts`
+
+FTS5 virtual table for full-text search. Auto-synced via triggers on `memories`. External content table — no manual inserts needed.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `rowid` | INTEGER | ✅ | Matches `memories.id` |
+| `content` | TEXT | ✅ | Full-text indexed content |
+| `tags` | TEXT | ❌ | Included but marked UNINDEXED (only kept for trigger sync) |
+
+**Triggers**:
+- `memories_ai` — AFTER INSERT: inserts new row into FTS index
+- `memories_ad` — AFTER DELETE: removes row from FTS index
+- `memories_au` — AFTER UPDATE: deletes old row, inserts new row
+
+**Notes**:
+- Search uses FTS5 ranking (`ORDER BY rank`) with fallback to `LIKE` if FTS5 fails.
+- Query terms are joined with `AND` for multi-term search.
+- The FTS table is populated with existing memories on migration v2 via `INSERT INTO memories_fts(rowid, content, tags) SELECT id, content, tags FROM memories`.
+
+---
+
+### `agent_outputs`
+
+Tracks the link between agent executions and their resulting memory entries. Created in migration v3.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | INTEGER PRIMARY KEY | ✅ | Auto-increment |
+| `agent_type` | TEXT | ✅ | Agent name. e.g. `"researcher"`, `"coder"` |
+| `task_id` | TEXT | ❌ | Unique task identifier. e.g. `"T119"` |
+| `task_description` | TEXT | ❌ | Human-readable task description |
+| `output_file` | TEXT | ❌ | Path to agent output artifact in `.dec/agent-output/` |
+| `memory_id` | INTEGER | ❌ | Foreign key → `memories.id`. `ON DELETE SET NULL` |
+| `created_at` | TEXT | ✅ | ISO 8601 timestamp. Default: `datetime('now')` |
+
+**Indexes**:
+- `idx_agent_outputs_agent` on `agent_type`
+- `idx_agent_outputs_task` on `task_id`
+
+**Notes**:
+- Created automatically when an agent completes successfully.
+- `memory_id` links to the auto-inserted memory summary. Can be `NULL` if the memory entry was deleted.
+
+---
+
+### `tag_taxonomy`
+
+Catalog of predefined tags and their categories. Created in migration v4.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | INTEGER PRIMARY KEY | ✅ | Auto-increment |
+| `name` | TEXT UNIQUE | ✅ | Tag name. e.g. `"decision"`, `"high-impact"` |
+| `description` | TEXT | ❌ | Human-readable description of the tag |
+| `category` | TEXT | ✅ | Tag category. One of: `type`, `meta`, `priority`, `source`. Default: `'general'` |
+| `created_at` | TEXT | ✅ | ISO 8601 timestamp. Default: `datetime('now')` |
+
+**Indexes**:
+- `idx_tag_taxonomy_category` on `category`
+
+**Seed data** (9 tags inserted on migration v4):
+
+| Name | Category | Description |
+|------|----------|-------------|
+| `decision` | type | Arquitectural or design decisions |
+| `note` | type | General notes and observations |
+| `context` | type | Project context and requirements |
+| `research` | type | Research findings and analysis |
+| `incident` | type | Issues, bugs, and incidents |
+| `code-snippet` | type | Code fragments and examples |
+| `session` | meta | Session summaries and logs |
+| `high-impact` | priority | Critical information worth surfacing |
+| `agent` | source | Agent-generated content |
+
+---
+
+### `embeddings` *(future — not yet implemented)*
 
 Stores vector embeddings for semantic search. One row per memory entry.
 
@@ -70,9 +151,19 @@ Stores vector embeddings for semantic search. One row per memory entry.
 ```
 memories 1 ──── 0..1 embeddings
    (memory_id FK, cascade delete)
+
+memories 1 ──── 1..1 memories_fts
+   (rowid = id, content-sync via triggers)
+
+memories 1 ──── 0..1 agent_outputs
+   (memory_id FK, ON DELETE SET NULL)
 ```
 
-Simple by design. A memory entry exists independently of its embedding. Deleting a memory cascades to its embedding. An embedding cannot exist without a memory.
+**Notes**:
+- A memory entry exists independently of its embedding. Deleting a memory cascades to its embedding.
+- `memories_fts` is an external content FTS5 table — its rowid is always the same as `memories.id`. Sync is automatic via triggers.
+- `agent_outputs` links an agent execution to its auto-generated memory summary. `ON DELETE SET NULL` avoids orphaned FKs.
+- `tag_taxonomy` is independent — no FK relationships to other tables. Tags are referenced by name from `memories.tags`.
 
 ---
 
@@ -86,14 +177,46 @@ Simple by design. A memory entry exists independently of its embedding. Deleting
 │ content     TEXT NOT NULL    │
 │ tags        TEXT             │
 │ project     TEXT             │
+│ type        TEXT NOT NULL    │ ← DEFAULT 'note'
 │ created_at  TEXT NOT NULL    │
-│ updated_at  TEXT             │
-└──────────────┬───────────────┘
-               │ 1
-               │
-               │ 0..1
-┌──────────────▼───────────────┐
-│         embeddings           │  ← Phase 2
+│ updated_at  TEXT NOT NULL    │
+│ deleted_at  TEXT             │
+└──────┬───────────┬───────────┘
+       │ 1         │ 1
+       │           │
+       │ 0..1      │ 1..1
+┌──────▼───────────▼───────────┐
+│    memories_fts (FTS5)       │  ← Migration v2
+├──────────────────────────────┤
+│ rowid     INTEGER (=memories)│
+│ content   TEXT NOT NULL       │
+│ tags      TEXT (UNINDEXED)    │
+└──────────────────────────────┘
+
+┌──────────────────────────────┐
+│         agent_outputs        │  ← Migration v3
+├──────────────────────────────┤
+│ id            INTEGER PK     │
+│ agent_type    TEXT NOT NULL  │
+│ task_id       TEXT           │
+│ task_desc     TEXT           │
+│ output_file   TEXT           │
+│ memory_id     INTEGER FK     │← memories.id ON DELETE SET NULL
+│ created_at    TEXT NOT NULL  │
+└──────────────────────────────┘
+
+┌──────────────────────────────┐
+│        tag_taxonomy          │  ← Migration v4
+├──────────────────────────────┤
+│ id          INTEGER PK       │
+│ name        TEXT UNIQUE      │
+│ description TEXT             │
+│ category    TEXT NOT NULL    │
+│ created_at  TEXT NOT NULL    │
+└──────────────────────────────┘
+
+┌──────────────────────────────┐
+│         embeddings           │  ← Future
 ├──────────────────────────────┤
 │ id          INTEGER PK       │
 │ memory_id   INTEGER FK       │
@@ -298,18 +421,25 @@ These entities exist only in memory during `dectl session end` execution. They a
 ## Migration Strategy
 
 - SQLite schema migrations run automatically on `memory.db` open via a `migrations` table that tracks applied versions.
-- Phase 1 ships with migration `0001_initial` (creates `memories` table).
-- Phase 2 ships with migration `0002_embeddings` (creates `embeddings` table).
-- Phase 6 ships with migration `0003_agent_log` (creates `agent_log` table).
 - Migrations are append-only — never modify or drop existing migrations.
+- Each migration is idempotent (`IF NOT EXISTS`) — safe to re-run.
 
 ```
-migrations table:
+migrations table — actual state:
 ┌─────────┬──────────────────┬─────────────────────┐
 │ version │ name             │ applied_at          │
 ├─────────┼──────────────────┼─────────────────────┤
-│ 1       │ initial          │ 2026-06-02T...      │
-│ 2       │ embeddings       │ (Phase 2)           │
-│ 3       │ agent_log        │ (Phase 6)           │
+│ 1       │ initial          │ created              │
+│ 2       │ fts5_and_types   │ FTS5 + type column  │
+│ 3       │ agent_outputs    │ agent_outputs table │
+│ 4       │ tag_taxonomy     │ tag_taxonomy + seeds│
 └─────────┴──────────────────┴─────────────────────┘
+```
+
+| Version | Name | Changes |
+|---------|------|---------|
+| 1 | `initial` | Creates `memories` table + indexes |
+| 2 | `fts5_and_types` | Adds `type TEXT NOT NULL DEFAULT 'note'` to memories, creates `memories_fts` virtual table with triggers, populates FTS from existing data |
+| 3 | `agent_outputs` | Creates `agent_outputs` table with FK to memories + indexes |
+| 4 | `tag_taxonomy` | Creates `tag_taxonomy` table with index, inserts 9 seed tags
 ```

@@ -1,15 +1,9 @@
 use crate::session::types::CapturedDecision;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use regex::Regex;
-use rusqlite::{params, Connection};
-use std::env;
+use rusqlite::params;
 use std::fs;
-use std::path::{Path, PathBuf};
-
-fn get_db_path() -> Result<PathBuf> {
-    let home = env::var("HOME").context("HOME not set")?;
-    Ok(PathBuf::from(home).join(".dectl").join("memory.db"))
-}
+use std::path::Path;
 
 fn get_project_name() -> Option<String> {
     let config_path = Path::new(".dec/config/project.toml");
@@ -27,13 +21,10 @@ fn get_project_name() -> Option<String> {
 }
 
 fn load_existing_memories() -> Result<Vec<String>> {
-    let db_path = get_db_path()?;
-    if !db_path.exists() {
-        return Ok(Vec::new());
-    }
-
-    let conn = Connection::open(&db_path)?;
-    let mut stmt = conn.prepare("SELECT content FROM memories WHERE deleted_at IS NULL")?;
+    let db = crate::memory::db::DbConn::new()?;
+    let mut stmt = db
+        .conn()
+        .prepare("SELECT content FROM memories WHERE deleted_at IS NULL")?;
     let rows = stmt.query_map([], |row| row.get(0))?;
 
     let mut memories = Vec::new();
@@ -127,15 +118,9 @@ pub fn capture_decisions() -> Result<Vec<CapturedDecision>> {
 }
 
 pub fn save_decisions(decisions: &[CapturedDecision]) -> Result<usize> {
-    let db_path = get_db_path()?;
-    if !db_path.exists() {
-        return Ok(0);
-    }
-
+    let db = crate::memory::db::DbConn::new()?;
     let project = get_project_name();
     let now = chrono::Utc::now().to_rfc3339();
-
-    let conn = Connection::open(&db_path)?;
 
     let mut count = 0;
     for decision in decisions {
@@ -146,8 +131,8 @@ pub fn save_decisions(decisions: &[CapturedDecision]) -> Result<usize> {
         let tags = decision.tags.join(",");
         let project_ref = project.as_deref();
 
-        conn.execute(
-            "INSERT INTO memories (content, tags, project, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+        db.conn().execute(
+            "INSERT INTO memories (content, tags, project, created_at, updated_at, type) VALUES (?1, ?2, ?3, ?4, ?5, 'decision')",
             params![decision.text, tags, project_ref, now, now],
         )?;
 

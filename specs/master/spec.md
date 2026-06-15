@@ -1,6 +1,6 @@
 # Project Specification — dectl (Dev Environment Control)
 > *Technology-agnostic. Describes WHAT to build, not HOW.*
-> *Version: 1.0 | Status: Updated | Last updated: 2026-06-02*
+> *Version: 1.1 | Status: Updated | Last updated: 2026-06-12*
 
 ---
 
@@ -60,9 +60,14 @@ dec solves this by separating concerns cleanly: the model thinks, the CLI execut
 
 **Acceptance Criteria**:
 - WHEN the developer or model adds a memory entry THEN dec SHALL persist it with a timestamp and optional tags
-- WHEN the developer searches memory THEN dec SHALL return relevant entries matching the query
-- WHEN the developer lists memory THEN dec SHALL display entries in reverse chronological order with IDs
-- WHEN the developer requests a specific memory by ID THEN dec SHALL display its full content
+- WHEN adding a memory entry THEN dec SHALL support a `--type` flag to categorize the entry (note, decision, context, research, incident, code-snippet)
+- WHEN the developer searches memory THEN dec SHALL return relevant entries using full-text search (FTS5) with fallback to substring matching
+- WHEN the developer lists memory THEN dec SHALL display entries in reverse chronological order with IDs, type, and tags
+- WHEN the developer requests a specific memory by ID THEN dec SHALL display its full content with type and metadata
+- WHEN the developer queries memory with a structured field query THEN dec SHALL parse and execute filters on type, tags, project, and created date using boolean operators, ordering, and limits
+- WHEN the developer deletes a memory entry THEN dec SHALL soft-delete by default (set deleted_at) with an option for permanent removal (--hard)
+- WHEN the developer edits a memory entry THEN dec SHALL open the content in $EDITOR for modification
+- WHEN an agent completes a task THEN its results SHALL be automatically stored in the memory system (auto-link)
 - WHEN memory is stored THEN it SHALL persist across terminal sessions and machine restarts
 
 ---
@@ -165,8 +170,7 @@ dec solves this by separating concerns cleanly: the model thinks, the CLI execut
 - Built-in model execution (dec does not run a model; it works alongside one)
 - Multi-user collaboration features
 - Windows native support (may work but not guaranteed)
-- Semantic search / embeddings (Phase 2)
-- Agent coordination (Phase 6) — see `specs/agents/spec.md`
+- Semantic search / embeddings (Phase 2 — not yet implemented)
 
 ## Implemented (post-v1)
 
@@ -178,6 +182,9 @@ dec solves this by separating concerns cleanly: the model thinks, the CLI execut
 - **Auto-Trust Interactive** (Phase 4): `dectl agent trust <type>` — trust an agent without running it, path canonicalization, improved `--non-interactive` error messages
 - **Install Script**: `scripts/install.sh` — curl-based installation for Linux, macOS, and WSL
 - **CI/CD Pipeline**: GitHub Actions workflow with fmt, clippy, test, and build steps
+- **Agent System** (Phase 6): 4 built-in agents (researcher, coder, reviewer, documenter), custom agents, parallelism, pipeline execution
+- **Agent Enhancements** (Fase 3): `requires` field, `context_files` auto-loading, non-blocking design, `run_always` support
+- **Memory Improvements** (3 fases): FTS5 full-text search (migration v2), `--type` categorization (note/decision/context/research/incident/code-snippet), `dectl memory delete` (soft/hard), `dectl memory edit` ($EDITOR), field query language (`dectl memory query`), agent_outputs for auto-link agent→memory (migration v3), tag_taxonomy with 9 seed tags (migration v4)
 
 ---
 

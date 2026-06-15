@@ -1,7 +1,7 @@
 # Technical Implementation Plan — Integration Layer
 > *Define los patrones concretos, flujos y artefactos de integración entre los tres actores.*
 > *La integración no tiene código propio — produce artefactos (templates, flujos, documentación).*
-> *Version: 1.0 | Status: Updated | Last updated: 2026-05-26*
+> *Version: 1.1 | Status: Updated | Last updated: 2026-06-12*
 
 ---
 
@@ -54,7 +54,7 @@ Este archivo va en `.dec/prompts/system/` y se crea en nivel 2 (`--standard`). D
 ## Al completar una tarea
 
 1. Si completaste o avanzaste una feature: actualiza `.dec/state/progress.json`
-2. Para decisiones importantes: ejecuta `dectl memory add "[resumen de la decisión]"`
+2. Para decisiones importantes: ejecuta `dectl memory add "[resumen de la decisión]" --type decision`
 3. Para decisiones arquitectónicas: crea `.dec/decisions/XXXX-nombre.md`
 
 ## Al finalizar sesión
@@ -64,7 +64,8 @@ Este archivo va en `.dec/prompts/system/` y se crea en nivel 2 (`--standard`). D
    - Qué quedó pendiente
    - Decisiones tomadas
    - Próximo paso recomendado
-2. Ejecuta `dectl memory add "Sesión [fecha]: [resumen en una línea]"`
+2. Ejecuta `dectl memory add "Sesión [fecha]: [resumen en una línea]" --type session`
+3. Puedes usar `dectl memory query "created:>2026-06-01 AND type:decision"` para consultas avanzadas
 ```
 
 ---
@@ -198,7 +199,7 @@ Developer: "Continuemos donde quedamos"
     │
     modelo al finalizar:
     ├── actualiza progress.json: refresh_token → "done"
-    ├── dectl memory add "Refresh token implementado con rotación de tokens"
+    ├── dectl memory add "Refresh token implementado con rotación de tokens" --type note
     └── escribe last_session.md con resumen y próximo paso
 ```
 
@@ -221,7 +222,7 @@ Developer: "Implementa el módulo de pagos con Stripe"
                        → modelo lee resultados, encuentra decisión previa de usar Stripe
     [paso 3 — prompt]: modelo diseña implementación respetando la decisión de Stripe
     [paso 4 — acción de codificación por el modelo]
-    [paso 5 — action]: dectl memory add "Módulo de pagos con Stripe implementado"
+    [paso 5 — action]: dectl memory add "Módulo de pagos con Stripe implementado" --type note
     [paso 6 — write]:  actualiza last_session.md
     │
     workflow completa → modelo reporta al developer
@@ -244,7 +245,7 @@ Developer: "Necesito decidir si usar Redis o PostgreSQL para las sesiones"
     developer: "sí"
     │
     modelo crea .dec/decisions/0002-session-storage.md con formato ADR
-    modelo: dectl memory add "Decisión: sesiones en PostgreSQL, consistente con 0001"
+    modelo: dectl memory add "Decisión: sesiones en PostgreSQL, consistente con 0001" --type decision
     │
     modelo reporta: "Decisión documentada en 0002-session-storage.md"
 ```
@@ -420,10 +421,12 @@ Developer: "Implementa el módulo de usuarios con registro y login"
 **Comportamiento esperado del modelo**:
 - El modelo principal SIEMPRE mantiene el contexto global y la coordinación
 - Los agentes ejecutan tareas autónomas y devuelven resultados
+- Los resultados de los agentes se auto-almacenan en memoria (auto-link) — el modelo no necesita invocar `dectl memory add` por separado para cada agente
 - El modelo revisa el output del agente antes de integrarlo
 - Para tareas independientes, el modelo puede proponer `--parallel`
 - El modelo usa `dectl agent list` para descubrir agentes disponibles
 - El modelo usa `dectl agent describe <type>` para entender inputs y steps
+- Para consultas avanzadas de memoria, el modelo puede usar `dectl memory query "type:research AND project:myapp"` en lugar de search básico
 
 ---
 

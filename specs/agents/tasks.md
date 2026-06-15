@@ -2,7 +2,7 @@
 
 > Atomic tasks for all agent features.
 > Prefix A to distinguish from v1 tasks (T/D/C/I/S).
-> Last updated: 2026-06-02
+> Last updated: 2026-06-12
 
 ---
 
@@ -61,6 +61,17 @@
 
 ---
 
+## Phase 5 — Memory Auto-Link
+
+*Auto-insert agent results into memories + agent_outputs tables.*
+
+- [x] [A024] Crear tabla `agent_outputs` (migration v3 en memory.db) + auto-insert de resumen en memories al completar agente con `type='research'` para researcher, `type='note'` para otros — M ✅
+- [x] [A025] Refactor `agent/log.rs` y `runner.rs` para usar `DbConn` compartido en vez de abrir conexión propia — S ✅
+
+**Phase 5 COMPLETE** ✅
+
+---
+
 ## Phase 4 — Agent Trust Command
 
 - [x] [A020] Implementar `dectl agent trust <type>`: verificar que el agente existe, canonicalizar path, escribir en trust.toml — S (REQ-A-010) ✅
@@ -80,4 +91,5 @@
 | Phase 2 — Parallelism + Custom | 5 | 5 | 0 | 0 |
 | Phase 3 — Session end + Polish | 5 | 5 | 0 | 0 |
 | Phase 4 — Agent trust | 4 | 4 | 0 | 0 |
-| **Total** | **23** | **23** | **0** | **0** |
+| Phase 5 — Memory Auto-Link | 2 | 2 | 0 | 0 |
+| **Total** | **25** | **25** | **0** | **0** |

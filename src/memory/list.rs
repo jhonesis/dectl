@@ -18,18 +18,22 @@ pub fn run(project: Option<String>, limit: Option<usize>, mode: OutputMode) -> R
 
     let db = DbConn::new()?;
 
+    let cols = super::db::MEMORY_SELECT_COLS;
     let query = if project.is_some() {
-        "SELECT id, content, tags, project, created_at, updated_at FROM memories WHERE project = ?1 AND deleted_at IS NULL ORDER BY created_at DESC LIMIT ?2"
+        format!("SELECT {} FROM memories WHERE project = ?1 AND deleted_at IS NULL ORDER BY created_at DESC LIMIT ?2", cols)
     } else {
-        "SELECT id, content, tags, project, created_at, updated_at FROM memories WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT ?1"
+        format!(
+            "SELECT {} FROM memories WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT ?1",
+            cols
+        )
     };
 
     let entries: Vec<MemoryEntry> = if let Some(ref proj) = project {
-        let mut stmt = db.conn().prepare(query)?;
+        let mut stmt = db.conn().prepare(&query)?;
         let rows = stmt.query_map(rusqlite::params![proj, limit], MemoryEntry::from_row)?;
         rows.filter_map(|r| r.ok()).collect()
     } else {
-        let mut stmt = db.conn().prepare(query)?;
+        let mut stmt = db.conn().prepare(&query)?;
         let rows = stmt.query_map(rusqlite::params![limit], MemoryEntry::from_row)?;
         rows.filter_map(|r| r.ok()).collect()
     };
@@ -51,9 +55,10 @@ pub fn run(project: Option<String>, limit: Option<usize>, mode: OutputMode) -> R
             }
             for entry in &output.entries {
                 println!(
-                    "[{}] {}",
+                    "[{}] {} ({})",
                     entry.id,
-                    entry.content.chars().take(60).collect::<String>().green()
+                    entry.content.chars().take(60).collect::<String>().green(),
+                    entry.type_.dimmed()
                 );
                 if !entry.tags.is_empty() {
                     println!("  Tags: {}", entry.tags.join(", ").cyan());

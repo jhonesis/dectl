@@ -1,6 +1,6 @@
 # Technical Research — dectl
 > *Documents technical unknowns investigated during planning. Captures decisions and their rationale.*
-> *Written alongside plan.md | Last updated: 2026-06-02*
+> *Written alongside plan.md | Last updated: 2026-06-12*
 
 ---
 
@@ -98,12 +98,88 @@
 
 ---
 
+### RQ-006: Full-text search engine for memory queries
+
+**Context**: Memory entries grow unbounded as the project evolves. Simple `LIKE '%query%'` does not scale — it's slow, ignores ranking, and misses partial matches. The search engine must be fast, local, have zero network dependencies, and run inside the existing SQLite database.
+
+**Options Evaluated**:
+
+| Option | Pros | Cons |
+|--------|------|------|
+| SQLite FTS5 (built-in via `bundled-fts5` feature) | Zero extra deps, integrated with existing SQLite, ranking (bm25), tokenizers, no separate index | Requires switching from `bundled` to `bundled-fts5` feature |
+| Tantivy (Rust full-text engine) | Modern, fast, BM25 ranking | Heavy dependency (~15 crate deps), separate index file, async API |
+| Embeddings via pgvector / OpenAI | Semantic search, modern | Requires network, cloud dependence, violates local-first + model-agnostic constitution |
+| Manual LIKE + application-level ranking | No deps | Slow on large datasets, no ranking, hacky |
+
+**Decision**: SQLite FTS5 with `bundled-fts5` feature flag.
+
+**Rationale**: FTS5 is already inside SQLite — switching from `bundled` to `bundled-fts5` adds zero bytes to the binary. The FTS5 virtual table sits alongside the existing `memories` table, kept in sync via triggers. Ranking via `bm25()` gives relevance-ordered results. The tokenizer (unicode61) handles natural language gracefully. No network, no extra binary size, no external index — perfectly aligned with the constitution's local-first requirement.
+
+---
+
+### RQ-007: Query language design for `dectl memory query`
+
+**Context**: Power users need to filter memory by multiple fields simultaneously (type, tags, date range, text). Passing all filters as CLI flags quickly becomes unwieldy. A dedicated query language strikes the balance between expressiveness and simplicity.
+
+**Options Evaluated**:
+
+| Option | Pros | Cons |
+|--------|------|------|
+| Custom mini-language with tokenizer + parser + SQL builder | Full control, predictable SQL, no injection risk, self-documenting | Requires writing ~300 lines of parser code |
+| Pass-through SQL queries | Flexible, no parser code | SQL injection risk (user input directly to SQLite), breaks model-agnostic goal (requires SQL knowledge) |
+| Reuse CLI flags (`--type`, `--tag`, `--from`, `--to`) | Familiar clap pattern | Combinatorial explosion, no complex expressions, limited to AND-only queries |
+| Third-party query language (Datalog, PRQL, EdgeQL) | Established syntax | Heavy deps, learning curve, overkill for key-value field queries |
+
+**Decision**: Custom field query language with tokenizer → recursive descent parser → SQL builder.
+
+**Rationale**: The language is intentionally limited to field queries (`type:research`, `tags:rust,cli`, `from:2026-01-01`, `is:starred`) — not a general SQL replacement. The tokenizer splits input into tokens, the parser builds an AST limited to conjunctions and noun phrases, and the SQL builder produces parameterized queries with zero injection risk. The full implementation is ~569 lines with 13 unit tests — maintainable and auditable. The syntax is designed to be discoverable by AI models and humans alike.
+
+---
+
+### RQ-008: Tag taxonomy for memory classification
+
+**Context**: Tags are free-form strings in the current schema (`tags TEXT` in memories). This leads to tag fragmentation ("rust", "Rust", "rustlang") and makes aggregation meaningless. A controlled vocabulary improves search and enables analytics.
+
+**Options Evaluated**:
+
+| Option | Pros | Cons |
+|--------|------|------|
+| Tag taxonomy table + migration seed (9 standard tags) | Controlled vocabulary, enables future analytics, backward-compatible | Migration required; existing tags remain as-is but new additions are validated |
+| Enforce via application-level validation only | No migration, simple | No database constraint, no analytics value |
+| Allow any tag + normalized form | Flexible, user-friendly | Tag normalization is lossy (Rust→rust), no curated list for discovery |
+| No taxonomy at all | Zero work | Status quo — tag fragmentation worsens over time |
+
+**Decision**: `tag_taxonomy` table with 9 seed tags + migration v4.
+
+**Rationale**: The taxonomy is a reference table, not a constraint — existing free-form tags remain untouched. New additions go through `dectl memory add --tags` which validates against the taxonomy and warns on unknown tags (but doesn't reject them). The 9 seed tags (`rust`, `cli`, `architecture`, `decision`, `workflow`, `agent`, `memory`, `sdd`, `config`) cover the project's domains. The table enables future features like tag suggestions, analytics by category, and memory organized by domain.
+
+---
+
+### RQ-009: Memory type categorization
+
+**Context**: Memory entries serve multiple purposes (research notes, decisions, code output, session summaries). A flat "everything is a note" model makes filtering hard. Adding a `type` column enables structured categorization.
+
+**Options Evaluated**:
+
+| Option | Pros | Cons |
+|--------|------|------|
+| `type TEXT CHECK IN (...)` with 7 predefined types | Schema-level validation, backward-compatible (default 'note'), self-documenting | Migration required; existing entries default to 'note' |
+| Enum in Rust only | No migration, flexible | No DB-level validation, no query-by-type via SQL |
+| Tags instead of type column | No new column, extensible | Tags are many-to-many; type is one-to-one; different semantics |
+| Discard and let user organize manually | Zero work | No discoverability, no filterability |
+
+**Decision**: `type TEXT NOT NULL DEFAULT 'note' CHECK(type IN ('note','decision','research','code','session','agent','task'))` — migration v2.
+
+**Rationale**: The type column is a simple enum enforced at the database level. Existing entries get `'note'` as default. The 7 types correspond to actual memory usage patterns observed in the project. The `--type` flag on `dectl memory add` validates against the same enum. During `dectl session end`, decisions are captured as `type='decision'`. Agent auto-link uses `type='research'` for researcher output and `type='note'` for other agents. The CHECK constraint is cheap and prevents data corruption.
+
+---
+
 ## External Dependencies Summary
 
 | Dependency | Version | License | Risk Level | Notes |
 |-----------|---------|---------|-----------|-------|
 | `clap` | 4.x | MIT/Apache-2.0 | Low | Industry standard, stable API |
-| `rusqlite` | 0.31+ | MIT | Low | Use `bundled` feature for static SQLite |
+| `rusqlite` | 0.31+ | MIT | Low | Use `bundled-fts5` feature for static SQLite + FTS5 |
 | `serde` + `serde_yaml` | 1.x / 0.9+ | MIT/Apache-2.0 | Low | Core serialization stack |
 | `serde_json` | 1.x | MIT/Apache-2.0 | Low | Required for `--json` output (REQ-006) |
 | `ignore` | 0.4+ | MIT/Unlicense | Low | Used by ripgrep, very stable |

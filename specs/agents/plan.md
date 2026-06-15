@@ -1,7 +1,7 @@
 # Technical Implementation Plan — Agent System
 
 > Describes HOW to implement the agent system. Technology-specific.
-> Version: 1.0 | Status: Final | Last updated: 2026-06-02
+> Version: 1.1 | Status: Updated | Last updated: 2026-06-12
 
 ---
 
@@ -13,7 +13,8 @@
 - Extends: `specs/cli/plan.md` (new `agent` modules)
 - Modifies: `specs/dot-dec/data-model.md` (new StepType `agent`)
 - Modifies: `specs/cli/data-model.md` (new JSON shapes)
-- Modifies: `specs/master/data-model.md` (agent_log table)
+- Modifies: `specs/master/data-model.md` (agent_log table, agent_outputs table)
+- Modifies: `specs/master/data-model.md` (memories_fts, tag_taxonomy, migration v2-v4)
 
 ---
 
@@ -43,7 +44,8 @@ src/
 │   │   └── documenter.yaml
 │   ├── list.rs          ← dectl agent list
 │   ├── run.rs           ← dectl agent run
-│   └── describe.rs      ← dectl agent describe
+│   ├── describe.rs      ← dectl agent describe
+│   └── trust.rs         ← dectl agent trust (trust registry)
 ```
 
 ---
@@ -59,6 +61,8 @@ pub struct AgentDef {
     pub name:          String,
     pub role:          String,
     pub description:   String,
+    #[serde(default)]
+    pub requires:      Vec<String>,     // informational, non-blocking
     #[serde(default)]
     pub context_files: Vec<String>,
     #[serde(default)]
@@ -203,7 +207,14 @@ dectl agent run reviewer --task "src/auth/jwt.rs"
     │     step 1 (prompt): prints interpolated content → pause for model
     │     step 2 (prompt): prints interpolated content → pause for model
     │
+    ├── on success (status = Ok):
+    │   │   INSERT INTO memories (content, type, project, ...)
+    │   │     → type = "research" if agent_type == "researcher", else "note"
+    │   │     → content = "Agent {agent_type}: {task_description}"
+    │   │   INSERT INTO agent_outputs (agent_type, task_id, task_desc, output_file, memory_id)
+    │   │
     ├── log: INSERT INTO agent_log (agent_type, task, status, steps_executed, duration_ms)
+    │       (always written, regardless of success/failure)
     │
     └── output: {status:"ok", agent:"reviewer", task:"src/auth/jwt.rs",
                  steps_executed:2, log_id:15}

@@ -1,7 +1,7 @@
 # Implementation Tasks — dectl CLI
 > *Tareas atómicas derivadas de plan.md y data-model.md del SDD del CLI.*
 > *Prefijo C para distinguir de tareas del maestro (T) y de .dec/ (D).*
-> *Last updated: 2026-06-02*
+> *Last updated: 2026-06-12*
 
 ---
 
@@ -264,6 +264,19 @@ C041–C050         (workflow runner con variables + --from-step)
 
 ---
 
+## Fase 13 — Memory Improvements
+
+*FTS5 full-text search, `--type` categorization, field query language.*
+
+- [x] [C13-01] Migración v2 (bundled → bundled-fts5, FTS5 virtual table + triggers + type column); rewrite `search.rs` para usar FTS5 con ranking y fallback LIKE — M ✅
+- [x] [C13-02] Flag `--type` en `dectl memory add` con validación de valores + columna type en list/show output humano y JSON — M ✅
+- [x] [C13-03] Comando `dectl memory query` con field query parser (tokenizer → expression parser → SQL builder parametrizado) — L ✅
+- [x] [C13-04] Tests de query language: 5 integration + 13 unit tests — M ✅
+
+**Fase 13 COMPLETE** ✅
+
+---
+
 ## Fase 11 — Agent Commands
 
 > Full specification in `specs/agents/`. CLI tasks A004, A005, A008, A011.
@@ -293,4 +306,5 @@ C041–C050         (workflow runner con variables + --from-step)
 | Fase 10 — Config Sync | 15 | 15 | 0 | 0 |
 | Fase 11 — Agent Commands | 4 | 4 | 0 | 0 |
 | Fase 12 — Context Improvements | 3 | 3 | 0 | 0 |
-| **Total** | **76** | **76** | **0** | **0** |
+| Fase 13 — Memory Improvements | 4 | 4 | 0 | 0 |
+| **Total** | **80** | **80** | **0** | **0** |

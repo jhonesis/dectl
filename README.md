@@ -40,9 +40,12 @@ Every AI coding assistant (Claude Code, Gemini CLI, Qwen CLI, Ollama, or a human
 
 ## Features
 
-### Persistent Memory
-- Add important context: decisions, architecture notes, team conventions
-- Search and retrieve across all stored memories
+### Persistent Memory with Structured Types
+- Add important context with **typed entries**: `--type decision`, `--type research`, `--type context`, `--type incident`
+- **FTS5-powered search** with ranking — the most relevant results appear first
+- **Query language** (`dectl memory query`) — filter by type, tags, project, date with boolean operators (`AND`/`OR`/`NOT`)
+- **Agent auto-link** — agent results are automatically saved to memory (researcher → `type=research`, documenter → `type=note`)
+- **Decision capture** — `dectl session end` auto-captures decisions as `type=decision`
 - Tag-based organization
 - Per-project memory with auto-detection
 - Soft-delete with `--hard` for permanent removal
@@ -127,6 +130,21 @@ Use `--auto` to skip trust confirmation prompts (once agents are trusted):
 dectl workflow run execute_task --var task_id=T001 --var description="test" --auto
 ```
 
+### Memory Query Language
+- `dectl memory query "<expression>"` — field-based query syntax without SQL
+- **Fields**: `type:`, `tags:`, `project:`, `created:` — filter by any memory attribute
+- **Comparators**: `=` (default), `>`, `<`, `>=`, `<=`, `!=` — use with `created:` for date ranges
+- **Boolean operators**: `AND`, `OR`, `NOT` — combine multiple conditions
+- **Sorting & limit**: `ORDER BY created DESC`, `LIMIT N`
+- **Examples**:
+  ```
+  type:decision AND tags:architecture
+  type:research ORDER BY created DESC LIMIT 5
+  created:>2026-06-01 AND NOT type:note
+  ```
+- **Zero SQL injection risk** — all values are parameterized
+- **Why it matters**: Instead of scrolling through `dectl memory list`, ask precisely for what you need. The AI model can query its own memory with surgical precision, saving tokens and time.
+
 ### Automated Session Management
 - `dectl session end` — single command to close a session
 - Auto-generates session summary from git log and previous session
@@ -189,17 +207,25 @@ This creates a `.dec/` directory with:
 ### 2. Add Context to Memory
 
 ```bash
-# Direct input
+# Direct input (defaults to type=note)
 dectl memory add "We're using SQLite for local storage because it simplifies deployment"
 
-# From file
-cat architecture.md | dectl memory add --tags architecture,database
+# From file with type and tags
+cat architecture.md | dectl memory add --type context --tags architecture,database
 
-# With project filter
-dectl memory add "API uses REST, not GraphQL" --project myapp
+# Mark an architectural decision
+dectl memory add "API uses REST, not GraphQL" --type decision --project myapp
 
-# View all memories (across projects)
+# View all memories with their type
 dectl memory list --global
+
+# Search with FTS5 (ranking by relevance)
+dectl memory search "SQLite storage"
+
+# Query with field filters and boolean operators
+dectl memory query "type:decision AND tags:architecture"
+dectl memory query "type:research ORDER BY created DESC LIMIT 5"
+dectl memory query "created:>2026-01-01 AND NOT type:note"
 ```
 
 ### 3. Use in AI Sessions
@@ -299,10 +325,11 @@ Agent artifacts are written to `.dec/agent-output/{{task_id}}-*` and persist bet
 
 | Command | Description |
 |---------|-------------|
-| `dectl memory add "<content>" [--tags t1,t2] [--project <name>]` | Add a memory |
+| `dectl memory add "<content>" [--tags t1,t2] [--project <name>] [--type <type>]` | Add a memory (types: note, decision, context, research, incident, code-snippet) |
 | `dectl memory list [--project <name>] [--limit N] [--global]` | List memories |
-| `dectl memory search "<query>" [--project <name>]` | Search memories |
-| `dectl memory show <id>` | Show memory details |
+| `dectl memory search "<query>" [--project <name>]` | Search memories (FTS5 with ranking) |
+| `dectl memory query "<query>" [--project <name>] [--limit N]` | **Filter memories** with field query language (type:, tags:, project:, created: + AND/OR/NOT + ORDER BY + LIMIT) |
+| `dectl memory show <id>` | Show memory details (includes type) |
 | `dectl memory delete <id>` | Soft-delete (can be recovered) |
 | `dectl memory delete <id> --hard` | Permanent deletion |
 | `dectl memory edit <id>` | Edit in $EDITOR |
@@ -586,10 +613,10 @@ If a command is not applicable to your project, leave it empty or omit the secti
 
 ```bash
 cd dectl
-cargo test        # Run all tests (115 passing)
+cargo test        # Run all tests (139 passing)
 cargo fmt         # Format code
 cargo clippy      # Lint check
-cargo build --release  # Build binary (~4.9MB)
+cargo build --release  # Build binary (~4.5MB)
 ```
 
 ## Contributing

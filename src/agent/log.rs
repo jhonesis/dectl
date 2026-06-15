@@ -1,6 +1,5 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::Result;
 use rusqlite::Connection;
-use std::path::PathBuf;
 
 fn ensure_table(conn: &Connection) -> Result<()> {
     conn.execute_batch(
@@ -21,25 +20,8 @@ fn ensure_table(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-fn open_db() -> Result<Connection> {
-    let home = std::env::var("HOME").map_err(|_| anyhow!("HOME not set"))?;
-    let db_path = PathBuf::from(home).join(".dectl").join("memory.db");
-
-    if let Some(parent) = db_path.parent() {
-        if !parent.exists() {
-            std::fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create {:?}", parent))?;
-        }
-    }
-
-    let conn = Connection::open(&db_path)
-        .with_context(|| format!("Failed to open database at {:?}", db_path))?;
-    conn.execute_batch("PRAGMA journal_mode=WAL;")
-        .context("Failed to enable WAL mode")?;
-    Ok(conn)
-}
-
 pub fn record_agent_execution(
+    conn: &Connection,
     agent_type: &str,
     task: &str,
     status: &str,
@@ -47,8 +29,7 @@ pub fn record_agent_execution(
     duration_ms: i64,
     error: Option<&str>,
 ) -> Result<i64> {
-    let conn = open_db()?;
-    ensure_table(&conn)?;
+    ensure_table(conn)?;
 
     conn.execute(
         "INSERT INTO agent_log (agent_type, task, status, steps_executed, duration_ms, error)
@@ -60,8 +41,7 @@ pub fn record_agent_execution(
     Ok(id)
 }
 
-pub fn query_agent_sessions_since(timestamp: &str) -> Result<usize> {
-    let conn = open_db()?;
+pub fn query_agent_sessions_since(conn: &Connection, timestamp: &str) -> Result<usize> {
     let count: usize = conn
         .query_row(
             "SELECT COUNT(*) FROM agent_log WHERE timestamp > ?1",

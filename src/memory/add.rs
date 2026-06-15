@@ -18,6 +18,7 @@ pub fn run(
     content: Option<String>,
     tags: Option<String>,
     project: Option<String>,
+    type_: String,
     mode: OutputMode,
 ) -> Result<()> {
     let content = match content {
@@ -44,14 +45,23 @@ pub fn run(
         })
         .unwrap_or_default();
 
+    let valid_types = super::db::VALID_TYPES;
+    if !valid_types.contains(&type_.as_str()) {
+        anyhow::bail!(
+            "Invalid type '{}'. Valid types: {}",
+            type_,
+            valid_types.join(", ")
+        );
+    }
+
     let db = DbConn::new()?;
     let now = chrono::Utc::now().to_rfc3339();
     let tags_str = tags.join(",");
     let project_str = project.clone();
 
     db.conn().execute(
-        "INSERT INTO memories (content, tags, project, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)",
-        rusqlite::params![content, tags_str, project_str, now, now],
+        "INSERT INTO memories (content, tags, project, created_at, updated_at, type) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        rusqlite::params![content, tags_str, project_str, now, now, type_],
     )?;
 
     let id = db.conn().last_insert_rowid();
