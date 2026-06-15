@@ -368,16 +368,17 @@ fn test_memory_query_order_limit() {
     );
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("\"count\": 1"), "Should return exactly 1 result, got: {}", stdout);
+    assert!(
+        stdout.contains("\"count\": 1"),
+        "Should return exactly 1 result, got: {}",
+        stdout
+    );
 }
 
 #[test]
 fn test_memory_query_invalid_syntax() {
     let tmp = TempDir::new().unwrap();
-    let output = run_dectl(
-        &["memory", "query", "invalid:value", "--json"],
-        tmp.path(),
-    );
+    let output = run_dectl(&["memory", "query", "invalid:value", "--json"], tmp.path());
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Unknown field"));

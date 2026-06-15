@@ -192,7 +192,11 @@ impl DbConn {
                 ("research", "Research findings and analysis", "type"),
                 ("incident", "Issues, bugs, and incidents", "type"),
                 ("session", "Session summaries and logs", "meta"),
-                ("high-impact", "Critical information worth surfacing", "priority"),
+                (
+                    "high-impact",
+                    "Critical information worth surfacing",
+                    "priority",
+                ),
                 ("agent", "Agent-generated content", "source"),
                 ("code-snippet", "Code fragments and examples", "type"),
             ];

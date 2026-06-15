@@ -94,10 +94,7 @@ fn tokenize(input: &str) -> Result<Vec<Token>> {
     Ok(tokens)
 }
 
-fn build_where_clause(
-    tokens: &[Token],
-    params: &mut Vec<String>,
-) -> Result<String> {
+fn build_where_clause(tokens: &[Token], params: &mut Vec<String>) -> Result<String> {
     let mut sql_parts = Vec::new();
     let mut i = 0;
 
@@ -109,7 +106,9 @@ fn build_where_clause(
                     sql_parts.push(format!("NOT ({})", expr));
                     i += consumed;
                 } else {
-                    return Err(anyhow::anyhow!("NOT must be followed by a field expression"));
+                    return Err(anyhow::anyhow!(
+                        "NOT must be followed by a field expression"
+                    ));
                 }
             }
             Token::And => {
@@ -127,7 +126,9 @@ fn build_where_clause(
                 break;
             }
             Token::Value(_) | Token::Comparator(_) => {
-                return Err(anyhow::anyhow!("Unexpected value or comparator without field"));
+                return Err(anyhow::anyhow!(
+                    "Unexpected value or comparator without field"
+                ));
             }
         }
         i += 1;
@@ -142,7 +143,9 @@ fn build_where_clause(
     for part in &sql_parts {
         let is_op = part == "AND" || part == "OR";
         if is_op && expect_expr {
-            return Err(anyhow::anyhow!("Unexpected operator at start of expression"));
+            return Err(anyhow::anyhow!(
+                "Unexpected operator at start of expression"
+            ));
         }
         if is_op && !expect_expr {
             if !combined.is_empty() {
@@ -233,10 +236,16 @@ fn parse_field_expr(tokens: &[Token], params: &mut Vec<String>) -> Result<(Strin
             consumed = 2;
             ("=".to_string(), v)
         } else {
-            return Err(anyhow::anyhow!("Expected value after field '{}'", field_name));
+            return Err(anyhow::anyhow!(
+                "Expected value after field '{}'",
+                field_name
+            ));
         }
     } else {
-        return Err(anyhow::anyhow!("Expected value after field '{}'", field_name));
+        return Err(anyhow::anyhow!(
+            "Expected value after field '{}'",
+            field_name
+        ));
     };
 
     let param_idx = params.len() + 1;
@@ -248,12 +257,18 @@ fn parse_field_expr(tokens: &[Token], params: &mut Vec<String>) -> Result<(Strin
         } else if comparator == "=" {
             "LIKE"
         } else {
-            return Err(anyhow::anyhow!("Invalid comparator '{}' for tags field", comparator));
+            return Err(anyhow::anyhow!(
+                "Invalid comparator '{}' for tags field",
+                comparator
+            ));
         };
         Ok((format!("{} {} ?{}", db_field, op, param_idx), consumed))
     } else if field_name == "created" {
         params.push(raw_value);
-        Ok((format!("{} {} ?{}", db_field, comparator, param_idx), consumed))
+        Ok((
+            format!("{} {} ?{}", db_field, comparator, param_idx),
+            consumed,
+        ))
     } else {
         params.push(raw_value);
         let op = if comparator == "=" {
@@ -261,7 +276,11 @@ fn parse_field_expr(tokens: &[Token], params: &mut Vec<String>) -> Result<(Strin
         } else if comparator == "!=" || comparator == "<>" {
             "!="
         } else {
-            return Err(anyhow::anyhow!("Invalid comparator '{}' for field '{}'", comparator, field_name));
+            return Err(anyhow::anyhow!(
+                "Invalid comparator '{}' for field '{}'",
+                comparator,
+                field_name
+            ));
         };
         Ok((format!("{} {} ?{}", db_field, op, param_idx), consumed))
     }
@@ -317,7 +336,9 @@ fn parse_order_limit(tokens: &[Token]) -> Result<(Option<String>, Option<String>
                 if i + 1 < tokens.len() {
                     match &tokens[i + 1] {
                         Token::Ident(n) => {
-                            let n: usize = n.parse().map_err(|_| anyhow::anyhow!("Expected number after LIMIT, got '{}'", n))?;
+                            let n: usize = n.parse().map_err(|_| {
+                                anyhow::anyhow!("Expected number after LIMIT, got '{}'", n)
+                            })?;
                             limit = Some(n);
                         }
                         _ => return Err(anyhow::anyhow!("Expected number after LIMIT")),
@@ -370,7 +391,12 @@ pub fn parse_query(query: &str) -> Result<ParsedQueryResult> {
     })
 }
 
-pub fn run(query: String, project: Option<String>, limit: Option<usize>, mode: OutputMode) -> Result<()> {
+pub fn run(
+    query: String,
+    project: Option<String>,
+    limit: Option<usize>,
+    mode: OutputMode,
+) -> Result<()> {
     let db = DbConn::new()?;
     let cols = super::db::MEMORY_SELECT_COLS;
 
@@ -380,9 +406,20 @@ pub fn run(query: String, project: Option<String>, limit: Option<usize>, mode: O
         .order_by
         .clone()
         .unwrap_or_else(|| "m.created_at".to_string());
-    let order_dir = parsed.order_dir.clone().unwrap_or_else(|| "DESC".to_string());
+    let order_dir = parsed
+        .order_dir
+        .clone()
+        .unwrap_or_else(|| "DESC".to_string());
 
-    let entries = query_entries(db.conn(), cols, &parsed, project.as_deref(), final_limit, &order_by, &order_dir);
+    let entries = query_entries(
+        db.conn(),
+        cols,
+        &parsed,
+        project.as_deref(),
+        final_limit,
+        &order_by,
+        &order_dir,
+    );
 
     let count = entries.len();
     let output = MemoryQueryOutput {
@@ -444,7 +481,8 @@ fn query_entries(
         String::new()
     };
 
-    let sql = format!(
+    let sql =
+        format!(
         "SELECT {} FROM memories m WHERE m.deleted_at IS NULL AND ({}) {} ORDER BY {} {} LIMIT ?{}",
         cols,
         parsed.where_clause,
@@ -465,7 +503,8 @@ fn query_entries(
     }
     all_params.push(Box::new(limit as i64));
 
-    let param_refs: Vec<&dyn rusqlite::types::ToSql> = all_params.iter().map(|p| p.as_ref()).collect();
+    let param_refs: Vec<&dyn rusqlite::types::ToSql> =
+        all_params.iter().map(|p| p.as_ref()).collect();
 
     let rows = stmt
         .query_map(param_refs.as_slice(), MemoryEntry::from_row)
