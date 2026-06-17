@@ -11,7 +11,7 @@ description: >
   create constitution.md, spec.md, requirements.md, plan.md, tasks.md, research.md, data-model.md, or CLAUDE.md;
   work with Kiro, spec-kit, OpenSpec, BMAD or similar SDD tools; or convert a vague idea into an AI-ready blueprint.
 
-  Trigger on: "plan before coding", "document first", "spec first", "quiero planificar", "create a spec",
+  Trigger on: "plan before coding", "document first", "spec first", "create a spec",
   "write requirements", "dectl spec init", or any description of a project/feature to build with AI agents.
 ---
 
@@ -26,7 +26,7 @@ Spec-Driven Development (SDD) **inverts the traditional workflow**:
 The specification is the **single source of truth**. Code is a transient byproduct.
 Debugging means fixing the spec, not just the code.
 
-**Key principle**: The SPEC is technology-agnostic (WHAT to build). The PLAN is technology-specific (HOW to build it). Never mix them.
+**Key principle**: The SPEC is technology-agnostic (WHAT to build). The PLAN is technology-specific (HOW to build it). Never mix them. See the dedicated section below for enforcement rules.
 
 ---
 
@@ -67,8 +67,22 @@ Before writing any document, interview the user to understand:
 3. **What constraints** exist? (tech stack, integrations, team conventions, compliance)
 4. **What does success look like?** (acceptance criteria, metrics)
 5. **What is explicitly OUT of scope?
+6. **What existing systems does this integrate with?** (APIs, databases, other tools)
+7. **What is the deployment model?** (self-hosted, SaaS, CLI via package manager, library published to registry)
+8. **What is the expected scale?** (users, data volume, throughput)
 
 Ask clarifying questions. Don't guess. The quality of the spec depends on the quality of the intent capture.
+
+### Step 1.5 — Clarification Phase
+
+Before choosing documents, resolve all known unknowns:
+
+1. **List every "known unknown"** — things the user hasn't specified that could affect architecture or design
+2. **For each unknown, ask a targeted question**: "You said [X]. Does that mean [interpretation A] or [interpretation B]?"
+3. Example: User says "fast search" → ask "What response time is acceptable? <100ms, <500ms, or <2s?"
+4. **Do NOT proceed to Step 2** until all identified unknowns are resolved
+
+The quality of the spec is bounded by the quality of these clarifications. Rushing past ambiguity is the #1 cause of spec rejection.
 
 ### Step 2 — Choose the right document set
 
@@ -93,12 +107,109 @@ Always show the user each document for review/approval before moving to the next
 
 Before declaring the SDD suite complete:
 - ✅ Spec is technology-agnostic
+- ✅ **spec.md has zero technology names** (grep for: React, Node, PostgreSQL, AWS, Docker, etc.)
 - ✅ Every acceptance criterion in spec.md has at least one corresponding task in tasks.md
 - ✅ Every task has a unique ID (T001, T002…)
 - ✅ Tasks are independently implementable and testable
 - ✅ **Every task has Build: + Verify: + Gate: — compile and verify after each task before the next**
 - ✅ **Each phase has Build Gate + Verify Gate**
 - ✅ No code has been written yet
+
+### Step 5 — Log decisions to memory
+
+After each document is approved, run:
+```bash
+dectl memory add "Document approved: [filename] — [summary]" --type decision
+```
+
+After the full suite is complete, run:
+```bash
+dectl memory add "SDD suite complete: [project] — [documents produced]" --type task
+```
+
+This creates traceability between spec documents and the project memory. Future agents can `dectl memory search` to find relevant decisions.
+
+---
+
+## Iterating on Existing Specs
+
+Specs evolve as the project grows. Follow these guidelines when updating:
+
+- **Minor change** (typo, clarification, reworded acceptance criterion) → update the relevant document, increment its `Version:` field
+- **Major change** (new feature, changed architecture, scope shift) → create a new version document (`spec-v2.md`), keep the old one for reference
+- After any change → run:
+  ```bash
+  dectl memory add "Spec updated: [description]" --type decision
+  ```
+
+Each document has a `Version:` field in its header. Agents MUST increment it on every meaningful change.
+
+---
+
+## Role System: Adversarial Agents
+
+The AI simulates three distinct roles sequentially for every document:
+
+### Coordinator
+Conducts the interview (Step 1), asks clarification questions (Step 1.5), and manages the workflow. Decides whether to fix issues or document them as known limitations.
+
+### Implementer
+Writes the actual document content based on the Coordinator's notes, following the templates in `references/templates.md`.
+
+### Verifier (Adversary)
+After the Implementer finishes each document, the Verifier switches mindset and actively tries to find:
+- **Missing edge cases** — cross-reference the Edge Case Catalog in the templates
+- **Contradictions** between documents (e.g., spec says X, plan implements Y)
+- **Technology names leaked into spec.md** — WHAT vs HOW violation
+- **Untestable acceptance criteria** ("it should be fast" without a metric)
+- **Non-atomic tasks** — giant tasks that hide complexity
+
+**Process**: Coordinator → Implementer writes draft → Verifier reviews → if Verifier finds issues, Coordinator decides: fix now or document as known limitation and proceed.
+
+This adversarial loop replaces the single-pass writing model. It catches errors that a single perspective misses.
+
+---
+
+## Critical Rule: WHAT vs HOW Separation
+
+The single most important rule in SDD. Violating it is the most common cause of spec rejection.
+
+| Document | Role | Content |
+|----------|------|---------|
+| **spec.md** | WHAT | Technology-agnostic. Describes user-facing behavior, not implementation. |
+| **plan.md** | HOW | Technology-specific. Makes concrete technology decisions for every requirement. |
+
+### Violation examples
+
+**spec.md (WRONG)** — contains technology names:
+> ❌ "The React frontend will fetch data from the PostgreSQL database via a REST API"
+>
+> ✅ "The user submits a task and it appears in the shared list"
+
+**plan.md (WRONG)** — too vague, no technology decisions:
+> ❌ "Users can create tasks"
+>
+> ✅ "React frontend calls Next.js API routes, which use Prisma to write to PostgreSQL"
+
+### Gate rule
+
+Before marking any document as complete, the **Verifier** role MUST check that:
+- `spec.md` contains **zero technology names** (grep for: React, Node, PostgreSQL, AWS, Docker, etc.)
+- `plan.md` contains **at least one technology decision per REQ**
+
+---
+
+## Model Tiering: Matching Effort to Task
+
+Different documents require different levels of reasoning depth:
+
+| Phase | Documents | Reasoning |
+|-------|-----------|-----------|
+| **Foundation** | Constitution, Spec, Requirements | Deepest reasoning. These define the project's foundations — errors here compound across all later phases. |
+| **Design** | Research, Plan, Data Model | Careful reasoning with cost-benefit awareness. Research should be thorough but proportionate to project risk. |
+| **Execution** | Interface Contracts, Tasks | Faster/cheaper inference. Tasks are repetitive and follow templates. The Verifier catches quality issues. |
+
+This tiering is a suggestion, not a constraint. If the model has a single mode, apply more thinking time to Phase 1 documents.
 
 ---
 
@@ -186,25 +297,9 @@ project-root/
 
 ---
 
-## Implementation Protocol (CRITICAL)
+## Implementation Preview
 
-After the SDD documents are complete, implementation follows this protocol:
-
-### For each Phase:
-1. Verify the phase's **Build Gate** passes (`cargo build`, `npm run build`, etc.)
-2. Execute tasks in order (or parallel if marked `[P]`)
-
-### For each task:
-1. **Implement** the task according to spec.md
-2. **Build**: run the compile command — must pass 0 errors
-3. **Verify**: run the verify command or check that the feature works as expected
-4. **Gate**: only if Build + Verify pass, mark task `[x]` and move to the next task
-5. If Build or Verify fails → **stop**, fix the issue, rebuild, reverify, then continue
-
-### Phase completion:
-1. All tasks marked `[x]`
-2. Phase **Verify Gate** passes
-3. Move to next phase
+After the SDD documents are approved, each task is implemented with **Build → Verify → Gate** (compile, test, then proceed). See the project's coding skill for the full implementation protocol.
 
 ---
 

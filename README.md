@@ -22,9 +22,7 @@ dectl project init --standard
 # → The model already has all the context. It responds without you explaining anything.
 ```
 
-<div style="text-align:center">
-  <img src="output.gif" alt="dectl in action" width="700">
-</div>
+[![dectl in action](https://img.youtube.com/vi/iYCDjqWcZyo/0.jpg)](https://youtu.be/iYCDjqWcZyo)
 
 *No external APIs. No telemetry. No manual configuration.*
 
@@ -87,6 +85,7 @@ Pre-configured workflows and prompts based on project type:
 - 4 built-in agent roles: **researcher → coder → reviewer → documenter**
 - Agents are **executable pipelines** — they run real commands (`action`), write files (`write`), and generate prompts (`prompt`)
 - All agent artifacts are saved to `.dec/agent-output/{{task_id}}-*` for cross-session persistence
+- The **reviewer** agent includes spec compliance verification: looks up `task_id` in `specs/*/tasks.md`, extracts the associated `REQ-XXX` identifier, reads acceptance criteria from `specs/*/spec.md`, and includes them in the review prompt so the AI model can verify the implementation matches the spec
 - Custom agents via `.dec/agents/*.yaml` (override builtins)
 - Configurable timeout per agent (default 5 min)
 - Trust system for action steps (same as workflows)
@@ -107,7 +106,7 @@ dectl workflow run execute_task --var task_id=T001 --var description="Add user a
 | 1 | `agent: researcher` | Scans project, searches memory, reads decisions, saves context to `.dec/agent-output/` |
 | 2 | `agent: coder` | Loads research context, checks git log, prepares implementation brief |
 | 3 | `prompt` | **Pause** — the AI model implements the changes using its editing tools, then resumes with `--from-step 4` |
-| 4 | `agent: reviewer` | Builds project, runs tests + linter, shows diff, generates review report |
+| 4 | `agent: reviewer` | Looks up task in SDD specs (task_id → REQ-XXX → acceptance criteria), builds project, runs tests + linter, shows diff, verifies spec compliance, generates review report |
 | 5 | `agent: documenter` | Records task completion + decisions in memory, writes summary, lists artifacts (`run_always: true`) |
 
 **Why this saves tokens and keeps the model focused:**
@@ -154,11 +153,13 @@ dectl workflow run execute_task --var task_id=T001 --var description="test" --au
 - Each step is independent; failures don't stop other steps
 - `--dry-run` to preview, `--skip-git` to bypass git sync
 
-### Spec-Driven Development
-- `dectl spec init` — ensure `.dec/sdd/` exists with SDD methodology
-- Auto-creates SKILL.md (atomic tasks, Build+Verify+Gate) + references/
+### Spec-Driven Development (SDD)
+- `dectl spec init` — ensure `.dec/sdd/` exists with SDD methodology (built into `project init --standard`)
+- Auto-creates 3 embedded templates:
+  - **SKILL.md** — SDD workflow: 8 interview questions, clarification phase, adversarial agent pattern (Coordinator/Implementer/Verifier), model tiering, WHAT vs HOW enforcement, memory integration
+  - **templates.md** — 9 document templates per project type (spec, architecture, tasks, API, data, auth, deployment, testing, monitoring), edge case catalog, purity boundaries, drift detection
+  - **examples.md** — 5 reference implementations (CLI logsnap, API SnippetVault, brownfield LegacyPay, EDA EventStream, Next.js 14 HabitStack)
 - Updates `.dec/config/project.toml` and `.dec/isa/project.isa.md`
-- Built into `project init --standard` (no extra command needed)
 - Signals the AI model to interview you and generate `specs/` documents
 
 ## Installation
@@ -298,12 +299,18 @@ dectl agent run --parallel reviewer,documenter --task "src/auth/"  # Parallel
 dectl agent run coder --task "test" --dry-run           # Preview only
 ```
 
-**Required project config** for the reviewer agent — add this to `.dec/config/project.toml`:
+**Configure build/test/lint** for the reviewer agent in `.dec/config/project.toml`:
 ```toml
 [build]
 command = "cargo build"
+
+[test]
+command = "cargo test"
+
+[lint]
+command = "cargo clippy"
 ```
-The reviewer runs this command to validate your code compiles before reporting.
+The reviewer auto-detects commands for common stacks (Cargo.toml, package.json, etc.) when not explicitly configured, and skips any missing step gracefully.
 
 Agent artifacts are written to `.dec/agent-output/{{task_id}}-*` and persist between sessions.
 
@@ -346,7 +353,7 @@ Agent artifacts are written to `.dec/agent-output/{{task_id}}-*` and persist bet
 | `dectl agent run --parallel t1,t2 --task <desc>` | Run multiple agents in parallel |
 | `[--file <path>] [--var k=v] [--timeout <secs>] [--dry-run]` | Optional flags for agent run |
 
-Pipeline: `researcher` saves context to `.dec/agent-output/`, chains to `coder` (implement), then `reviewer` (compile via `[build] command`), then `documenter` (persist progress).
+Pipeline: `researcher` saves context to `.dec/agent-output/`, chains to `coder` (implement), then `reviewer` (verify spec compliance + compile via `[build] command` + test + lint), then `documenter` (persist progress).
 
 ### Workflows
 
@@ -613,7 +620,7 @@ If a command is not applicable to your project, leave it empty or omit the secti
 
 ```bash
 cd dectl
-cargo test        # Run all tests (139 passing)
+cargo test        # Run all tests (140 passing)
 cargo fmt         # Format code
 cargo clippy      # Lint check
 cargo build --release  # Build binary (~4.5MB)

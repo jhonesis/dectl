@@ -1,8 +1,9 @@
 name: reviewer
-role: "Quality gate: build + test + lint + convention verification"
+role: "Quality gate: build + test + lint + spec compliance verification"
 description: >
   Review phase: compile, run tests, check linting, verify git changes,
-  validate against project conventions. Quality gate before documentation.
+  validate against project conventions, and verify the implementation
+  matches the spec requirements (task_id → REQ-XXX → acceptance criteria).
   Third step in the SDD pipeline. Run after implementing.
   Note: Agents are fault-tolerant. Reviewer runs even if coder fails
   (but will report compilation errors).
@@ -12,6 +13,11 @@ context_files:
   - ".dec/config/project.toml"
 next_step_hint: "If all checks pass: dectl agent run documenter --task {{task}} --var task_id={{task_id}}"
 steps:
+  - type: action
+    description: Look up task in SDD specs
+    shell: true
+    cmd: ["found=$(grep -rn -B2 -A5 '{{task_id}}' specs/*/tasks.md 2>/dev/null | head -20); if [ -z \"$found\" ]; then echo 'TASK_NOT_FOUND_IN_SPECS'; else echo \"$found\"; req=$(echo \"$found\" | grep -oE 'REQ-[A-Z0-9-]+' | head -1); if [ -n \"$req\" ]; then echo '---'; echo \"REQ=$req\"; echo '---'; grep -A5 \"$req\" specs/*/spec.md 2>/dev/null | head -20; fi; fi"]
+
   - type: action
     description: Build project
     shell: true
@@ -53,59 +59,71 @@ steps:
       # Review Report: {{task}}
       ## Task ID: {{task_id}}
 
-      ### Build
+      ### Spec Compliance
       {{step_1_output}}
 
-      ### Tests
+      ### Build
       {{step_2_output}}
 
-      ### Lint
+      ### Tests
       {{step_3_output}}
 
-      ### Change Summary
+      ### Lint
       {{step_4_output}}
 
+      ### Change Summary
+      {{step_5_output}}
+
       ### Change Stats
-      {{step_6_output}}
+      {{step_7_output}}
 
       ### Untracked Files
-      {{step_7_output}}
+      {{step_8_output}}
 
   - type: action
     description: Record review in memory
-    cmd: ["dectl", "memory", "add", "Review {{task_id}}: build+test+lint completed", "--tags", "review,{{task_id}}"]
+    cmd: ["dectl", "memory", "add", "Review {{task_id}}: spec+build+test+lint completed", "--tags", "review,{{task_id}},spec-verify"]
 
   - type: prompt
-    description: Review analysis
+    description: Review analysis with spec verification
     content: |
       ## Review: {{task}}
       **Task ID**: {{task_id}}
+
+      ### Spec Compliance Check
+      The task was looked up in the SDD specs:
+      ```
+      {{step_1_output}}
+      ```
+
+      If a REQ-XXX was found, the implementation MUST satisfy the acceptance criteria above.
+      If the task was NOT found in any spec, check if this is an ad-hoc task or if the spec needs updating.
 
       ### Automated Check Results
       See full report: `.dec/agent-output/{{task_id}}-review.md`
 
       ### Build Result
-      {{step_1_output}}
-
-      ### Test Result
       {{step_2_output}}
 
-      ### Lint Result
+      ### Test Result
       {{step_3_output}}
 
+      ### Lint Result
+      {{step_4_output}}
+
       ### Your review tasks:
-      1. Analyze the diff below for:
-         - Logic errors or edge cases not covered by tests
-         - Convention violations (check `.dec/config/project.toml`)
-         - Security concerns (input validation, error handling)
-         - Performance issues (unnecessary allocations, O(n^2) loops)
-      2. Check untracked files — should any be committed?
+      1. **Spec compliance**: Does the diff below implement the acceptance criteria from the spec? Check each criterion explicitly.
+      2. **Logic**: Edge cases, error handling, input validation.
+      3. **Conventions**: Check `.dec/config/project.toml` and project code style.
+      4. **Security**: Injection, secrets, auth gaps.
+      5. **Untracked files**: Should any be committed?
 
       ### Diff (first 500 lines):
       ```
-      {{step_5_output}}
+      {{step_6_output}}
       ```
 
       ### Verdict:
-      - PASS: `dectl agent run documenter --task "{{task}}" --var task_id={{task_id}}`
+      - PASS (spec compliant): `dectl agent run documenter --task "{{task}}" --var task_id={{task_id}}`
+      - PASS (ad-hoc, no spec): `dectl agent run documenter --task "{{task}}" --var task_id={{task_id}}`
       - FAIL: Fix issues and re-run: `dectl agent run reviewer --task "{{task}}" --var task_id={{task_id}}`

@@ -55,13 +55,15 @@ Example:
 
 ## 7. Definition of Done
 A task is complete when:
-- [ ] Code implements the spec requirement
-- [ ] **Build passes without errors** (compilation/transpile completes)
-- [ ] **Verify passes**: the feature runs and produces expected output
-- [ ] Tests pass (unit + integration)
-- [ ] PR reviewed and approved
-- [ ] No new linting errors
-- [ ] Spec/plan updated if implementation deviated
+- [ ] **Code compiles** without errors (Build passes)
+- [ ] **Verify step passes** — the feature runs and produces expected output
+- [ ] **Tests pass** (unit + integration)
+- [ ] **Constitution compliance review** — does the implementation respect all Core Principles?
+- [ ] **No new linting errors**
+- [ ] **PR reviewed and approved**
+- [ ] **Spec/plan updated** if implementation deviated
+
+> **Note**: DoD is non-negotiable. No task is complete until ALL checklist items pass. The "Constitution compliance review" prevents gradual erosion of project principles.
 ```
 
 ---
@@ -72,6 +74,14 @@ A task is complete when:
 # Feature Specification: [Feature Name]
 > *Technology-agnostic. Describes WHAT to build, not HOW.*
 > *Version: 1.0 | Status: Draft | Last updated: YYYY-MM-DD*
+
+## Project Type
+Select the type that best matches this project. This persona choice affects how requirements are framed:
+
+- **CLI project** — User interacts via terminal, not browser. Personas include "Terminal User", "CI Pipeline", "Sysadmin".
+- **Library project** — User imports the library, not an API. Personas include "Developer integrating this library", "Downstream project".
+- **API project** — User calls HTTP endpoints. Personas include "API Client", "Frontend developer", "Third-party integrator".
+- **Web application** — User interacts via browser. Personas include "End user", "Admin", "Visitor".
 
 ## Overview
 Brief description of the feature and the problem it solves.
@@ -111,10 +121,10 @@ Why is this feature needed? What user pain does it address?
 ---
 
 ## Non-Functional Requirements
-- **Performance**: (e.g., page loads in < 2s under normal load)
-- **Accessibility**: (e.g., WCAG 2.1 AA compliance)
+- **Performance**: (e.g., processes input in < 2s for typical workload)
+- **Reliability**: (e.g., zero data loss on crash)
 - **Security**: (e.g., all data encrypted at rest)
-- **Localization**: (e.g., supports English and Spanish)
+- **Composability**: (e.g., works as a UNIX pipe for CLI projects)
 
 ## Out of Scope
 Explicitly list what this feature does NOT include:
@@ -125,6 +135,17 @@ Explicitly list what this feature does NOT include:
 List unresolved questions that need answers before development starts:
 - [ ] Question 1
 - [ ] Question 2
+
+## Edge Case Catalog
+The agent MUST enumerate at least 3 edge cases per REQ. If the user has not specified edge case behavior, the agent MUST ask before proceeding. Evaluate each category:
+
+- [ ] **Null/missing input**: what happens when required data is absent?
+- [ ] **Network failure**: what happens when an external dependency is unreachable?
+- [ ] **Duplicate data**: what happens when a unique constraint is violated?
+- [ ] **Concurrent access**: what happens when two users modify the same resource?
+- [ ] **Empty state**: what does the system look like with zero data?
+- [ ] **Maximum load**: what happens at or beyond the performance threshold?
+- [ ] **Malicious input**: what happens with injection, overflow, or malformed data?
 ```
 
 ---
@@ -220,21 +241,35 @@ List any spikes or PoCs conducted:
 ## Tech Stack
 | Layer | Technology | Version | Justification |
 |-------|-----------|---------|---------------|
-| Frontend | | | |
-| Backend | | | |
+| Language | | | |
+| Program Type | CLI / API / Library / Web | | |
+| Framework | | | |
 | Database | | | |
 | Auth | | | |
 | Hosting | | | |
 
 ## Architecture Overview
+
+### API Projects
 ```
-[ASCII or Mermaid diagram of system architecture]
+[ASCII or Mermaid diagram showing client → API → DB flow]
 
 Example Mermaid:
 graph TD
     Client --> API
     API --> DB
     API --> Cache
+```
+
+### CLI / Library Projects (no API)
+```
+[ASCII or Mermaid diagram showing module/function call flow]
+
+Example Mermaid for CLI:
+graph LR
+    CLI[CLI Parser] --> Core[Core Logic]
+    Core --> Output[Output Formatter]
+    Core --> FileIO[File I/O]
 ```
 
 ## Data Flow
@@ -246,8 +281,9 @@ Describe how data moves through the system for the main use cases.
 
 **Goal**:
 
-**Build Gate**: `cargo build` / `npm run build` / `go build` — must pass with 0 errors
-**Verify Gate**: `cargo test` / `npm test` or manual smoke test confirms phase goal is met
+**Build Gate**: `[build command]` — must pass with 0 errors
+  - Examples: `cargo build` (Rust), `go build` (Go), `npm run build` (JS/TS), `python -m build` (Python)
+**Verify Gate**: `[test command]` or manual smoke test confirms phase goal is met
 **Rule**: Each task in this phase MUST compile and verify BEFORE the next task begins
 
 **Deliverables**:
@@ -260,8 +296,8 @@ Describe how data moves through the system for the main use cases.
 
 **Goal**:
 
-**Build Gate**: `cargo build` / `npm run build` / `go build` — must pass with 0 errors
-**Verify Gate**: `cargo test` / `npm test` or manual smoke test confirms phase goal is met
+**Build Gate**: `[build command]` — must pass with 0 errors
+**Verify Gate**: `[test command]` or manual smoke test confirms phase goal is met
 **Rule**: Each task in this phase MUST compile and verify BEFORE the next task begins
 
 **Deliverables**:
@@ -284,6 +320,28 @@ Describe how data moves through the system for the main use cases.
 - Integration tests: [strategy]
 - E2E tests: [strategy]
 - **Per-task verification**: after each task, compile + verify before proceeding to next
+
+## Purity Boundaries
+Define which components are pure (no side effects: same input → same output, no I/O) and which are impure (perform I/O, mutate state, or call external systems).
+
+| Component | Type | Reason |
+|-----------|------|--------|
+| `[module name]` | Pure / Impure | [justification] |
+
+> Marking purity boundaries helps the AI agent reason about testability and parallel safety. Pure functions need only unit tests; impure functions need integration tests.
+
+## Drift Detection
+Drift is when the implemented code no longer matches the spec. Detect drift by:
+
+- **Automated**: run test suite (`cargo test`, `pytest`) — if a test that was passing now fails, drift is detected
+- **Manual**: compare spec acceptance criteria against actual behavior during code review
+- **Structural**: run `dectl session end` at the end of each session — the decision capture log should match the spec REQs
+
+### Drift Detection Checklist
+- [ ] All REQ-xxx acceptance criteria have corresponding tests
+- [ ] Test suite passes before every commit
+- [ ] `dectl session end` confirms no undocumented decisions
+- [ ] If drift detected: pause → update spec.md → update tasks.md → resume
 ```
 
 ---
@@ -294,14 +352,16 @@ Describe how data moves through the system for the main use cases.
 # Data Model
 > *Defines all entities, their attributes, and relationships.*
 
+> **Note**: For CLI/library projects without databases, this section documents internal data structures (structs, enums, traits) instead of database tables.
+
 ## Entities
 
 ### [EntityName]
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| id | UUID | ✅ | Primary key |
-| created_at | timestamp | ✅ | Auto-set on creation |
-| ... | | | |
+| Field | Type | Required | Indexes | Constraints | Description |
+|-------|------|----------|---------|-------------|-------------|
+| id | UUID | ✅ | PK | | Primary key |
+| created_at | timestamp | ✅ | INDEX | | Auto-set on creation |
+| ... | | | | | |
 
 ### [EntityName2]
 ...
@@ -316,24 +376,61 @@ Describe entity relationships:
 [ERD in ASCII or Mermaid format]
 ```
 
+## Code-Level Data Structures (for non-DB projects)
+If the project has no database, document the core data structures instead:
+
+```rust
+// Example: Rust struct
+pub struct Config {
+    pub verbose: bool,
+    pub output_format: OutputFormat,
+    pub input_path: Option<PathBuf>,
+}
+
+pub enum OutputFormat {
+    Text,
+    Json,
+    Csv,
+}
+```
+
+```typescript
+// Example: TypeScript interface
+interface Task {
+  id: string;
+  title: string;
+  status: 'pending' | 'in-progress' | 'done';
+  createdAt: Date;
+}
+```
+
 ## Migration Notes
 If modifying an existing schema, describe migrations needed.
 ```
 
 ---
 
-## interface-contracts/api.md
+## interface-contracts/{api,cli,lib}.md
 
 ```markdown
-# API Interface Contracts
+# Interface Contracts
+
+## Interface Type
+Select the type that matches this project:
+
+- **`type: api`** — REST/GraphQL endpoints. Document with OpenAPI-style endpoint definitions.
+- **`type: cli`** — CLI commands, flags, and arguments. Document with usage + flag tables.
+- **`type: library`** — Public API functions/methods. Document with function signatures + examples.
+
+---
+
+### API Template
 
 ## Base URL
 `/api/v1`
 
 ## Authentication
 All endpoints require `Authorization: Bearer <token>` unless marked 🔓.
-
----
 
 ## Endpoints
 
@@ -363,6 +460,67 @@ All endpoints require `Authorization: Bearer <token>` unless marked 🔓.
 - `409 Conflict`: Resource already exists
 
 ---
+
+### CLI Template
+
+## Usage
+```
+[command] [ARGS] [OPTIONS]
+```
+
+## Arguments
+| Argument | Type | Required | Description |
+|----------|------|----------|-------------|
+| FILE | Path | No | Input file path. Reads from stdin if omitted. |
+
+## Options
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--output, -o` | String | text | Output format |
+| `--verbose, -v` | Flag | false | Enable verbose logging |
+
+## Exit Codes
+| Code | Meaning |
+|------|---------|
+| 0 | Success |
+| 1 | Error |
+
+## Examples
+```bash
+# Basic usage
+command input.txt
+
+# With options
+command input.txt --output json --verbose
+```
+
+---
+
+### Library Template
+
+## Public API
+
+### `fn do_something(input: Type) -> Result<Output>`
+**Description**: What this function does.
+**Parameters**:
+| Name | Type | Description |
+|------|------|-------------|
+| input | Type | Description of the input |
+**Returns**: Description of the return value.
+**Example**:
+```rust
+let result = do_something(my_input);
+assert!(result.is_ok());
+```
+
+### `fn process_data(config: Config) -> Vec<Item>`
+**Description**: Processes data based on configuration.
+**Throws**: Panics if config is invalid.
+**Example**:
+```rust
+let items = process_data(Config::default());
+println!("{} items processed", items.len());
+```
 ```
 
 ---
@@ -386,46 +544,48 @@ All endpoints require `Authorization: Bearer <token>` unless marked 🔓.
 
 ---
 
-## Phase 1: [Name]
+> **Note**: Tasks in this template are generic placeholders. Replace with your project's actual first phase tasks.
 
-**Build Gate**: `cargo build` / `npm run build` / `go build` — must pass with 0 errors before phase is complete
+## Phase 1: Foundation
+
+**Build Gate**: `[build command]` — must pass with 0 errors before phase is complete
 
 - [ ] [T001] [Setup] Initialize project structure and install dependencies — S
-  **Build**: `cargo build` passes without errors
-  **Verify**: `cargo run` starts without errors
+  **Build**: `[build command]` passes without errors
+  **Verify**: project runs without errors (e.g., `--help`, `/health`, or import works)
   **Gate**: must pass before T002
 
-- [ ] [T002] [Setup] Configure environment variables and secrets management — S
-  **Build**: `cargo build` passes without errors
-  **Verify**: environment variables are loaded correctly (check with print/debug)
+- [ ] [T002] [Setup] Configure build system and linting — S
+  **Build**: `[build command]` passes without errors
+  **Verify**: linter passes with 0 errors
   **Gate**: must pass before T003
 
-- [ ] [T003][P] [Auth] Create database schema for users table — S (REQ-001)
-  **Build**: `cargo build` passes without errors
-  **Verify**: `cargo db:migrate` creates users table, verify with `\dt` or equivalent
+- [ ] [T003] [Core] Implement core data structures/types — S (REQ-001)
+  **Build**: `[build command]` passes without errors
+  **Verify**: unit tests for core types pass
   **Gate**: must pass before T004
 
-- [ ] [T004][P] [Auth] Implement POST /auth/register endpoint — M (REQ-001)
-  **Build**: `cargo build` passes without errors
-  **Verify**: `curl -X POST localhost:3000/auth/register -d '{"email":"test@test.com","password":"123"}'` returns 201
+- [ ] [T004][P] [Core] Implement primary business logic function/module — M (REQ-001)
+  **Build**: `[build command]` passes without errors
+  **Verify**: `[test command]` passes for the module
   **Gate**: must pass before T005
 
-- [ ] [T005] [Auth] Implement POST /auth/login endpoint with JWT — M (REQ-001)
-  **Build**: `cargo build` passes without errors
-  **Verify**: `curl -X POST localhost:3000/auth/login -d '{"email":"test@test.com","password":"123"}'` returns 200 with JWT token
+- [ ] [T005][P] [Core] Implement secondary business logic — M (REQ-002)
+  **Build**: `[build command]` passes without errors
+  **Verify**: `[test command]` passes for the module
   **Gate**: must pass before T006
 
-- [ ] [T006] [Auth] Write unit tests for auth service — M (REQ-001)
-  **Build**: `cargo build` passes without errors
-  **Verify**: `cargo test auth` passes all auth-related tests
+- [ ] [T006] [Core] Write unit tests for core modules — M (REQ-001, REQ-002)
+  **Build**: `[build command]` passes without errors
+  **Verify**: `[test command]` passes all tests with >= 80% coverage
   **Gate**: must pass before T007
 
 ## Phase 2: [Name]
 
-**Build Gate**: `cargo build` / `npm run build` / `go build` — must pass with 0 errors before phase is complete
+**Build Gate**: `[build command]` — must pass with 0 errors before phase is complete
 
-- [ ] [T007] [Feature] ... — M (REQ-002)
-  **Build**: `cargo build` passes without errors
+- [ ] [T007] [Feature] ... — M (REQ-003)
+  **Build**: `[build command]` passes without errors
   **Verify**: [specific verify step for this task]
   **Gate**: must pass before T008
 

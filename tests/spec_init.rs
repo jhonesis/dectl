@@ -51,6 +51,86 @@ fn test_spec_init_creates_sdd_dir() {
     let skill = fs::read_to_string(tmp.path().join(".dec/sdd/SKILL.md")).unwrap();
     assert!(skill.contains("Spec-Driven Development"));
     assert!(skill.contains("Build: + Verify: + Gate:"));
+
+    // Phase 1: 4 diverse examples, no TaskFlow, traceability
+    let examples = fs::read_to_string(tmp.path().join(".dec/sdd/references/examples.md")).unwrap();
+    assert!(examples.contains("logsnap"), "examples.md missing logsnap");
+    assert!(
+        examples.contains("SnippetVault"),
+        "examples.md missing SnippetVault"
+    );
+    assert!(
+        examples.contains("LegacyPay"),
+        "examples.md missing LegacyPay"
+    );
+    assert!(
+        examples.contains("EventStream"),
+        "examples.md missing EventStream"
+    );
+    assert!(
+        examples.contains("HabitStack"),
+        "examples.md missing HabitStack web example"
+    );
+    assert!(
+        !examples.contains("TaskFlow"),
+        "examples.md should not contain old TaskFlow example"
+    );
+    assert!(
+        examples.contains("Traceability Matrix"),
+        "examples.md missing Traceability Matrix"
+    );
+
+    // Phase 2: project-agnostic templates with new sections
+    let templates =
+        fs::read_to_string(tmp.path().join(".dec/sdd/references/templates.md")).unwrap();
+    assert!(
+        templates.contains("Program Type") || templates.contains("Interface Type"),
+        "templates.md missing project-type-agnostic sections"
+    );
+    assert!(
+        templates.contains("Edge Case Catalog"),
+        "templates.md missing Edge Case Catalog"
+    );
+    assert!(
+        templates.contains("Purity Boundaries"),
+        "templates.md missing Purity Boundaries"
+    );
+    assert!(
+        templates.contains("Drift Detection"),
+        "templates.md missing Drift Detection"
+    );
+    assert!(
+        templates.contains("Constitution compliance review"),
+        "templates.md missing Constitution compliance review"
+    );
+
+    // Phase 3: skill.md enhancements
+    assert!(
+        !skill.contains("quiero planificar"),
+        "skill.md should have no Spanish"
+    );
+    assert!(skill.contains("Step 5"), "skill.md missing Step 5");
+    assert!(
+        skill.contains("dectl memory add"),
+        "skill.md missing dectl memory integration"
+    );
+    assert!(
+        skill.contains("Coordinator"),
+        "skill.md missing Coordinator role"
+    );
+    assert!(
+        skill.contains("Implementer"),
+        "skill.md missing Implementer role"
+    );
+    assert!(skill.contains("Verifier"), "skill.md missing Verifier role");
+    assert!(
+        skill.contains("Clarification Phase"),
+        "skill.md missing Clarification Phase"
+    );
+    assert!(
+        skill.contains("WHAT vs HOW"),
+        "skill.md missing WHAT vs HOW separation"
+    );
 }
 
 #[test]
@@ -103,6 +183,44 @@ fn test_spec_init_idempotent() {
 
     let second = run_dectl(&["spec", "init"], tmp.path());
     assert!(second.status.success());
+}
+
+#[test]
+fn test_spec_init_file_sizes() {
+    let tmp = TempDir::new().unwrap();
+    create_dec_base(&tmp);
+
+    let output = run_dectl(&["spec", "init"], tmp.path());
+    assert!(output.status.success());
+
+    let skill_lines = fs::read_to_string(tmp.path().join(".dec/sdd/SKILL.md"))
+        .unwrap()
+        .lines()
+        .count();
+    let templates_lines = fs::read_to_string(tmp.path().join(".dec/sdd/references/templates.md"))
+        .unwrap()
+        .lines()
+        .count();
+    let examples_lines = fs::read_to_string(tmp.path().join(".dec/sdd/references/examples.md"))
+        .unwrap()
+        .lines()
+        .count();
+
+    assert!(
+        (260..=400).contains(&skill_lines),
+        "SKILL.md has {} lines, expected 260-400",
+        skill_lines
+    );
+    assert!(
+        (480..=700).contains(&templates_lines),
+        "templates.md has {} lines, expected 480-700",
+        templates_lines
+    );
+    assert!(
+        (1800..=2200).contains(&examples_lines),
+        "examples.md has {} lines, expected 1800-2200",
+        examples_lines
+    );
 }
 
 #[test]
