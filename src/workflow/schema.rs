@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 use std::fmt;
+
+#[cfg(test)]
+use std::collections::HashSet;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -56,6 +58,10 @@ pub struct Step {
     pub parallel: Option<bool>,
     #[serde(default)]
     pub run_always: Option<bool>,
+    #[serde(default)]
+    pub skip_if: Option<String>,
+    #[serde(default)]
+    pub timeout_secs: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -68,7 +74,7 @@ pub struct Workflow {
 }
 
 impl Workflow {
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn required_input_names(&self) -> HashSet<&str> {
         self.inputs
             .iter()

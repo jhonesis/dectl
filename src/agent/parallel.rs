@@ -1,8 +1,8 @@
 use crate::agent::schema::{AgentResult, AgentRunStatus};
+use crate::bail_app_err;
 use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::mpsc;
-use std::thread;
 
 pub fn run_parallel(
     agent_types: &[String],
@@ -18,9 +18,12 @@ pub fn run_parallel(
         let agent = crate::agent::loader::load_agent(agent_type);
         match agent {
             Some((def, _)) => agents.push(def),
-            None => anyhow::bail!(
-                "Agent '{}' not found. Run 'dectl agent list' to see available agents.",
-                agent_type
+            None => bail_app_err!(
+                format!(
+                    "Agent '{}' not found. Run 'dectl agent list' to see available agents.",
+                    agent_type
+                ),
+                "Specify agent types with --parallel type1,type2"
             ),
         }
     }
@@ -37,8 +40,9 @@ pub fn run_parallel(
         let task = task.clone();
         let vars = vars.clone();
         let agent_type = agent_types[i].clone();
+        let timeout = timeout_secs;
 
-        let handle = thread::spawn(move || {
+        let handle = std::thread::spawn(move || {
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 crate::agent::runner::run_agent(
                     &agent_def,
@@ -46,7 +50,7 @@ pub fn run_parallel(
                     &vars,
                     None,
                     dry_run,
-                    timeout_secs,
+                    timeout,
                     non_interactive,
                     &mode,
                     false,

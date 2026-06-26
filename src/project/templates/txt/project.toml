@@ -36,3 +36,10 @@ command = ""
 # Command to run linter. Optional. Used by reviewer agent for code quality checks.
 # Example: "cargo clippy" or "npx eslint ."
 command = ""
+
+[session]
+# Workflow hooks to run at the end of each session.
+# Each entry is a workflow name from .dec/workflows/.
+# Hooks run after all other session end steps, in order.
+# If a hook fails, other hooks and main steps continue.
+hooks = []

@@ -296,11 +296,15 @@ fn test_context_format_compact() {
         stdout
     );
     assert!(
-        stdout.contains("project:"),
+        stdout.contains("\"project\":"),
         "Missing project: in:\n{}",
         stdout
     );
-    assert!(stdout.contains("stack:"), "Missing stack: in:\n{}", stdout);
+    assert!(
+        stdout.contains("\"stack\":"),
+        "Missing stack: in:\n{}",
+        stdout
+    );
 }
 
 #[test]

@@ -1,6 +1,6 @@
 use crate::core::output::{Output, OutputMode};
 use crate::session::types::SessionEndResult;
-use crate::session::{agent_sync, config_sync, decision_capture, git_sync, session_summary};
+use crate::session::{agent_sync, config_sync, decision_capture, git_sync, hooks, session_summary};
 use anyhow::Result;
 
 pub fn run(dry_run: bool, skip_git: bool, _non_interactive: bool, mode: OutputMode) -> Result<()> {
@@ -138,6 +138,28 @@ pub fn run(dry_run: bool, skip_git: bool, _non_interactive: bool, mode: OutputMo
         }
     }
 
+    // Step 6: Run session hooks
+    match hooks::load_hooks() {
+        Ok(hook_list) => {
+            if hook_list.is_empty() {
+                result.add_step("hooks", true, "no hooks configured");
+            } else {
+                let hook_results = hooks::execute_hooks(&hook_list, dry_run);
+                let success_count = hook_results.iter().filter(|(_, ok, _)| *ok).count();
+                let fail_count = hook_results.len() - success_count;
+                let msg = if fail_count > 0 {
+                    format!("{} hooks ran, {} failed", hook_results.len(), fail_count)
+                } else {
+                    format!("{} hooks completed", hook_results.len())
+                };
+                result.add_step("hooks", success_count > 0, &msg);
+            }
+        }
+        Err(e) => {
+            result.add_step("hooks", false, &format!("failed to load hooks: {}", e));
+        }
+    }
+
     // Output results
     print_result(&result, mode);
 
@@ -205,7 +227,7 @@ fn print_result(result: &SessionEndResult, mode: OutputMode) {
         };
         Output::print(&output, mode);
     } else {
-        println!("\n{}", "Session ended.".bold());
+        println!("\n{}", "Session ended.".color(palette::SUCCESS).bold());
         println!();
         for step in &result.steps {
             let icon = if step.success { "✅" } else { "❌" };
@@ -216,7 +238,10 @@ fn print_result(result: &SessionEndResult, mode: OutputMode) {
         }
         if let Some(config) = &result.config_changes {
             if !config.isa_warnings.is_empty() {
-                println!("\n{}", "ISA coherence warnings:".yellow().bold());
+                println!(
+                    "\n{}",
+                    "ISA coherence warnings:".color(palette::WARNING).bold()
+                );
                 for warning in &config.isa_warnings {
                     println!("  ⚠ {}", warning);
                 }
@@ -227,3 +252,5 @@ fn print_result(result: &SessionEndResult, mode: OutputMode) {
 }
 
 use colored::Colorize;
+
+use crate::core::output::palette;

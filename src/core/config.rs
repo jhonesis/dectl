@@ -49,7 +49,7 @@ impl GlobalConfig {
             let default_config = GlobalConfig::default();
             default_config.ensure_dir()?;
             default_config.save()?;
-            eprintln!("Created default config at {:?}", config_path);
+            log::info!("Created default config at {:?}", config_path);
             return Ok(default_config);
         }
 

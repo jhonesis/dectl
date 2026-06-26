@@ -1,8 +1,10 @@
 pub mod add;
-pub mod db;
 pub mod delete;
 pub mod edit;
+pub mod export;
+pub mod import;
 pub mod list;
 pub mod query;
+pub mod restore;
 pub mod search;
 pub mod show;

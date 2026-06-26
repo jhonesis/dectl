@@ -2,7 +2,6 @@ use anyhow::{Context, Result};
 use chrono::Utc;
 use std::fs;
 use std::path::Path;
-use std::process::Command;
 
 use crate::session::types::SessionSummary;
 
@@ -20,7 +19,7 @@ pub fn generate_session_summary() -> Result<SessionSummary> {
     }
 
     // Extract git information if in a git repo
-    if is_git_repo(project_root) {
+    if crate::core::git::is_git_repo() {
         extract_git_actions(project_root, &mut summary)?;
     }
 
@@ -114,80 +113,31 @@ fn format_summary(summary: &SessionSummary) -> String {
     output
 }
 
-fn is_git_repo(path: &Path) -> bool {
-    Command::new("git")
-        .arg("rev-parse")
-        .arg("--is-inside-work-tree")
-        .current_dir(path)
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
-}
+fn extract_git_actions(_project_root: &Path, summary: &mut SessionSummary) -> Result<()> {
+    use crate::core::git;
 
-fn extract_git_actions(project_root: &Path, summary: &mut SessionSummary) -> Result<()> {
-    // Get recent commits
-    let git_log = Command::new("git")
-        .arg("log")
-        .arg("--oneline")
-        .arg("-20")
-        .current_dir(project_root)
-        .output();
-
-    if let Ok(output) = git_log {
-        if output.status.success() {
-            let log_str = String::from_utf8_lossy(&output.stdout);
-            for line in log_str.lines() {
-                if !line.trim().is_empty() {
-                    // Remove the commit hash prefix (e.g., "abc1234 ")
-                    let parts: Vec<&str> = line.splitn(2, ' ').collect();
-                    if parts.len() == 2 {
-                        summary.actions.push(parts[1].to_string());
-                    } else {
-                        summary.actions.push(line.trim().to_string());
-                    }
-                }
-            }
-        }
+    for commit in git::recent_commits(20)? {
+        summary.actions.push(commit.message);
     }
 
-    // Get modified files for additional context
-    let git_diff = Command::new("git")
-        .arg("diff")
-        .arg("--name-only")
-        .arg("HEAD~10..HEAD")
-        .current_dir(project_root)
-        .output();
-
-    if let Ok(output) = git_diff {
-        if output.status.success() {
-            let diff_str = String::from_utf8_lossy(&output.stdout);
-            let modified: Vec<String> = diff_str
-                .lines()
-                .filter(|l| !l.trim().is_empty())
-                .map(|l| l.trim().to_string())
-                .collect();
-
-            if !modified.is_empty() {
-                let file_summary = format!(
-                    "{} archivo(s) modificado(s): {}",
-                    modified.len(),
-                    modified
-                        .iter()
-                        .take(5)
-                        .cloned()
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                );
-                if modified.len() > 5 {
-                    summary.decisions.push(format!(
-                        "{} (y {} más)",
-                        file_summary,
-                        modified.len() - 5
-                    ));
-                } else {
-                    summary.decisions.push(file_summary);
-                }
-            }
+    let modified = git::diff_since("HEAD~10")?;
+    if !modified.is_empty() {
+        let file_summary = format!(
+            "{} archivo(s) modificado(s): {}",
+            modified.len(),
+            modified
+                .iter()
+                .take(5)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        if modified.len() > 5 {
+            summary
+                .decisions
+                .push(format!("{} (y {} más)", file_summary, modified.len() - 5));
+        } else {
+            summary.decisions.push(file_summary);
         }
     }
 

@@ -1,8 +1,9 @@
+use crate::bail_app_err;
 use anyhow::{Context, Result};
 use serde::Serialize;
 use std::io::Read;
 
-use super::db::DbConn;
+use crate::core::db::{get_db, Storage};
 use crate::core::output::OutputMode;
 
 #[derive(Debug, Serialize)]
@@ -30,7 +31,10 @@ pub fn run(
                 .read_to_string(&mut input)
                 .context("Failed to read from stdin")?;
             if input.is_empty() {
-                anyhow::bail!("No content provided. Use argument or pipe content via stdin.");
+                bail_app_err!(
+                    "No content provided. Use argument or pipe content via stdin.",
+                    "Use: dectl memory add \"your content\""
+                );
             }
             input.trim().to_string()
         }
@@ -45,26 +49,29 @@ pub fn run(
         })
         .unwrap_or_default();
 
-    let valid_types = super::db::VALID_TYPES;
+    let valid_types = crate::core::db::VALID_TYPES;
     if !valid_types.contains(&type_.as_str()) {
-        anyhow::bail!(
-            "Invalid type '{}'. Valid types: {}",
-            type_,
-            valid_types.join(", ")
+        bail_app_err!(
+            format!(
+                "Invalid type '{}'. Valid types: {}",
+                type_,
+                valid_types.join(", ")
+            ),
+            "Valid types: note, decision, research, code, session, agent, task"
         );
     }
 
-    let db = DbConn::new()?;
+    let db = get_db()?;
     let now = chrono::Utc::now().to_rfc3339();
     let tags_str = tags.join(",");
     let project_str = project.clone();
 
-    db.conn().execute(
+    db.execute(
         "INSERT INTO memories (content, tags, project, created_at, updated_at, type) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         rusqlite::params![content, tags_str, project_str, now, now, type_],
     )?;
 
-    let id = db.conn().last_insert_rowid();
+    let id = db.last_insert_rowid();
 
     let output = MemoryAddOutput {
         id,
@@ -74,21 +81,7 @@ pub fn run(
         created_at: now,
     };
 
-    match mode {
-        OutputMode::Json => {
-            let envelope = crate::core::output::JsonEnvelope::ok(&output);
-            println!("{}", serde_json::to_string_pretty(&envelope)?);
-        }
-        OutputMode::Human => {
-            println!("Added memory entry #{}", id);
-            if !output.tags.is_empty() {
-                println!("Tags: {}", output.tags.join(", "));
-            }
-            if let Some(ref p) = output.project {
-                println!("Project: {}", p);
-            }
-        }
-    }
+    mode.print(&output)?;
 
     Ok(())
 }

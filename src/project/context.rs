@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use indicatif::ProgressStyle;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 
@@ -313,6 +314,24 @@ pub fn run(max_tokens: Option<usize>, format: String, mode: OutputMode) -> Resul
 
     let max_tokens = max_tokens.unwrap_or(DEFAULT_MAX_TOKENS).max(1);
 
+    let _spinner = if !mode.is_json() && is_terminal::is_terminal(std::io::stdout()) {
+        let pb = indicatif::ProgressBar::new_spinner();
+        pb.set_style(ProgressStyle::default_spinner().tick_strings(&[
+            "▹▹▹▹▹",
+            "▸▹▹▹▹",
+            "▹▸▹▹▹",
+            "▹▹▸▹▹",
+            "▹▹▹▸▹",
+            "▹▹▹▹▸",
+            "▪▪▪▪▪",
+        ]));
+        pb.set_message("Scanning project context...");
+        pb.enable_steady_tick(std::time::Duration::from_millis(80));
+        Some(pb)
+    } else {
+        None
+    };
+
     let mut files_data: Vec<FileContent> = Vec::new();
     let mut section_weights: Vec<f64> = Vec::new();
 
@@ -395,6 +414,10 @@ pub fn run(max_tokens: Option<usize>, format: String, mode: OutputMode) -> Resul
         truncated_content.push_str(&format!("\n## {}\n\n{}\n", file.path, file.content));
     }
 
+    if let Some(spinner) = &_spinner {
+        spinner.finish_and_clear();
+    }
+
     let final_tokens = count_tokens(&truncated_content);
 
     if format == "compact" {
@@ -411,53 +434,27 @@ pub fn run(max_tokens: Option<usize>, format: String, mode: OutputMode) -> Resul
             memory_hits: count_memory_hits(),
         };
 
-        match mode {
-            OutputMode::Json => {
-                let envelope = crate::core::output::JsonEnvelope::ok(&compact);
-                println!("{}", serde_json::to_string_pretty(&envelope)?);
-            }
-            OutputMode::Human => {
-                println!("project: {}", compact.project);
-                println!("stack: {}", compact.stack);
-                println!("last_session: {}", compact.last_session);
-                println!("progress: {}", compact.progress);
-                println!("decisions: {}", compact.decisions);
-                println!("memory_hits: {}", compact.memory_hits);
-            }
-        }
+        mode.print(&compact)?;
         return Ok(());
     }
 
-    match (format.as_str(), mode) {
-        ("json", OutputMode::Json) => {
-            let output = ContextJsonOutput {
-                project: project_name,
-                tokens_used: final_tokens,
-                tokens_limit: max_tokens,
-                files: files_data,
-            };
-            let envelope = crate::core::output::JsonEnvelope::ok(&output);
-            println!("{}", serde_json::to_string_pretty(&envelope)?);
-        }
-        ("json", OutputMode::Human) => {
-            let output = ContextJsonOutput {
-                project: project_name,
-                tokens_used: final_tokens,
-                tokens_limit: max_tokens,
-                files: files_data,
-            };
-            println!("{}", serde_json::to_string_pretty(&output)?);
-        }
-        _ => {
-            let output = ContextOutput {
-                project: project_name,
-                tokens_used: final_tokens,
-                tokens_limit: max_tokens,
-                content: truncated_content,
-            };
-            println!("{}", output.content);
-            println!("\n---\ntokens: {}/{}", final_tokens, max_tokens);
-        }
+    if format == "json" {
+        let output = ContextJsonOutput {
+            project: project_name,
+            tokens_used: final_tokens,
+            tokens_limit: max_tokens,
+            files: files_data,
+        };
+        mode.print(&output)?;
+    } else {
+        let output = ContextOutput {
+            project: project_name,
+            tokens_used: final_tokens,
+            tokens_limit: max_tokens,
+            content: truncated_content,
+        };
+        println!("{}", output.content);
+        println!("\n---\ntokens: {}/{}", final_tokens, max_tokens);
     }
 
     Ok(())

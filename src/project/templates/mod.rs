@@ -97,6 +97,10 @@ impl Templates {
             ),
             (".dec/sdd/SKILL.md", include_str!("txt/sdd_skill.md")),
             (
+                ".dec/workflows/post_session_cleanup.yaml",
+                include_str!("txt/workflow_post_session_cleanup.yaml"),
+            ),
+            (
                 ".dec/sdd/references/templates.md",
                 include_str!("txt/sdd_templates.md"),
             ),

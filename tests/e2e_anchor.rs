@@ -179,10 +179,13 @@ fn test_anchor_moment_full_flow() {
         compact_stdout
     );
     assert!(
-        compact_stdout.contains("project:"),
+        compact_stdout.contains("\"project\":"),
         "compact missing project:"
     );
-    assert!(compact_stdout.contains("stack:"), "compact missing stack:");
+    assert!(
+        compact_stdout.contains("\"stack\":"),
+        "compact missing stack:"
+    );
 }
 
 #[test]

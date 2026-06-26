@@ -68,7 +68,7 @@ impl TrustConfig {
         }
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn untrust(&mut self, project_path: &str, workflow_name: &str) {
         self.trusted_entries
             .retain(|e| !(e.project_path == project_path && e.workflow_name == workflow_name));

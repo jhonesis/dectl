@@ -1,8 +1,8 @@
+use crate::bail_app_err;
 use anyhow::{Context, Result};
-use colored::Colorize;
 use serde::Serialize;
 
-use super::db::DbConn;
+use crate::core::db::{get_db, Storage};
 use crate::core::output::OutputMode;
 
 #[derive(Debug, Serialize)]
@@ -11,17 +11,26 @@ pub struct MemoryEditOutput {
     pub updated_at: String,
 }
 
-fn get_editor() -> String {
-    std::env::var("EDITOR")
-        .or_else(|_| std::env::var("VISUAL"))
-        .unwrap_or_else(|_| "vi".to_string())
+fn get_editor() -> Result<String> {
+    for var in &["EDITOR", "VISUAL"] {
+        if let Ok(val) = std::env::var(var) {
+            if !val.trim().is_empty() {
+                return Ok(val);
+            }
+        }
+    }
+    for editor in &["vi", "nano", "vim"] {
+        if which::which(editor).is_ok() {
+            return Ok(editor.to_string());
+        }
+    }
+    anyhow::bail!("No editor found")
 }
 
 pub fn run(id: i64, mode: OutputMode) -> Result<()> {
-    let db = DbConn::new()?;
+    let db = get_db()?;
 
     let (content, _tags, _project): (String, Option<String>, Option<String>) = db
-        .conn()
         .query_row(
             "SELECT content, tags, project FROM memories WHERE id = ?1 AND deleted_at IS NULL",
             rusqlite::params![id],
@@ -38,7 +47,10 @@ pub fn run(id: i64, mode: OutputMode) -> Result<()> {
 
     std::fs::write(temp_file.path(), &temp_content).context("Failed to write to temporary file")?;
 
-    let editor = get_editor();
+    let editor = match get_editor() {
+        Ok(e) => e,
+        Err(_) => bail_app_err!("No editor found", "Install nano or set $EDITOR"),
+    };
     let editor_path = which::which(&editor).unwrap_or_else(|_| std::path::PathBuf::from(&editor));
 
     let status = std::process::Command::new(&editor_path)
@@ -47,7 +59,10 @@ pub fn run(id: i64, mode: OutputMode) -> Result<()> {
         .context(format!("Failed to execute editor: {}", editor))?;
 
     if !status.success() {
-        anyhow::bail!("Editor exited with non-zero status");
+        bail_app_err!(
+            "Editor exited with non-zero status",
+            "Check your $EDITOR configuration"
+        );
     }
 
     let edited = std::fs::read_to_string(temp_file.path()).context("Failed to read edited file")?;
@@ -61,17 +76,22 @@ pub fn run(id: i64, mode: OutputMode) -> Result<()> {
         .to_string();
 
     if new_content.is_empty() {
-        anyhow::bail!("Empty content - edit cancelled");
+        bail_app_err!(
+            "Empty content - edit cancelled",
+            "Write content before saving"
+        );
     }
 
     if new_content == content {
-        println!("{}", "No changes detected.".dimmed());
+        if !mode.is_json() {
+            println!("No changes detected.");
+        }
         return Ok(());
     }
 
     let now = chrono::Utc::now().to_rfc3339();
 
-    db.conn().execute(
+    db.execute(
         "UPDATE memories SET content = ?1, updated_at = ?2 WHERE id = ?3",
         rusqlite::params![new_content, now, id],
     )?;
@@ -81,15 +101,7 @@ pub fn run(id: i64, mode: OutputMode) -> Result<()> {
         updated_at: now,
     };
 
-    match mode {
-        OutputMode::Json => {
-            let envelope = crate::core::output::JsonEnvelope::ok(&output);
-            println!("{}", serde_json::to_string_pretty(&envelope)?);
-        }
-        OutputMode::Human => {
-            println!("{}", format!("Memory #{} updated.", id).green());
-        }
-    }
+    mode.print(&output)?;
 
     Ok(())
 }

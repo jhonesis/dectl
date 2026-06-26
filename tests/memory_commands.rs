@@ -19,7 +19,7 @@ fn test_memory_add() {
     let output = run_dectl(&["memory", "add", "Test memory content"], tmp.path());
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Added memory"));
+    assert!(stdout.contains("\"content_preview\":"));
 }
 
 #[test]
@@ -96,14 +96,10 @@ fn test_memory_add_and_show() {
     assert!(output.status.success());
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let id_line = stdout
-        .lines()
-        .find(|l| l.contains("Added memory entry #"))
-        .unwrap_or_default();
-    let binding = id_line.replace("Added memory entry #", "");
-    let id_str = binding.trim().to_string();
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).expect("Valid JSON");
+    let id = parsed["id"].as_i64().expect("id field");
 
-    let output = run_dectl(&["memory", "show", &id_str], tmp.path());
+    let output = run_dectl(&["memory", "show", &id.to_string()], tmp.path());
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Show test content"));
@@ -143,19 +139,14 @@ fn test_memory_add_with_type() {
     assert!(output.status.success());
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let id_line = stdout
-        .lines()
-        .find(|l| l.contains("Added memory entry #"))
-        .unwrap_or_default();
-    let id_str = id_line
-        .replace("Added memory entry #", "")
-        .trim()
-        .to_string();
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).expect("Valid JSON");
+    let id = parsed["id"].as_i64().expect("id field");
 
-    let output = run_dectl(&["memory", "show", &id_str], tmp.path());
+    let output = run_dectl(&["memory", "show", &id.to_string()], tmp.path());
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Type: decision"));
+    assert!(stdout.contains("decision"));
+    assert!(stdout.contains("test"));
 }
 
 #[test]
@@ -165,19 +156,13 @@ fn test_memory_type_default() {
     assert!(output.status.success());
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let id_line = stdout
-        .lines()
-        .find(|l| l.contains("Added memory entry #"))
-        .unwrap_or_default();
-    let id_str = id_line
-        .replace("Added memory entry #", "")
-        .trim()
-        .to_string();
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).expect("Valid JSON");
+    let id = parsed["id"].as_i64().expect("id field");
 
-    let output = run_dectl(&["memory", "show", &id_str], tmp.path());
+    let output = run_dectl(&["memory", "show", &id.to_string()], tmp.path());
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Type: note"));
+    assert!(stdout.contains("\"type\": \"note\""));
 }
 
 #[test]

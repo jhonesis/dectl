@@ -1,3 +1,4 @@
+use crate::bail_app_err;
 use anyhow::{Context, Result};
 use is_terminal::IsTerminal;
 use std::fs;
@@ -16,9 +17,10 @@ pub fn run(level: InitLevel, project_type: ProjectType, _interactive: bool) -> R
     let dec_path = Path::new(".dec");
 
     if dec_path.exists() {
-        anyhow::bail!(
+        bail_app_err!(
             ".dec/ already exists. Remove it first if you want to reinitialize.\n\
-             Hint: rm -rf .dec/"
+             Hint: rm -rf .dec/",
+            "Use --type cli, api, microservice, or other"
         );
     }
 

@@ -1,3 +1,4 @@
+use crate::bail_app_err;
 use crate::workflow::schema::{StepType, Workflow};
 use anyhow::{Context, Result};
 use std::collections::HashMap;
@@ -6,6 +7,28 @@ use std::path::Path;
 use std::process::Command;
 
 use super::interpolate::interpolate;
+
+fn run_cmd_with_timeout(
+    mut cmd: Command,
+    timeout_secs: Option<u64>,
+    desc: String,
+) -> Result<std::process::Output> {
+    match timeout_secs {
+        Some(timeout) => {
+            let output = crate::core::threadpool::with_timeout(move || Ok(cmd.output()?), timeout)
+                .map_err(|e| {
+                    anyhow::anyhow!("Command timed out after {}s: {} ({})", timeout, desc, e)
+                })?;
+            Ok(output)
+        }
+        None => {
+            let output = cmd
+                .output()
+                .with_context(|| format!("Failed to execute: {}", desc))?;
+            Ok(output)
+        }
+    }
+}
 
 pub struct Runner;
 
@@ -20,10 +43,12 @@ impl Runner {
             if let Some(value) = provided_vars.get(&input_def.name) {
                 resolved.insert(input_def.name.clone(), value.clone());
             } else if input_def.is_required {
-                anyhow::bail!(
-                    "Required input '{}' not provided. Use --var {}='<value>'",
-                    input_def.name,
-                    input_def.name
+                bail_app_err!(
+                    format!(
+                        "Required input '{}' not provided. Use --var {}='<value>'",
+                        input_def.name, input_def.name
+                    ),
+                    "Run `dectl workflow list` to see available workflows"
                 );
             } else if let Some(default) = &input_def.default {
                 resolved.insert(input_def.name.clone(), default.clone());
@@ -45,10 +70,13 @@ impl Runner {
         let start_idx = from_step.map(|s| s.saturating_sub(1)).unwrap_or(0);
 
         if start_idx >= workflow.steps.len() {
-            anyhow::bail!(
-                "from_step {} is out of bounds (workflow has {} steps)",
-                start_idx,
-                workflow.steps.len()
+            bail_app_err!(
+                format!(
+                    "from_step {} is out of bounds (workflow has {} steps)",
+                    start_idx,
+                    workflow.steps.len()
+                ),
+                "Check the workflow definition in .dec/workflows/ for required inputs"
             );
         }
 
@@ -65,12 +93,34 @@ impl Runner {
         for (idx, step) in workflow.steps.iter().enumerate().skip(start_idx) {
             let step_num = idx + 1;
 
+            if let Some(ref cond) = step.skip_if {
+                let should_skip = interpolate(cond, vars)
+                    .map(|r| r.trim() == "true" || r.trim() == "1" || r.trim() == "yes")
+                    .unwrap_or(false);
+                if should_skip {
+                    log::info!(
+                        "Step {} skipped (condition: {} resolved to true)",
+                        step_num,
+                        cond
+                    );
+                    results.push(StepResult {
+                        step_num,
+                        step_type: format!("{:?}", step.step_type).to_lowercase(),
+                        success: true,
+                        output: Some(format!("Skipped via skip_if: {}", cond)),
+                        stderr: None,
+                    });
+                    continue;
+                }
+            }
+
             if !all_success && !step.run_always.unwrap_or(false) {
                 results.push(StepResult {
                     step_num,
                     step_type: format!("{:?}", step.step_type).to_lowercase(),
                     success: false,
                     output: Some("Skipped due to previous failure".to_string()),
+                    stderr: None,
                 });
                 continue;
             }
@@ -110,6 +160,7 @@ impl Runner {
                         step_type: "prompt".to_string(),
                         success: true,
                         output: None,
+                        stderr: None,
                     });
                     if pause_on_prompt {
                         paused = true;
@@ -133,10 +184,13 @@ impl Runner {
 
                     let output_str = if shell {
                         let full_cmd = interp_cmd.join(" ");
-                        let shell_output = Command::new("sh")
-                            .args(["-c", &full_cmd])
-                            .output()
-                            .with_context(|| format!("Failed to execute: {}", full_cmd))?;
+                        let mut sh_cmd = Command::new("sh");
+                        sh_cmd.args(["-c", &full_cmd]);
+                        let shell_output = run_cmd_with_timeout(
+                            sh_cmd,
+                            step.timeout_secs,
+                            format!("sh -c '{}'", full_cmd),
+                        )?;
 
                         let captured_out =
                             String::from_utf8_lossy(&shell_output.stdout).to_string();
@@ -156,10 +210,8 @@ impl Runner {
                                 step_num,
                                 step_type: "action".to_string(),
                                 success: false,
-                                output: Some(format!(
-                                    "Exit code: {:?}",
-                                    shell_output.status.code()
-                                )),
+                                output: Some(captured_out),
+                                stderr: Some(captured_err),
                             });
                             eprintln!(
                                 "\n⚠️  Step {} failed. Resume with --from-step {}",
@@ -171,24 +223,35 @@ impl Runner {
                             continue;
                         }
 
-                        Some(captured_out)
+                        Some((captured_out, captured_err))
                     } else {
                         let program = &interp_cmd[0];
-                        let args = &interp_cmd[1..];
+                        let args: Vec<&String> = interp_cmd[1..].iter().collect();
 
-                        let output = Command::new(program)
-                            .args(args)
-                            .output()
-                            .with_context(|| format!("Failed to execute: {}", program))?;
+                        let mut prog_cmd = Command::new(program);
+                        prog_cmd.args(args.clone());
+                        let output = run_cmd_with_timeout(
+                            prog_cmd,
+                            step.timeout_secs,
+                            format!(
+                                "{} {}",
+                                program,
+                                args.iter()
+                                    .map(|s| s.as_str())
+                                    .collect::<Vec<_>>()
+                                    .join(" ")
+                            ),
+                        )?;
 
+                        let cmd_stderr = String::from_utf8_lossy(&output.stderr).to_string();
                         if !output.status.success() {
                             all_success = false;
-                            let stderr = String::from_utf8_lossy(&output.stderr);
                             results.push(StepResult {
                                 step_num,
                                 step_type: "action".to_string(),
                                 success: false,
-                                output: Some(stderr.to_string()),
+                                output: Some(String::from_utf8_lossy(&output.stdout).to_string()),
+                                stderr: Some(cmd_stderr),
                             });
                             eprintln!(
                                 "\n⚠️  Step {} failed. Resume with --from-step {}",
@@ -200,16 +263,22 @@ impl Runner {
                             continue;
                         }
 
-                        Some(String::from_utf8_lossy(&output.stdout).to_string())
+                        Some((
+                            String::from_utf8_lossy(&output.stdout).to_string(),
+                            cmd_stderr,
+                        ))
                     };
 
-                    let captured = output_str.clone();
+                    let captured = output_str.clone().map(|(out, _)| out);
+
+                    let action_stderr = output_str.clone().map(|(_, err)| err);
 
                     results.push(StepResult {
                         step_num,
                         step_type: "action".to_string(),
                         success: true,
-                        output: output_str,
+                        output: captured.clone(),
+                        stderr: action_stderr,
                     });
 
                     if let Some(ref out) = captured {
@@ -238,6 +307,7 @@ impl Runner {
                         step_type: "write".to_string(),
                         success: true,
                         output: None,
+                        stderr: None,
                     });
                 }
                 StepType::Agent => {
@@ -252,6 +322,7 @@ impl Runner {
                                 step_type: "agent".to_string(),
                                 success: false,
                                 output: Some("Agent step missing agent_type".to_string()),
+                                stderr: None,
                             });
                             all_success = false;
                             eprintln!(
@@ -271,9 +342,10 @@ impl Runner {
                             step_type: "agent".to_string(),
                             success: false,
                             output: Some("No agent types specified".to_string()),
+                            stderr: None,
                         });
                         all_success = false;
-                        eprintln!("\nStep {} failed: no agent types specified", step_num);
+                        log::error!("\nStep {} failed: no agent types specified", step_num);
                         if !has_remaining_run_always(idx) {
                             break;
                         }
@@ -303,6 +375,7 @@ impl Runner {
                                     step_type: "agent".to_string(),
                                     success: false,
                                     output: Some(msg.clone()),
+                                    stderr: None,
                                 });
                                 all_success = false;
                                 eprintln!("\n\u{26a0}\u{fe0f}  Step {} failed. Resume with --from-step {}", step_num, step_num);
@@ -334,6 +407,7 @@ impl Runner {
                                         "{} agent(s) completed",
                                         results_list.len()
                                     )),
+                                    stderr: None,
                                 });
                             } else {
                                 let failed_details: Vec<String> = results_list
@@ -378,6 +452,7 @@ impl Runner {
                                     step_type: "agent".to_string(),
                                     success: false,
                                     output: Some(msg.clone()),
+                                    stderr: None,
                                 });
                                 all_success = false;
                                 eprintln!("\n\u{26a0}\u{fe0f}  Step {} failed. Resume with --from-step {}", step_num, step_num);
@@ -393,6 +468,7 @@ impl Runner {
                                 step_type: "agent".to_string(),
                                 success: false,
                                 output: Some(e.to_string()),
+                                stderr: None,
                             });
                             all_success = false;
                             eprintln!(
@@ -411,12 +487,18 @@ impl Runner {
             let _ = output;
         }
 
+        let fail_logs: Vec<String> = results
+            .iter()
+            .filter_map(|r| if !r.success { r.stderr.clone() } else { None })
+            .collect();
+
         Ok(ExecutionResult {
             workflow_name: workflow.name.clone(),
             success: all_success,
             steps_executed: results.len(),
             paused,
             results,
+            logs: fail_logs,
         })
     }
 }
@@ -429,6 +511,8 @@ pub struct StepResult {
     pub step_type: String,
     pub success: bool,
     pub output: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stderr: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -441,6 +525,8 @@ pub struct ExecutionResult {
     #[serde(default)]
     pub paused: bool,
     pub results: Vec<StepResult>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub logs: Vec<String>,
 }
 
 fn print_step_header(step_num: usize, description: &str) {

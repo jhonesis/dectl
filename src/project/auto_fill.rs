@@ -284,73 +284,21 @@ pub fn fill_project_files(
 }
 
 fn update_project_toml(project_dir: &Path, name: &str, stack: &DetectedStack) -> Result<()> {
-    use super::templates::Templates;
+    use crate::core::toml_util;
 
     let toml_path = project_dir.join(".dec/config/project.toml");
 
-    let content = if toml_path.exists() {
-        fs::read_to_string(&toml_path)?
-    } else {
-        Templates::project_toml_l1().to_string()
-    };
-
-    let mut doc: toml::map::Map<String, toml::Value> =
-        toml::from_str(&content).unwrap_or_else(|_| toml::map::Map::new());
-
-    if let Some(project) = doc.get_mut("project") {
-        if let Some(map) = project.as_table_mut() {
-            if let Some(n) = map.get_mut("name") {
-                *n = toml::Value::String(name.to_string());
-            }
-            if let Some(t) = map.get_mut("type") {
-                *t = toml::Value::String(stack.project_type.clone());
-            }
-        }
-    } else {
-        let mut project_map = toml::map::Map::new();
-        project_map.insert("name".to_string(), toml::Value::String(name.to_string()));
-        project_map.insert(
-            "type".to_string(),
-            toml::Value::String(stack.project_type.clone()),
-        );
-        doc.insert("project".to_string(), toml::Value::Table(project_map));
+    if !toml_path.exists() {
+        use super::templates::Templates;
+        fs::write(&toml_path, Templates::project_toml_l1())?;
     }
 
-    // Merge languages into existing stack, preserving frameworks, tools, databases
+    toml_util::update_field(&toml_path, "project.name", name)?;
+    toml_util::update_field(&toml_path, "project.type", &stack.project_type)?;
+
     if !stack.languages.is_empty() {
-        let existing_languages: Vec<String> = doc
-            .get("stack")
-            .and_then(|s| s.get("languages"))
-            .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_str().map(String::from))
-                    .collect()
-            })
-            .unwrap_or_default();
-
-        let mut merged: Vec<String> = existing_languages.clone();
-        for lang in &stack.languages {
-            if !merged.contains(lang) {
-                merged.push(lang.clone());
-            }
-        }
-        merged.sort();
-
-        let stack_entry = doc
-            .entry("stack".to_string())
-            .or_insert_with(|| toml::Value::Table(toml::map::Map::new()));
-
-        if let Some(stack_table) = stack_entry.as_table_mut() {
-            stack_table.insert(
-                "languages".to_string(),
-                toml::Value::Array(merged.into_iter().map(toml::Value::String).collect()),
-            );
-        }
+        toml_util::merge_array(&toml_path, "stack.languages", &stack.languages)?;
     }
-
-    let new_content = toml::to_string_pretty(&doc)?;
-    fs::write(&toml_path, new_content)?;
 
     Ok(())
 }

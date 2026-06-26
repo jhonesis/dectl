@@ -1,0 +1,21 @@
+name: post_session_cleanup
+description: Clean up temporary session artifacts after session end
+inputs: []
+
+steps:
+  - type: prompt
+    description: Review session artifacts
+    content: |
+      Check for any temporary files, agent outputs, or generated content
+      that should be cleaned up after this session.
+
+  - type: action
+    description: Clean agent output artifacts
+    cmd:
+      - sh
+      - -c
+      - |
+        if [ -d .dec/agent-output ]; then
+          find .dec/agent-output -type f -name "*.tmp" -delete 2>/dev/null || true
+          echo "Cleaned temporary agent artifacts"
+        fi

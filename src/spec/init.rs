@@ -1,3 +1,4 @@
+use crate::bail_app_err;
 use anyhow::Result;
 use std::path::Path;
 
@@ -9,7 +10,10 @@ pub fn run(json: bool, _non_interactive: bool) -> Result<()> {
 
     let dec_exists = project_dir.join(".dec").exists();
     if !dec_exists {
-        anyhow::bail!(".dec/ not found. Run `dectl project init` first.");
+        bail_app_err!(
+            ".dec/ not found. Run `dectl project init` first.",
+            "Run `dectl project init` from a dectl project directory"
+        );
     }
 
     templates::ensure_sdd_dir(project_dir)?;

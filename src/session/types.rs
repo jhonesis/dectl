@@ -66,6 +66,20 @@ pub struct SessionEndResult {
     pub agent_sessions: usize,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionHook {
+    pub name: String,
+    pub workflow: String,
+    #[serde(default)]
+    pub vars: std::collections::HashMap<String, String>,
+    #[serde(default = "default_run_always")]
+    pub run_always: bool,
+}
+
+fn default_run_always() -> bool {
+    true
+}
+
 impl SessionEndResult {
     pub fn new() -> Self {
         SessionEndResult {

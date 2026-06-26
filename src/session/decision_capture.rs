@@ -1,3 +1,4 @@
+use crate::core::db::Storage;
 use crate::session::types::CapturedDecision;
 use anyhow::Result;
 use regex::Regex;
@@ -21,18 +22,12 @@ fn get_project_name() -> Option<String> {
 }
 
 fn load_existing_memories() -> Result<Vec<String>> {
-    let db = crate::memory::db::DbConn::new()?;
-    let mut stmt = db
-        .conn()
-        .prepare("SELECT content FROM memories WHERE deleted_at IS NULL")?;
-    let rows = stmt.query_map([], |row| row.get(0))?;
-
-    let mut memories = Vec::new();
-    for content in rows.flatten() {
-        memories.push(content);
-    }
-
-    Ok(memories)
+    let db = crate::core::db::get_db()?;
+    db.query_map(
+        "SELECT content FROM memories WHERE deleted_at IS NULL",
+        &[],
+        |row| row.get(0),
+    )
 }
 
 fn extract_decisions_from_text(text: &str) -> Vec<String> {
@@ -79,15 +74,8 @@ pub fn capture_decisions() -> Result<Vec<CapturedDecision>> {
         }
     }
 
-    if let Ok(output) = std::process::Command::new("git")
-        .args(["log", "--oneline", "-20"])
-        .output()
-    {
-        if output.status.success() {
-            if let Ok(git_log) = String::from_utf8(output.stdout) {
-                all_text.push_str(&git_log);
-            }
-        }
+    if let Ok(git_log) = crate::core::git::raw_commit_log(20) {
+        all_text.push_str(&git_log);
     }
 
     if all_text.is_empty() {
@@ -118,7 +106,7 @@ pub fn capture_decisions() -> Result<Vec<CapturedDecision>> {
 }
 
 pub fn save_decisions(decisions: &[CapturedDecision]) -> Result<usize> {
-    let db = crate::memory::db::DbConn::new()?;
+    let db = crate::core::db::get_db()?;
     let project = get_project_name();
     let now = chrono::Utc::now().to_rfc3339();
 
@@ -131,7 +119,7 @@ pub fn save_decisions(decisions: &[CapturedDecision]) -> Result<usize> {
         let tags = decision.tags.join(",");
         let project_ref = project.as_deref();
 
-        db.conn().execute(
+        db.execute(
             "INSERT INTO memories (content, tags, project, created_at, updated_at, type) VALUES (?1, ?2, ?3, ?4, ?5, 'decision')",
             params![decision.text, tags, project_ref, now, now],
         )?;

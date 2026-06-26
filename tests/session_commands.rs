@@ -82,12 +82,10 @@ fn test_session_end_json_dry_run() {
     let output = run_dectl(&["--json", "session", "end", "--dry-run"], tmp.path());
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let json_line = stdout
-        .lines()
-        .find(|l| l.starts_with('{'))
-        .expect("Should contain JSON output");
+    let json_start = stdout.find('{').expect("stdout should contain JSON object");
+    let json_str = &stdout[json_start..];
     let parsed: serde_json::Value =
-        serde_json::from_str(json_line).expect("Output should be valid JSON");
+        serde_json::from_str(json_str).expect("Output should be valid JSON");
     let data = parsed.get("data").expect("data field should exist");
     let steps = data.get("steps").expect("steps should exist");
     assert!(steps.is_array());

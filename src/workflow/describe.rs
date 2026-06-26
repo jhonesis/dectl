@@ -1,3 +1,4 @@
+use crate::bail_app_err;
 use crate::core::output::OutputMode;
 use crate::workflow::loader::load_workflow;
 use anyhow::Result;
@@ -7,9 +8,12 @@ pub fn run(name: &str, mode: OutputMode) -> Result<()> {
     let workflow_path = Path::new(".dec/workflows").join(format!("{}.yaml", name));
 
     if !workflow_path.exists() {
-        anyhow::bail!(
-            "Workflow '{}' not found. Run 'dectl workflow list' to see available workflows.",
-            name
+        bail_app_err!(
+            format!(
+                "Workflow '{}' not found. Run 'dectl workflow list' to see available workflows.",
+                name
+            ),
+            "Run `dectl workflow list` to see available workflows"
         );
     }
 

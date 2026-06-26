@@ -1,6 +1,6 @@
 use anyhow::Result;
-use colored::Colorize;
 use ignore::{DirEntry, WalkBuilder};
+use indicatif::ProgressStyle;
 use std::path::Path;
 
 use crate::core::output::OutputMode;
@@ -26,6 +26,24 @@ const IGNORED_DIRS: &[&str] = &[
 pub fn run(depth: Option<usize>, mode: OutputMode) -> Result<()> {
     let max_depth = depth.unwrap_or(DEFAULT_DEPTH).min(MAX_DISPLAY_DEPTH);
 
+    let _spinner = if !mode.is_json() && is_terminal::is_terminal(std::io::stdout()) {
+        let pb = indicatif::ProgressBar::new_spinner();
+        pb.set_style(ProgressStyle::default_spinner().tick_strings(&[
+            "▹▹▹▹▹",
+            "▸▹▹▹▹",
+            "▹▸▹▹▹",
+            "▹▹▸▹▹",
+            "▹▹▹▸▹",
+            "▹▹▹▹▸",
+            "▪▪▪▪▪",
+        ]));
+        pb.set_message("Scanning project files...");
+        pb.enable_steady_tick(std::time::Duration::from_millis(80));
+        Some(pb)
+    } else {
+        None
+    };
+
     let walker = WalkBuilder::new(Path::new("."))
         .hidden(false)
         .ignore(true)
@@ -48,42 +66,19 @@ pub fn run(depth: Option<usize>, mode: OutputMode) -> Result<()> {
         .filter(|e| e.file_type().map(|ft| ft.is_file()).unwrap_or(false))
         .count();
 
-    match mode {
-        OutputMode::Json => {
-            let paths: Vec<String> = entries
-                .iter()
-                .map(|e| e.path().to_string_lossy().to_string())
-                .collect();
-            let result = serde_json::json!({
-                "files": paths,
-                "count": file_count
-            });
-            let envelope = crate::core::output::JsonEnvelope::ok(&result);
-            println!("{}", serde_json::to_string_pretty(&envelope)?);
-        }
-        OutputMode::Human => {
-            for entry in &entries {
-                let path = entry.path();
-                let depth = path.components().count().saturating_sub(1);
-                let prefix = "  ".repeat(depth.min(max_depth));
-
-                let name = path
-                    .file_name()
-                    .map(|n| n.to_string_lossy().to_string())
-                    .unwrap_or_default();
-
-                let display = if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
-                    format!("{}{}", prefix, name.blue().bold())
-                } else {
-                    format!("{}{}", prefix, name.green())
-                };
-
-                println!("{}", display);
-            }
-            println!();
-            println!("Total: {} files", file_count);
-        }
+    if let Some(spinner) = &_spinner {
+        spinner.finish_and_clear();
     }
+
+    let paths: Vec<String> = entries
+        .iter()
+        .map(|e| e.path().to_string_lossy().to_string())
+        .collect();
+    let result = serde_json::json!({
+        "files": paths,
+        "count": file_count
+    });
+    mode.print(&result)?;
 
     Ok(())
 }

@@ -75,7 +75,7 @@ pub fn run(mode: OutputMode) -> Result<()> {
                     }
                 }
                 Err(e) => {
-                    eprintln!("  {} (ERROR: {})", name, e);
+                    log::warn!("  {} (ERROR: {})", name, e);
                 }
             }
         }

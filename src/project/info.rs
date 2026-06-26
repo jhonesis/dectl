@@ -88,15 +88,7 @@ pub fn run(mode: OutputMode) -> Result<()> {
         isa,
     };
 
-    match mode {
-        OutputMode::Json => {
-            let envelope = crate::core::output::JsonEnvelope::ok(&output);
-            println!("{}", serde_json::to_string_pretty(&envelope)?);
-        }
-        OutputMode::Human => {
-            print_human_output(&output);
-        }
-    }
+    mode.print(&output)?;
 
     Ok(())
 }
@@ -142,71 +134,3 @@ fn extract_section(content: &str, header: &str) -> Option<String> {
     }
     None
 }
-
-fn print_human_output(info: &ProjectInfoOutput) {
-    println!("{}", "Project Context".bold().underline());
-    println!();
-
-    if let Some(name) = &info.name {
-        println!("{}: {}", "Name".bold(), name);
-    } else {
-        println!("{}: {}", "Name".bold(), "<not set>".dimmed());
-    }
-
-    if let Some(ptype) = &info.project_type {
-        println!("{}: {}", "Type".bold(), ptype);
-    }
-
-    if let Some(desc) = &info.description {
-        if !desc.is_empty() && !desc.starts_with("Descripción") {
-            println!("{}: {}", "Description".bold(), desc);
-        }
-    }
-
-    println!();
-    println!("{}", "Stack".bold().underline());
-
-    if !info.stack.languages.is_empty() {
-        println!("  Languages: {}", info.stack.languages.join(", "));
-    }
-    if !info.stack.frameworks.is_empty() {
-        println!("  Frameworks: {}", info.stack.frameworks.join(", "));
-    }
-    if !info.stack.databases.is_empty() {
-        println!("  Databases: {}", info.stack.databases.join(", "));
-    }
-    if !info.stack.tools.is_empty() {
-        println!("  Tools: {}", info.stack.tools.join(", "));
-    }
-
-    if !info.stack.languages.is_empty()
-        || !info.stack.frameworks.is_empty()
-        || !info.stack.databases.is_empty()
-        || !info.stack.tools.is_empty()
-    {
-        println!();
-    }
-
-    if let Some(isa) = &info.isa {
-        println!(
-            "{}",
-            "ISA (Intentional System Architecture)".bold().underline()
-        );
-        if let Some(vision) = &isa.vision {
-            println!("  Vision: {}", vision.dimmed());
-        }
-        if let Some(objective) = &isa.objective {
-            println!("  Objective: {}", objective.dimmed());
-        }
-        println!();
-    }
-
-    if !info.warnings.is_empty() {
-        println!("{}", "Warnings".bold().underline());
-        for w in &info.warnings {
-            println!("  ⚠  {}", w.yellow());
-        }
-    }
-}
-
-use colored::Colorize;

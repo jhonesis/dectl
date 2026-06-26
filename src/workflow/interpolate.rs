@@ -1,48 +1,59 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use regex::Regex;
 use std::collections::HashMap;
 
 pub fn interpolate(template: &str, vars: &HashMap<String, String>) -> Result<String> {
-    let var_pattern = Regex::new(r"\\?\{\{([^}]+)\}\}")
-        .map_err(|e| anyhow::anyhow!("Invalid regex pattern: {}", e))?;
-
-    let mut result = String::with_capacity(template.len());
-    let mut last_end = 0;
-
-    for cap in var_pattern.captures_iter(template) {
-        let full_match = cap.get(0).map(|m| m.as_str()).unwrap_or("");
-        result.push_str(&template[last_end..cap.get(0).map(|m| m.start()).unwrap_or(0)]);
-
-        if let Some(stripped) = full_match.strip_prefix('\\') {
-            result.push_str(stripped);
-        } else {
-            if let Some(var_name) = cap.get(1).map(|m| m.as_str().trim()) {
-                if let Some(value) = vars.get(var_name) {
-                    result.push_str(value);
-                } else {
-                    anyhow::bail!(
-                        "Variable '{{{{}}}}' not found in inputs. Available: {:?}",
-                        var_name
-                    );
-                }
-            }
+    let referenced = extract_variables(template);
+    for var in &referenced {
+        if !vars.contains_key(var.as_str()) {
+            anyhow::bail!(
+                "Variable '{{{{{}}}}}' not found in inputs. Available: {:?}",
+                var,
+                vars.keys().collect::<Vec<_>>()
+            );
         }
-        last_end = cap.get(0).map(|m| m.end()).unwrap_or(last_end);
     }
 
-    result.push_str(&template[last_end..]);
-    Ok(result)
+    let mut handlebars = handlebars::Handlebars::new();
+    handlebars.register_escape_fn(|s: &str| s.to_string());
+
+    let context = serde_json::to_value(vars)
+        .map_err(|e| anyhow::anyhow!("Failed to serialize variables: {}", e))?;
+
+    handlebars
+        .render_template(template, &context)
+        .with_context(|| "Template interpolation error".to_string())
 }
 
 pub fn extract_variables(template: &str) -> Vec<String> {
     let var_pattern = Regex::new(r"\{\{([^}]+)\}\}").unwrap();
     let mut vars: Vec<String> = Vec::new();
+    let keywords = [
+        "if", "else", "each", "with", "unless", "log", "lookup", "this", ".",
+    ];
 
     for cap in var_pattern.captures_iter(template) {
-        if let Some(var_name) = cap.get(1) {
-            let var_name = var_name.as_str().trim().to_string();
-            if !vars.contains(&var_name) {
-                vars.push(var_name);
+        if let Some(inner) = cap.get(1) {
+            let mut content = inner.as_str().trim();
+            content = content.strip_prefix('#').unwrap_or(content);
+            content = content.strip_prefix('/').unwrap_or(content);
+            content = content.strip_prefix('>').unwrap_or(content);
+            content = content.strip_prefix('!').unwrap_or(content);
+            let content = content.trim();
+
+            if content.is_empty() || keywords.contains(&content) {
+                continue;
+            }
+
+            let parts: Vec<&str> = content.splitn(2, char::is_whitespace).collect();
+            let var_name = if parts.len() >= 2 && keywords.contains(&parts[0]) {
+                parts[1].trim()
+            } else {
+                parts[0]
+            };
+
+            if !var_name.is_empty() && !vars.contains(&var_name.to_string()) {
+                vars.push(var_name.to_string());
             }
         }
     }
@@ -121,5 +132,64 @@ mod tests {
 
         let result = interpolate("Hello {{  name  }}!", &vars).unwrap();
         assert_eq!(result, "Hello Cris!");
+    }
+
+    #[test]
+    fn test_handlebars_if_helper() {
+        let vars: HashMap<_, _> = [
+            ("body".to_string(), "test payload".to_string()),
+            ("method".to_string(), "POST".to_string()),
+            ("endpoint".to_string(), "api/test".to_string()),
+        ]
+        .into_iter()
+        .collect();
+
+        let template = "{{#if body}}curl -X {{method}} {{endpoint}}{{/if}}";
+        let result = interpolate(template, &vars).unwrap();
+        assert_eq!(result, "curl -X POST api/test");
+    }
+
+    #[test]
+    fn test_handlebars_if_helper_false() {
+        let vars: HashMap<_, _> = [
+            ("body".to_string(), "".to_string()),
+            ("method".to_string(), "GET".to_string()),
+            ("endpoint".to_string(), "api/health".to_string()),
+        ]
+        .into_iter()
+        .collect();
+
+        let template = "{{#if body}}curl -X {{method}} {{endpoint}}{{/if}}";
+        let result = interpolate(template, &vars).unwrap();
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_extract_handlebars_variables() {
+        let template = "{{#if body}}\n  curl -X {{method}} {{endpoint}}\n{{/if}}";
+        let vars = extract_variables(template);
+
+        assert_eq!(vars.len(), 3);
+        assert!(vars.contains(&"body".to_string()));
+        assert!(vars.contains(&"method".to_string()));
+        assert!(vars.contains(&"endpoint".to_string()));
+    }
+
+    #[test]
+    fn test_extract_skips_keywords() {
+        let template = "{{#if body}}{{else}}{{/if}}";
+        let vars = extract_variables(template);
+
+        assert_eq!(vars.len(), 1);
+        assert_eq!(vars[0], "body");
+    }
+
+    #[test]
+    fn test_extract_each_helper() {
+        let template = "{{#each items}}{{this}}{{/each}}";
+        let vars = extract_variables(template);
+
+        assert_eq!(vars.len(), 1);
+        assert_eq!(vars[0], "items");
     }
 }

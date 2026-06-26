@@ -100,28 +100,14 @@ pub fn run(path: &Path, mode: OutputMode) -> Result<()> {
         }
     }
 
-    match mode {
-        OutputMode::Json => {
-            let exec_output = ExecOutput {
-                total: results.total,
-                succeeded: results.succeeded,
-                failed: results.failed,
-                error_line: results.first_error.as_ref().map(|(n, _)| *n),
-                error_message: results.first_error.as_ref().map(|(_, m)| m.clone()),
-            };
-            let envelope = crate::core::output::JsonEnvelope::ok(exec_output);
-            println!("{}", serde_json::to_string_pretty(&envelope)?);
-        }
-        OutputMode::Human => {
-            println!(
-                "Executed {} command(s): {} succeeded, {} failed",
-                results.total, results.succeeded, results.failed
-            );
-            if let Some((line, msg)) = results.first_error {
-                println!("First error at line {}: {}", line, msg);
-            }
-        }
-    }
+    let exec_output = ExecOutput {
+        total: results.total,
+        succeeded: results.succeeded,
+        failed: results.failed,
+        error_line: results.first_error.as_ref().map(|(n, _)| *n),
+        error_message: results.first_error.as_ref().map(|(_, m)| m.clone()),
+    };
+    mode.print(&exec_output)?;
 
     if results.failed > 0 {
         std::process::exit(1);

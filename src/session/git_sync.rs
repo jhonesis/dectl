@@ -2,74 +2,26 @@ use anyhow::Result;
 use serde_json;
 use std::fs;
 use std::path::Path;
-use std::process::Command;
 
 use crate::session::types::GitChanges;
 
 pub fn detect_git_changes() -> Result<Option<GitChanges>> {
-    let git_dir = Command::new("git")
-        .arg("rev-parse")
-        .arg("--git-dir")
-        .output();
-
-    match git_dir {
-        Ok(output) if output.status.success() => {
-            let modified_files = parse_modified_files()?;
-            let new_commits = parse_recent_commits()?;
-            let detected_features = detect_features_from_commits(&new_commits);
-
-            Ok(Some(GitChanges {
-                modified_files,
-                new_commits,
-                detected_features,
-            }))
-        }
-        _ => Ok(None),
-    }
-}
-
-fn parse_modified_files() -> Result<Vec<(String, String)>> {
-    let output = Command::new("git")
-        .arg("diff")
-        .arg("--name-status")
-        .output()?;
-
-    if !output.status.success() {
-        return Ok(Vec::new());
+    if !crate::core::git::is_git_repo() {
+        return Ok(None);
     }
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let mut files = Vec::new();
+    let modified_files = crate::core::git::diff_status()?;
+    let new_commits: Vec<String> = crate::core::git::recent_commits(20)?
+        .into_iter()
+        .map(|c| format!("{} {}", c.hash, c.message))
+        .collect();
+    let detected_features = detect_features_from_commits(&new_commits);
 
-    for line in stdout.lines() {
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
-
-        if let Some(tab_idx) = line.find('\t') {
-            let status = line[..tab_idx].to_string();
-            let path = line[tab_idx + 1..].to_string();
-            files.push((status, path));
-        }
-    }
-
-    Ok(files)
-}
-
-fn parse_recent_commits() -> Result<Vec<String>> {
-    let output = Command::new("git")
-        .arg("log")
-        .arg("--oneline")
-        .arg("-20")
-        .output()?;
-
-    if !output.status.success() {
-        return Ok(Vec::new());
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    Ok(stdout.lines().map(|l| l.to_string()).collect())
+    Ok(Some(GitChanges {
+        modified_files,
+        new_commits,
+        detected_features,
+    }))
 }
 
 fn detect_features_from_commits(commits: &[String]) -> Vec<String> {

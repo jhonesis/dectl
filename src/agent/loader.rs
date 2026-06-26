@@ -28,11 +28,11 @@ pub fn load_custom_agents() -> Vec<(AgentDef, AgentSource)> {
                     Ok(content) => match serde_yaml::from_str::<AgentDef>(&content) {
                         Ok(agent) => agents.push((agent, AgentSource::Custom(path))),
                         Err(e) => {
-                            eprintln!("Warning: invalid agent in {}: {}", path.display(), e)
+                            log::warn!("Warning: invalid agent in {}: {}", path.display(), e)
                         }
                     },
                     Err(e) => {
-                        eprintln!("Warning: could not read {}: {}", path.display(), e)
+                        log::warn!("Warning: could not read {}: {}", path.display(), e)
                     }
                 }
             }

@@ -1,3 +1,4 @@
+use crate::bail_app_err;
 use anyhow::{Context, Result};
 use std::path::Path;
 
@@ -7,7 +8,10 @@ pub fn run(agent_type: &str, project: &str, mode: crate::core::output::OutputMod
 
     let project_path = Path::new(project);
     if !project_path.exists() {
-        anyhow::bail!("Project path does not exist: {}", project);
+        bail_app_err!(
+            format!("Project path does not exist: {}", project),
+            "Provide a valid project path"
+        );
     }
     let canonical = std::fs::canonicalize(project_path)
         .with_context(|| format!("Failed to resolve project path: {}", project))?;

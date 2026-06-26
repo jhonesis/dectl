@@ -1,10 +1,10 @@
 use crate::agent::schema::{AgentDef, AgentResult, AgentRunStatus};
+use crate::bail_app_err;
+use crate::core::db::Storage;
 use crate::workflow::runner::Runner;
 use crate::workflow::schema::{StepType, Workflow};
 use anyhow::Result;
 use std::collections::HashMap;
-use std::sync::mpsc;
-use std::time::Duration;
 
 #[allow(clippy::too_many_arguments)]
 pub fn run_agent(
@@ -27,44 +27,35 @@ pub fn run_agent(
     let file_context = file_context.map(|s| s.to_string());
     let mode = *mode;
 
-    let (tx, rx) = mpsc::channel();
     let timeout = timeout_secs.unwrap_or(300);
 
-    std::thread::spawn(move || {
-        let result = execute_agent_inner(
-            &agent_def,
-            &task_clone,
-            &vars,
-            file_context.as_deref(),
-            dry_run,
-            non_interactive,
-            auto,
-            &mode,
-            called_from_workflow,
-        );
-        let _ = tx.send(result);
-    });
-
-    match rx.recv_timeout(Duration::from_secs(timeout)) {
-        Ok(Ok(agent_result)) => Ok(agent_result),
-        Ok(Err(e)) => Ok(AgentResult {
-            agent_type: agent_name,
-            status: AgentRunStatus::Error {
-                message: e.to_string(),
-            },
-            steps_executed: 0,
-            log_id: None,
-        }),
-        Err(_) => {
-            let error_msg = format!("Agent '{}' timed out after {}s", agent_name, timeout);
-            if let Ok(db) = crate::memory::db::DbConn::new() {
+    match crate::core::threadpool::with_timeout(
+        move || {
+            execute_agent_inner(
+                &agent_def,
+                &task_clone,
+                &vars,
+                file_context.as_deref(),
+                dry_run,
+                non_interactive,
+                auto,
+                &mode,
+                called_from_workflow,
+            )
+        },
+        timeout,
+    ) {
+        Ok(agent_result) => Ok(agent_result),
+        Err(crate::core::threadpool::PoolError::Timeout { timeout_secs: secs }) => {
+            let error_msg = format!("Agent '{}' timed out after {}s", agent_name, secs);
+            if let Ok(db) = crate::core::db::get_db() {
                 let _ = crate::agent::log::record_agent_execution(
-                    db.conn(),
+                    db,
                     &agent_name,
                     &task,
                     "timeout",
                     0,
-                    (timeout * 1000) as i64,
+                    (secs * 1000) as i64,
                     Some(&error_msg),
                 );
             }
@@ -75,6 +66,12 @@ pub fn run_agent(
                 log_id: None,
             })
         }
+        Err(crate::core::threadpool::PoolError::Execute(msg)) => Ok(AgentResult {
+            agent_type: agent_name,
+            status: AgentRunStatus::Error { message: msg },
+            steps_executed: 0,
+            log_id: None,
+        }),
     }
 }
 
@@ -91,7 +88,7 @@ fn execute_agent_inner(
     called_from_workflow: bool,
 ) -> Result<AgentResult> {
     let start = std::time::Instant::now();
-    let db = crate::memory::db::DbConn::new().ok();
+    let db = crate::core::db::get_db().ok();
 
     let workflow = Workflow {
         name: agent_def.name.clone(),
@@ -136,12 +133,9 @@ fn execute_agent_inner(
         )?;
         match trust_decision {
             crate::workflow::trust::TrustDecision::RequiresConfirmation => {
-                anyhow::bail!(
-                    "Agent '{}' is not trusted for this project.\n\
-                     Run without --non-interactive to trust interactively, or use:\n\
-                     dectl agent trust {} --project .",
-                    agent_def.name,
-                    agent_def.name
+                bail_app_err!(
+                    format!("Agent '{}' is not trusted for this project.\nRun without --non-interactive to trust interactively, or use:\ndectl agent trust {} --project .", agent_def.name, agent_def.name),
+                    "Check the agent definition with `dectl agent describe <type>`"
                 );
             }
             crate::workflow::trust::TrustDecision::AskUser => {
@@ -166,10 +160,9 @@ fn execute_agent_inner(
                         println!("Trusted. This agent is now trusted for this project.");
                     }
                 } else {
-                    anyhow::bail!(
-                        "Agent '{}' contains action steps that are not trusted.\n\
-                         Run interactively to trust, or edit ~/.dectl/trust.toml manually.",
-                        agent_def.name
+                    bail_app_err!(
+                        format!("Agent '{}' contains action steps that are not trusted.\nRun interactively to trust, or edit ~/.dectl/trust.toml manually.", agent_def.name),
+                        "Check the command output above for details"
                     );
                 }
             }
@@ -221,9 +214,9 @@ fn execute_agent_inner(
         "ok"
     };
 
-    let log_id = match db.as_ref() {
-        Some(d) => crate::agent::log::record_agent_execution(
-            d.conn(),
+    let log_id = match db {
+        Some(c) => crate::agent::log::record_agent_execution(
+            c,
             &agent_def.name,
             task,
             status_str,
@@ -235,7 +228,7 @@ fn execute_agent_inner(
     };
 
     if agent_ok && !dry_run {
-        if let Some(d) = db.as_ref() {
+        if let Some(c) = db {
             let mem_type = if agent_def.name.to_lowercase() == "researcher" {
                 "research"
             } else {
@@ -247,16 +240,15 @@ fn execute_agent_inner(
             );
             let now = chrono::Utc::now().to_rfc3339();
             let tags = format!("agent,{}", agent_def.name);
-            if d.conn()
-                .execute(
-                    "INSERT INTO memories (content, tags, project, created_at, updated_at, type)
+            if c.execute(
+                "INSERT INTO memories (content, tags, project, created_at, updated_at, type)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                    rusqlite::params![summary, tags, Option::<&str>::None, now, now, mem_type],
-                )
-                .is_ok()
+                rusqlite::params![summary, tags, Option::<&str>::None, now, now, mem_type],
+            )
+            .is_ok()
             {
-                let memory_id = d.conn().last_insert_rowid();
-                let _ = d.conn().execute(
+                let memory_id = c.last_insert_rowid();
+                let _ = c.execute(
                     "INSERT INTO agent_outputs (agent_type, task_id, task_description, memory_id, created_at)
                      VALUES (?1, ?2, ?3, ?4, ?5)",
                     rusqlite::params![
@@ -326,6 +318,8 @@ mod tests {
                 shell: None,
                 task: None,
                 run_always: None,
+                skip_if: None,
+                timeout_secs: None,
             }],
         }
     }
@@ -354,9 +348,8 @@ mod tests {
         );
         assert!(result.is_ok(), "agent execution failed: {:?}", result.err());
 
-        let db = crate::memory::db::DbConn::new().expect("failed to open db");
+        let db = crate::core::db::get_db().expect("failed to open db");
         let count: i64 = db
-            .conn()
             .query_row(
                 "SELECT COUNT(*) FROM memories WHERE content LIKE ?1 AND type = 'research'",
                 rusqlite::params!["[Agent: researcher]%"],
@@ -386,9 +379,8 @@ mod tests {
         );
         assert!(result.is_ok(), "agent execution failed: {:?}", result.err());
 
-        let db = crate::memory::db::DbConn::new().expect("failed to open db");
+        let db = crate::core::db::get_db().expect("failed to open db");
         let count: i64 = db
-            .conn()
             .query_row(
                 "SELECT COUNT(*) FROM memories WHERE content LIKE ?1 AND type = 'note'",
                 rusqlite::params!["[Agent: coder]%"],

@@ -10,9 +10,9 @@ pub fn query_agent_sessions() -> Result<usize> {
         None
     };
 
-    let db = crate::memory::db::DbConn::new()?;
+    let db = crate::core::db::get_db()?;
     match timestamp {
-        Some(ts) => crate::agent::log::query_agent_sessions_since(db.conn(), &ts),
+        Some(ts) => crate::agent::log::query_agent_sessions_since(db, &ts),
         None => Ok(0),
     }
 }

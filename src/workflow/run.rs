@@ -129,7 +129,8 @@ pub fn run(
                 "steps_executed": result.steps_executed,
                 "failed_step": failed_step,
                 "hint": "Use --from-step N to resume after fixing the issue",
-                "results": result.results
+                "results": result.results,
+                "logs": result.logs,
             })
         };
         crate::core::output::Output::print(&json_result, mode);
@@ -154,6 +155,15 @@ pub fn run(
                 "\n✗ Workflow '{}' failed at step {}",
                 workflow.name, result.steps_executed
             );
+            for step_result in &result.results {
+                if !step_result.success {
+                    if let Some(ref stderr) = step_result.stderr {
+                        if !stderr.is_empty() {
+                            log::error!("Step {} stderr:\n{}", step_result.step_num, stderr);
+                        }
+                    }
+                }
+            }
             println!(
                 "   Resume with: dectl workflow run {} --from-step {}",
                 name, result.steps_executed

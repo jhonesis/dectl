@@ -1,9 +1,7 @@
 use anyhow::Result;
-use colored::Colorize;
-use rusqlite::Connection;
 use serde::Serialize;
 
-use super::db::{DbConn, MemoryEntry};
+use crate::core::db::{get_db, MemoryEntry, Storage};
 use crate::core::output::OutputMode;
 
 #[derive(Debug, Serialize)]
@@ -397,8 +395,8 @@ pub fn run(
     limit: Option<usize>,
     mode: OutputMode,
 ) -> Result<()> {
-    let db = DbConn::new()?;
-    let cols = super::db::MEMORY_SELECT_COLS;
+    let db = get_db()?;
+    let cols = crate::core::db::MEMORY_SELECT_COLS;
 
     let parsed = parse_query(&query)?;
     let final_limit = limit.or(parsed.limit).unwrap_or(50);
@@ -412,7 +410,7 @@ pub fn run(
         .unwrap_or_else(|| "DESC".to_string());
 
     let entries = query_entries(
-        db.conn(),
+        db,
         cols,
         &parsed,
         project.as_deref(),
@@ -434,40 +432,13 @@ pub fn run(
         },
     };
 
-    match mode {
-        OutputMode::Json => {
-            let envelope = crate::core::output::JsonEnvelope::ok(&output);
-            println!("{}", serde_json::to_string_pretty(&envelope)?);
-        }
-        OutputMode::Human => {
-            if output.count == 0 {
-                println!("No results found.");
-                return Ok(());
-            }
-            println!("Found {} result(s):\n", count);
-            for entry in &output.entries {
-                println!(
-                    "[{}] {} ({})",
-                    entry.id,
-                    entry.content.chars().take(60).collect::<String>().green(),
-                    entry.type_.dimmed()
-                );
-                if !entry.tags.is_empty() {
-                    println!("  Tags: {}", entry.tags.join(", ").cyan());
-                }
-                if let Some(ref p) = entry.project {
-                    println!("  Project: {}", p);
-                }
-                println!();
-            }
-        }
-    }
+    mode.print(&output)?;
 
     Ok(())
 }
 
 fn query_entries(
-    conn: &Connection,
+    db: &impl Storage,
     cols: &str,
     parsed: &ParsedQueryResult,
     project: Option<&str>,
@@ -492,8 +463,6 @@ fn query_entries(
         if project.is_some() { parsed.params.len() + 2 } else { parsed.params.len() + 1 }
     );
 
-    let mut stmt = conn.prepare(&sql).expect("Failed to prepare query");
-
     let mut all_params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
     for p in &parsed.params {
         all_params.push(Box::new(p.clone()));
@@ -506,10 +475,8 @@ fn query_entries(
     let param_refs: Vec<&dyn rusqlite::types::ToSql> =
         all_params.iter().map(|p| p.as_ref()).collect();
 
-    let rows = stmt
-        .query_map(param_refs.as_slice(), MemoryEntry::from_row)
-        .expect("Failed to execute query");
-    rows.filter_map(|r| r.ok()).collect()
+    db.query_map(&sql, param_refs.as_slice(), MemoryEntry::from_row)
+        .unwrap_or_default()
 }
 
 #[cfg(test)]
