@@ -231,6 +231,18 @@ enum AgentCommands {
 #[derive(Subcommand)]
 enum SpecCommands {
     Init,
+    Add {
+        /// Name of the feature or module (e.g., "biometric-auth", "auth")
+        name: String,
+
+        /// Scope: "feature" (adds to root specs) or "module" (creates subdirectory)
+        #[arg(long, value_parser = ["feature", "module"])]
+        scope: Option<String>,
+
+        /// Path to a .md file with requirements (parsed automatically)
+        #[arg(long)]
+        from: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -506,6 +518,25 @@ fn main() {
         Some(Commands::Spec { command }) => match command {
             Some(SpecCommands::Init) => {
                 if let Err(e) = spec::init::run(cli.json, cli.non_interactive) {
+                    core::error::exit_for_error(e, mode);
+                }
+            }
+            Some(SpecCommands::Add {
+                ref name,
+                ref scope,
+                ref from,
+            }) => {
+                let args = spec::add::SpecAddArgs {
+                    name: name.clone(),
+                    scope: scope.clone().map(|s| match s.as_str() {
+                        "module" => spec::add::Scope::Module,
+                        _ => spec::add::Scope::Feature,
+                    }),
+                    from: from.clone(),
+                    json: cli.json,
+                    non_interactive: cli.non_interactive,
+                };
+                if let Err(e) = spec::add::run(args) {
                     core::error::exit_for_error(e, mode);
                 }
             }

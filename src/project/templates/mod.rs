@@ -220,4 +220,16 @@ impl Templates {
             ProjectType::Other => None,
         }
     }
+
+    pub fn module_spec_files() -> Vec<(&'static str, &'static str)> {
+        vec![
+            (
+                "constitution.md",
+                include_str!("txt/spec_module_constitution.md"),
+            ),
+            ("spec.md", include_str!("txt/spec_module_spec.md")),
+            ("plan.md", include_str!("txt/spec_module_plan.md")),
+            ("tasks.md", include_str!("txt/spec_module_tasks.md")),
+        ]
+    }
 }

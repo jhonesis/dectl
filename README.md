@@ -184,6 +184,13 @@ dectl workflow run execute_task --var task_id=T001 --var description="test" --au
   - **SKILL.md** — SDD workflow: 8 interview questions, clarification phase, adversarial agent pattern (Coordinator/Implementer/Verifier), model tiering, WHAT vs HOW enforcement, memory integration
   - **templates.md** — 9 document templates per project type (spec, architecture, tasks, API, data, auth, deployment, testing, monitoring), edge case catalog, purity boundaries, drift detection
   - **examples.md** — 5 reference implementations (CLI logsnap, API SnippetVault, brownfield LegacyPay, EDA EventStream, Next.js 14 HabitStack)
+- `dectl spec add <name> [--scope feature|module] [--from <path>]` — **add features and modules to existing specs** without editing files manually:
+  - **feature mode**: appends requirements and tasks to root `specs/spec.md` and `specs/tasks.md`
+  - **module mode**: creates `specs/<name>/` with 4 documents (constitution, spec, plan, tasks) and references them from root
+  - **auto-detect**: ≤3 REQs → feature, ≥5 REQs or mentions "module" → module
+  - **`--from`** parses an existing Markdown file extracting requirements automatically
+  - **interactive fallback**: interviews you for description and requirements when no `--from` file is given
+  - **memory logging**: every `spec add` records what was added to `memory.db` for cross-session awareness
 - Updates `.dec/config/project.toml` and `.dec/isa/project.isa.md`
 - Signals the AI model to interview you and generate `specs/` documents
 
@@ -417,6 +424,7 @@ When executed, `dectl session end` performs five actions (plus optional hooks):
 |---------|-------------|
 | `dectl spec init` | Ensure `.dec/sdd/` exists with SKILL.md + references/, update bridge |
 | `dectl spec init --json` | JSON output with envelope |
+| `dectl spec add <name> [--scope feature\|module] [--from <path>]` | Add features/modules to specs — appends REQs/tasks or creates module directory with 4 documents |
 
 ### Shell Completions
 
@@ -709,10 +717,10 @@ If a command is not applicable to your project, leave it empty or omit the secti
 
 ```bash
 cd dectl
-cargo test        # Run all tests (148 passing)
+cargo test        # Run all tests (185 passing)
 cargo fmt         # Format code
 cargo clippy      # Lint clean (0 warnings)
-cargo build --release  # Build binary (~5.7MB)
+cargo build --release  # Build binary (~5.8MB)
 ```
 
 ## Contributing

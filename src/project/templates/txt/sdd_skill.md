@@ -87,9 +87,10 @@ The quality of the spec is bounded by the quality of these clarifications. Rushi
 ### Step 2 — Choose the right document set
 
 | Project type | Documents to produce |
-|---|---|
+|---|---|---|
 | New greenfield project | All 9 documents |
 | New feature on existing codebase | spec.md, plan.md, tasks.md (+ update CLAUDE.md) |
+| New module on existing codebase | `specs/<name>/` full document set (via `dectl spec add --scope module`) |
 | Bug fix | bugfix.md (instead of spec), tasks.md |
 | Planning only (no implementation yet) | constitution.md, spec.md, requirements.md |
 | Quick exploration | spec.md only |
@@ -131,12 +132,31 @@ This creates traceability between spec documents and the project memory. Future 
 
 ---
 
+## Adding a Module with dectl
+
+For complex subsystems that deserve their own spec subdirectory:
+
+```bash
+dectl spec add "auth" --scope module --from requirements.md
+```
+
+This creates `specs/auth/` with constitution, spec, plan, and tasks.
+The root `specs/spec.md` gets a reference REQ pointing to the module.
+
+After creation, implement via:
+```bash
+dectl workflow run execute_task --var task_id=AUTH-T001 --auto
+```
+
+---
+
 ## Iterating on Existing Specs
 
 Specs evolve as the project grows. Follow these guidelines when updating:
 
 - **Minor change** (typo, clarification, reworded acceptance criterion) → update the relevant document, increment its `Version:` field
 - **Major change** (new feature, changed architecture, scope shift) → create a new version document (`spec-v2.md`), keep the old one for reference
+- **New module** → `dectl spec add <name> --scope module --from requirements.md` (creates `specs/<name>/`)
 - After any change → run:
   ```bash
   dectl memory add "Spec updated: [description]" --type decision
