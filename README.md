@@ -179,17 +179,19 @@ dectl workflow run execute_task --var task_id=T001 --var description="test" --au
 - Extend `dectl session end` without modifying code — just add a workflow and reference it
 
 ### Spec-Driven Development (SDD)
-- `dectl spec init` — ensure `.dec/sdd/` exists with SDD methodology (built into `project init --standard`)
+- `dectl spec init [--from <path>]` — ensure `.dec/sdd/` exists with SDD methodology (built into `project init --standard`)
+- **`--from <path>`**: pass a `.md` file with requirements as input — content is injected as `[SOURCE FILE CONTENT]` for the agent
 - Auto-creates 3 embedded templates:
   - **SKILL.md** — SDD workflow: 8 interview questions, clarification phase, adversarial agent pattern (Coordinator/Implementer/Verifier), model tiering, WHAT vs HOW enforcement, memory integration
   - **templates.md** — 9 document templates per project type (spec, architecture, tasks, API, data, auth, deployment, testing, monitoring), edge case catalog, purity boundaries, drift detection
   - **examples.md** — 5 reference implementations (CLI logsnap, API SnippetVault, brownfield LegacyPay, EDA EventStream, Next.js 14 HabitStack)
-- `dectl spec add <name> [--scope feature|module] [--from <path>]` — **add features and modules to existing specs** without editing files manually:
+- `dectl spec add <name> [--scope feature|module] [--from <path>]` — **add features and modules to existing specs** via the `spec_writer` agent:
   - **feature mode**: appends requirements and tasks to root `specs/spec.md` and `specs/tasks.md`
-  - **module mode**: creates `specs/<name>/` with 4 documents (constitution, spec, plan, tasks) and references them from root
-  - **auto-detect**: ≤3 REQs → feature, ≥5 REQs or mentions "module" → module
-  - **`--from`** parses an existing Markdown file extracting requirements automatically
+  - **module mode**: creates `specs/<name>/` with 6 SDD documents (constitution, spec, requirements, research, plan, tasks)
+  - **`--from <path>`**: reads `.md` file with requirements, passes to `spec_writer` agent which understands any format (user stories, structured sections, requirement IDs)
+  - **preserves requirement IDs**: REQ-AUTH-001, C-01, etc. are kept exactly as-is from source file
   - **interactive fallback**: interviews you for description and requirements when no `--from` file is given
+  - **SDD-compliant output**: agent reads `.dec/sdd/SKILL.md` automatically, ensuring all generated docs follow SDD rules
   - **memory logging**: every `spec add` records what was added to `memory.db` for cross-session awareness
 - Updates `.dec/config/project.toml` and `.dec/isa/project.isa.md`
 - Signals the AI model to interview you and generate `specs/` documents
@@ -422,9 +424,9 @@ When executed, `dectl session end` performs five actions (plus optional hooks):
 
 | Command | Description |
 |---------|-------------|
-| `dectl spec init` | Ensure `.dec/sdd/` exists with SKILL.md + references/, update bridge |
+| `dectl spec init [--from <path>]` | Ensure `.dec/sdd/` exists with SKILL.md + references/, update bridge. `--from`: pass `.md` file as input to agent |
 | `dectl spec init --json` | JSON output with envelope |
-| `dectl spec add <name> [--scope feature\|module] [--from <path>]` | Add features/modules to specs — appends REQs/tasks or creates module directory with 4 documents |
+| `dectl spec add <name> [--scope feature\|module] [--from <path>]` | Add features/modules to specs via `spec_writer` agent — reads any format, preserves requirement IDs |
 
 ### Shell Completions
 
@@ -717,7 +719,7 @@ If a command is not applicable to your project, leave it empty or omit the secti
 
 ```bash
 cd dectl
-cargo test        # Run all tests (185 passing)
+cargo test        # Run all tests (163 passing)
 cargo fmt         # Format code
 cargo clippy      # Lint clean (0 warnings)
 cargo build --release  # Build binary (~5.8MB)
