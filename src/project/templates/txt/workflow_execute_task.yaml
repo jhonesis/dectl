@@ -21,19 +21,36 @@ steps:
   - type: prompt
     description: "AI model implements the changes"
     content: |
-      Task {{task_id}}: {{description}}
+      ## Task {{task_id}}: {{description}}
 
-      You (the AI model) must now implement this task using your editing tools.
-      Read the context prepared by the coder agent in `.dec/agent-output/{{task_id}}-coder-context.md`
-      and implement the changes following the project conventions.
+      ### Implementation Phase
+      1. Read `.dec/agent-output/{{task_id}}-coder-context.md` for context
+      2. Read `.dec/agent-output/{{task_id}}-research.md` for research findings
+      3. Implement the changes following project conventions
 
-      When implementation is complete, run:
-        dectl workflow run execute_task --var task_id={{task_id}} --var description="{{description}}" --from-step 4
+      ### REQUIRED: Complete the Task Cycle
+      After implementation is complete, run EXACTLY this command:
+
+      ```bash
+      dectl workflow run execute_task \
+        --var task_id={{task_id}} \
+        --var description="{{description}}" \
+        --from-step 4
+      ```
+
+      **WARNING: Skipping this command will cause:**
+      - No build/test/lint verification
+      - No memory recording
+      - No progress.json update
+      - Incomplete task cycle
+
+      Run the command above before finishing.
 
   - type: agent
     description: "Build + diff + verification"
     agent_type: reviewer
     task: "{{description}}"
+    run_always: true
 
   - type: agent
     description: "Register decision and close the task cycle"

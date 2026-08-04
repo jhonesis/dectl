@@ -136,10 +136,7 @@ fn test_flow_error_recovery() {
     let tmp = TempDir::new().unwrap();
 
     let no_args_output = run_dectl(&["memory", "add", "--json"], tmp.path());
-    assert!(
-        no_args_output.status.success() == false,
-        "No-args add should fail"
-    );
+    assert!(!no_args_output.status.success(), "No-args add should fail");
     assert_eq!(
         no_args_output.status.code().unwrap(),
         1,

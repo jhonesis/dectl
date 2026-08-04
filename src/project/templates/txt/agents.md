@@ -77,6 +77,23 @@ dectl exec-from-file <path>                   # execute commands from a file
 
 ---
 
+## Workflow: execute_task
+
+When an agent dispatches `execute_task`, the workflow pauses at **step 3** for implementation.
+After implementation, ALWAYS run:
+
+```bash
+dectl workflow run execute_task \
+  --var task_id=<id> \
+  --var description="<desc>" \
+  --from-step 4
+```
+
+This triggers **review** (step 4) and **documentation** (step 5).
+Skipping this leaves tasks incomplete — no verification, no memory recording, no progress update.
+
+---
+
 ## Coding Discipline
 
 > Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.

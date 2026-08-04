@@ -234,3 +234,67 @@ fn test_spec_init_standard_includes_sdd() {
     assert!(tmp.path().join(".dec/sdd/references/templates.md").exists());
     assert!(tmp.path().join(".dec/sdd/references/examples.md").exists());
 }
+
+#[test]
+fn test_spec_init_from_passes_content_to_agent() {
+    let tmp = TempDir::new().unwrap();
+    create_dec_base(&tmp);
+
+    let reqs_path = tmp.path().join("requirements.md");
+    fs::write(
+        &reqs_path,
+        "# Auth Requirements\n\nREQ-AUTH-001: User login\nREQ-AUTH-002: Password reset\n",
+    )
+    .unwrap();
+
+    let output = run_dectl(&["spec", "init", "--from", "requirements.md"], tmp.path());
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("[SOURCE FILE CONTENT]"),
+        "Output missing [SOURCE FILE CONTENT] tag"
+    );
+    assert!(
+        stdout.contains("[/SOURCE FILE CONTENT]"),
+        "Output missing [/SOURCE FILE CONTENT] tag"
+    );
+    assert!(
+        stdout.contains("REQ-AUTH-001: User login"),
+        "Output missing file content"
+    );
+    assert!(
+        stdout.contains("REQ-AUTH-002: Password reset"),
+        "Output missing file content"
+    );
+    assert!(
+        stdout.contains("Use the above content as input"),
+        "Output missing agent instruction"
+    );
+}
+
+#[test]
+fn test_spec_init_from_nonexistent_file() {
+    let tmp = TempDir::new().unwrap();
+    create_dec_base(&tmp);
+
+    let output = run_dectl(&["spec", "init", "--from", "nonexistent.md"], tmp.path());
+    assert!(!output.status.success());
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("File not found"));
+}
+
+#[test]
+fn test_spec_init_from_empty_file() {
+    let tmp = TempDir::new().unwrap();
+    create_dec_base(&tmp);
+
+    fs::write(tmp.path().join("empty.md"), "").unwrap();
+
+    let output = run_dectl(&["spec", "init", "--from", "empty.md"], tmp.path());
+    assert!(!output.status.success());
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("empty"));
+}

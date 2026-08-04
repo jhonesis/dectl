@@ -230,7 +230,11 @@ enum AgentCommands {
 
 #[derive(Subcommand)]
 enum SpecCommands {
-    Init,
+    Init {
+        /// Path to a .md file to use as input for creating specs
+        #[arg(long)]
+        from: Option<PathBuf>,
+    },
     Add {
         /// Name of the feature or module (e.g., "biometric-auth", "auth")
         name: String,
@@ -516,8 +520,8 @@ fn main() {
             }
         },
         Some(Commands::Spec { command }) => match command {
-            Some(SpecCommands::Init) => {
-                if let Err(e) = spec::init::run(cli.json, cli.non_interactive) {
+            Some(SpecCommands::Init { from }) => {
+                if let Err(e) = spec::init::run(cli.json, cli.non_interactive, from.as_deref()) {
                     core::error::exit_for_error(e, mode);
                 }
             }

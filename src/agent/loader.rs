@@ -9,6 +9,7 @@ pub fn load_builtin(name: &str) -> Option<AgentDef> {
         "reviewer" => include_str!("builtins/reviewer.yaml"),
         "researcher" => include_str!("builtins/researcher.yaml"),
         "documenter" => include_str!("builtins/documenter.yaml"),
+        "spec_writer" => include_str!("builtins/spec_writer.yaml"),
         _ => return None,
     };
     serde_yaml::from_str(yaml_str).ok()
@@ -56,7 +57,13 @@ pub fn list_all_agents() -> Vec<(AgentDef, AgentSource)> {
 
     let mut all = custom;
 
-    for name in &["coder", "reviewer", "researcher", "documenter"] {
+    for name in &[
+        "coder",
+        "reviewer",
+        "researcher",
+        "documenter",
+        "spec_writer",
+    ] {
         if !custom_names.contains(*name) {
             if let Some(agent) = load_builtin(name) {
                 all.push((agent, AgentSource::Builtin));

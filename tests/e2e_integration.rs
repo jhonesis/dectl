@@ -22,16 +22,6 @@ fn has_valid_json_output(stdout: &str, stderr: &str) -> bool {
     !stdout.is_empty() && is_valid_json(stdout) || !stderr.is_empty() && is_valid_json(stderr)
 }
 
-fn get_any_json_output(stdout: &str, stderr: &str) -> String {
-    if !stdout.is_empty() && is_valid_json(stdout) {
-        stdout.to_string()
-    } else if !stderr.is_empty() && is_valid_json(stderr) {
-        stderr.to_string()
-    } else {
-        String::new()
-    }
-}
-
 #[test]
 fn test_e2e_project_init_and_memory_crud() {
     let tmp = TempDir::new().unwrap();

@@ -453,3 +453,39 @@ fn test_project_init_invalid_type() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Invalid project type"));
 }
+
+#[test]
+fn test_project_init_standard_creates_sdd_with_bridge() {
+    let tmp = TempDir::new().unwrap();
+    let output = run_dectl(&["project", "init", "--standard"], tmp.path());
+    assert!(output.status.success());
+
+    // SDD files exist
+    assert!(tmp.path().join(".dec/sdd/SKILL.md").exists());
+    assert!(tmp.path().join(".dec/sdd/references/templates.md").exists());
+    assert!(tmp.path().join(".dec/sdd/references/examples.md").exists());
+
+    // Bridge wired in project.toml
+    let toml_content = fs::read_to_string(tmp.path().join(".dec/config/project.toml")).unwrap();
+    assert!(
+        toml_content.contains("[specs]"),
+        "project.toml missing [specs] section"
+    );
+    assert!(
+        toml_content.contains("dir = \"specs\""),
+        "project.toml missing dir = \"specs\""
+    );
+
+    // Bridge wired in project.isa.md
+    let isa_content = fs::read_to_string(tmp.path().join(".dec/isa/project.isa.md")).unwrap();
+    assert!(
+        isa_content.contains("See `specs/` for SDD artifacts"),
+        "project.isa.md missing SDD section"
+    );
+
+    // specs/ does NOT exist (created by spec init, not project init)
+    assert!(
+        !tmp.path().join("specs").exists(),
+        "specs/ should NOT exist after project init --standard"
+    );
+}

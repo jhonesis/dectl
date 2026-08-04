@@ -50,6 +50,16 @@ pub fn run(level: InitLevel, project_type: ProjectType, _interactive: bool) -> R
         fs::write(path, *content).with_context(|| format!("Failed to write file {:?}", path))?;
     }
 
+    // SDD bridge wiring for Level 2+
+    if matches!(level, InitLevel::Level2 | InitLevel::Level3) {
+        if let Err(e) = crate::spec::bridge::update_project_toml(Path::new(".")) {
+            eprintln!("Warning: failed to wire SDD in project.toml: {}", e);
+        }
+        if let Err(e) = crate::spec::bridge::update_project_isa(Path::new(".")) {
+            eprintln!("Warning: failed to wire SDD in project.isa.md: {}", e);
+        }
+    }
+
     if is_project_empty() {
         if std::io::stdout().is_terminal() {
             handle_empty_project()?;
