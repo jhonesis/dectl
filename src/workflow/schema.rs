@@ -62,6 +62,8 @@ pub struct Step {
     pub skip_if: Option<String>,
     #[serde(default)]
     pub timeout_secs: Option<u64>,
+    #[serde(default)]
+    pub append: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,9 +1,10 @@
 name: spec_writer
-role: "SDD module spec creator"
+role: "SDD spec guide for AI agents"
 description: >
-  Creates SDD specs for a module: specs/<name>/ directory with constitution.md,
-  spec.md, requirements.md, plan.md, tasks.md. Also appends to root spec.md
-  and tasks.md. Used by `dectl spec add --scope module`.
+  Guides an AI agent to create or update SDD specs using .dec/sdd/SKILL.md as source
+  and guide. Module scope: create specs/<name>/ with constitution.md, spec.md,
+  requirements.md, plan.md, tasks.md. Feature scope: update existing specs/spec.md
+  and specs/tasks.md. Used by `dectl spec add`.
 requires: []
 context_files:
   - ".dec/config/project.toml"
@@ -15,7 +16,7 @@ inputs:
     description: "Content from source file (--from flag)"
     required: false
     default: ""
-next_step_hint: "After writing specs, verify: ls specs/"
+next_step_hint: "After guidance, the AI agent creates/updates the specs. Verify: ls specs/"
 steps:
   - type: action
     description: Check SDD skill file exists
@@ -44,184 +45,95 @@ steps:
     shell: true
     cmd: ["date", "-u", "+%Y-%m-%dT%H:%M:%SZ"]
 
-  - type: write
-    description: Save context
-    path: ".dec/agent-output/spec_writer-context.md"
-    content: |
-      # Spec Writer Context
-      ## Task: {{task}}
-      ## Timestamp: {{step_5_output}}
-      {{#if from_content}}
-      ### Source File Content
-      {{from_content}}
-      {{/if}}
-
-  - type: write
-    description: Create constitution.md
-    path: "specs/{{name}}/constitution.md"
-    content: |
-      # Constitution: {{task}}
-
-      ## Project Rules
-      - Follow SDD principles: spec first, code second
-      - All requirements must have acceptance criteria
-      - Tasks must be atomic and individually verifiable
-
-      ## Constraints
-      - Technology-agnostic specifications
-      - Technology-specific implementation plans
-      - No code written before specs approved
-
-      ## Definition of Done
-      - [ ] Specs reviewed and approved
-      - [ ] All requirements have acceptance criteria
-      - [ ] Tasks are atomic and verifiable
-      - [ ] Implementation follows plan
-
-  - type: write
-    description: Create spec.md
-    path: "specs/{{name}}/spec.md"
-    content: |
-      # Specification: {{task}}
-
-      ## Overview
-      {{task}}
-
-      ## Functional Requirements
-
-      {{#if from_content}}
-      Based on the source file content, the following requirements are identified:
-
-      **IMPORTANT**: If the source file contains requirement IDs (e.g., REQ-AUTH-001, C-01),
-      preserve them exactly. Do NOT renumber.
-      {{/if}}
-
-      ### REQ-{{name}}-001: Core Functionality
-      **User Story**: As a user, I want core {{name}} functionality
-      **Acceptance Criteria**:
-      - WHEN user requests {{name}} THEN system SHALL provide it
-
-      ## Non-Functional Requirements
-      - Performance: Response time < 200ms
-      - Security: Authentication required
-
-      ## Out of Scope
-      - To be determined
-
-  - type: write
-    description: Create requirements.md
-    path: "specs/{{name}}/requirements.md"
-    content: |
-      # Requirements: {{task}}
-
-      ## Functional Requirements
-
-      {{#if from_content}}
-      Based on the source file content, the following requirements are identified:
-
-      - [ ] REQ-{{name}}-001: Core functionality
-      {{else}}
-      - [ ] REQ-{{name}}-001: Core functionality
-      - [ ] REQ-{{name}}-002: User management
-      - [ ] REQ-{{name}}-003: Data persistence
-      {{/if}}
-
-      ## Non-Functional Requirements
-      - [ ] Performance: Response time < 200ms
-      - [ ] Scalability: Support 1000+ concurrent users
-      - [ ] Security: Authentication required for all operations
-
-  - type: write
-    description: Create plan.md
-    path: "specs/{{name}}/plan.md"
-    content: |
-      # Implementation Plan: {{task}}
-
-      ## Architecture
-      To be determined during detailed planning phase.
-
-      ## Implementation Phases
-
-      ### Phase 1: Foundation
-      **Build Gate**: `cargo build`
-      **Verify Gate**: `cargo test`
-      - Set up module structure
-      - Implement core functionality
-
-      ### Phase 2: Features
-      **Build Gate**: `cargo build`
-      **Verify Gate**: `cargo test`
-      - Implement user management
-      - Add data persistence
-
-  - type: write
-    description: Create tasks.md
-    path: "specs/{{name}}/tasks.md"
-    content: |
-      # Tasks: {{task}}
-
-      ## Phase 1: Foundation
-
-      - [T001] [Module] Implement {{name}} module — L (REQ-{{name}}-001)
-        **Build**: `cargo build`
-        **Verify**: specs/{{name}}/ tests pass
-        **Gate**: must pass before next task
-
-      ## Phase 2: Features
-
-      - [T002] Implement user management — M
-        **Build**: `cargo build`
-        **Verify**: `cargo test`
-        **Gate**: must pass before next task
-
-  - type: write
-    description: Append module entry to root spec.md
-    path: "specs/spec.md"
-    content: |
-      # Spec
-
-      ## Functional Requirements
-
-      ### REQ-{{name}}: [{{name}}] Module
-      **User Story**:
-      > As a developer, I want a {{name}} module so that I can organize {{name}} functionality
-
-      **Implementation Notes**: Implemented in specs/{{name}}/
-
-      ---
-
-  - type: write
-    description: Append module task to root tasks.md
-    path: "specs/tasks.md"
-    content: |
-      # Tasks
-
-      ## Phase 1: Implementation
-
-      - [T001] [Module] Implement {{name}} module — L (REQ-{{name}})
-        **Build**: `cargo build`
-        **Verify**: specs/{{name}}/ tests pass
-        **Gate**: must pass before next task
-
   - type: action
-    description: Record in memory
-    cmd: ["dectl", "memory", "add", "Specs written for module: {{task}}", "--tags", "specs,module,{{task_id}}"]
+    description: Read existing spec and tasks to find last IDs
+    shell: true
+    run_always: true
+    cmd: ["LAST_REQ=$(grep -oE 'REQ-[0-9]+' specs/spec.md 2>/dev/null | grep -oE '[0-9]+' | sort -n | tail -1 || echo '0'); LAST_TASK=$(grep -oE 'T[0-9]+' specs/tasks.md 2>/dev/null | grep -oE '[0-9]+' | sort -n | tail -1 || echo '0'); NREQ=$(printf '%03d' $((LAST_REQ+1))); NTASK=$(printf '%03d' $((LAST_TASK+1))); echo last_req=$LAST_REQ last_task=$LAST_TASK next_req=$NREQ next_task=$NTASK"]
 
   - type: prompt
-    description: Summary
+    description: Module spec guidance
+    skip_if: "{{#if_eq scope \"feature\"}}true{{/if_eq}}"
+    content: |
+      ## MODULE SPEC GUIDANCE — create specs/{{name}}/
+
+      You are the spec_writer. Generate the SDD document suite for the module "{{name}}"
+      using the SDD skill as the source and guide. dectl does not create these files
+      for you — you must create them.
+
+      Read these files before writing:
+      - `.dec/sdd/SKILL.md` — SDD workflow (Steps 1–5) and document rules
+      - `.dec/sdd/references/templates.md` — full document templates
+      - `.dec/sdd/references/examples.md` — worked examples
+
+      Create exactly these files under `specs/{{name}}/`, following the templates
+      EXACTLY (keep every section; fill the placeholders with module-specific content):
+      1. constitution.md
+      2. spec.md
+      3. requirements.md
+      4. plan.md
+      5. tasks.md
+
+      Rules:
+      - Preserve every template section: Definition of Done, User Stories with SHALL
+        acceptance criteria, Edge Case Catalog, Build/Verify/Gate per task, etc.
+      - spec.md is technology-agnostic (WHAT); plan.md is technology-specific (HOW).
+      - Use sequential IDs: `REQ-{{name}}-001`, ..., and `T001`, `T002`, ... in tasks.md.
+      - Every task has **Build**: + **Verify**: + **Gate**:.
+
+      {{#if from_content}}
+      [SOURCE FILE CONTENT]
+      {{from_content}}
+      [/SOURCE FILE CONTENT]
+      Preserve the requirement IDs from the source file. Do NOT renumber them.
+      {{/if}}
+
+      When the 5 files are done, also append:
+      - A reference REQ entry to root `specs/spec.md` pointing to `specs/{{name}}/`.
+      - A module task to root `specs/tasks.md` (with Build/Verify/Gate).
+
+  - type: prompt
+    description: Feature spec guidance
+    skip_if: "{{#if_eq scope \"module\"}}true{{/if_eq}}"
+    content: |
+      ## FEATURE SPEC GUIDANCE — update specs/spec.md + specs/tasks.md
+
+      You are the spec_writer. Update the existing project specs for the feature
+      "{{name}}" using the SDD skill as the source and guide. dectl does not update
+      these files for you — you must do it.
+
+      Read these files before writing:
+      - `.dec/sdd/SKILL.md` — SDD workflow and document rules
+      - `.dec/sdd/references/templates.md` — full document templates
+      - `.dec/sdd/references/examples.md` — worked examples
+
+      Do NOT create a `specs/{{name}}/` subdirectory. Instead:
+
+      1. `specs/spec.md` — append a new requirement block `REQ-{{next_req}}` for the
+         feature {{name}}, following the spec.md template (User Story, Acceptance
+         Criteria with SHALL, Implementation Notes).
+      2. `specs/tasks.md` — append atomic tasks for the feature starting at
+         `T{{next_task}}`, each with **Build**: + **Verify**: + **Gate**:, and
+         referencing `REQ-{{next_req}}`.
+
+      {{#if from_content}}
+      [SOURCE FILE CONTENT]
+      {{from_content}}
+      [/SOURCE FILE CONTENT]
+      Preserve the requirement IDs from the source file. Do NOT renumber them.
+      {{/if}}
+
+  - type: prompt
+    description: Closing reminder
     run_always: true
     content: |
-      ## Module Spec Writing Complete
+      ## Spec guidance complete — {{task}}
 
-      **Task**: {{task}}
+      Use the guidance above to create or update the spec documents, guided by
+      `.dec/sdd/SKILL.md` and `.dec/sdd/references/templates.md`.
+      - Module scope: create `specs/{{name}}/` with the 5 SDD documents.
+      - Feature scope: update `specs/spec.md` and `specs/tasks.md` (no subdirectory).
 
-      ### Files created:
-      Check `specs/{{name}}/` for the SDD documents.
-
-      ### Root files updated:
-      - `specs/spec.md` — module entry appended
-      - `specs/tasks.md` — module task appended
-
-      ### Next steps:
-      1. Review the generated specs
-      2. Implement tasks via: `dectl workflow run execute_task --var task_id=<ID> --auto`
+      Before finishing, validate against SKILL.md Step 4: spec is technology-agnostic,
+      every task has Build/Verify/Gate, IDs are sequential. Then record the result:
+      `dectl memory add "Specs written for {{name}}" --tags specs,{{scope}}`

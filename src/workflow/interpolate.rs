@@ -1,6 +1,32 @@
 use anyhow::{Context, Result};
+use handlebars::{
+    Context as HbContext, Handlebars, Helper, HelperDef, HelperResult, Output, RenderContext,
+    Renderable,
+};
 use regex::Regex;
 use std::collections::HashMap;
+
+#[derive(Clone, Copy)]
+struct IfEqHelper;
+
+impl HelperDef for IfEqHelper {
+    fn call<'reg: 'rc, 'rc>(
+        &self,
+        h: &Helper<'rc>,
+        r: &'reg Handlebars<'reg>,
+        ctx: &'rc HbContext,
+        rc: &mut RenderContext<'reg, 'rc>,
+        out: &mut dyn Output,
+    ) -> HelperResult {
+        let a = h.param(0).and_then(|p| p.value().as_str()).unwrap_or("");
+        let b = h.param(1).and_then(|p| p.value().as_str()).unwrap_or("");
+        let tmpl = if a == b { h.template() } else { h.inverse() };
+        match tmpl {
+            Some(t) => t.render(r, ctx, rc, out),
+            None => Ok(()),
+        }
+    }
+}
 
 pub fn interpolate(template: &str, vars: &HashMap<String, String>) -> Result<String> {
     let referenced = extract_variables(template);
@@ -16,6 +42,7 @@ pub fn interpolate(template: &str, vars: &HashMap<String, String>) -> Result<Str
 
     let mut handlebars = handlebars::Handlebars::new();
     handlebars.register_escape_fn(|s: &str| s.to_string());
+    handlebars.register_helper("if_eq", Box::new(IfEqHelper));
 
     let context = serde_json::to_value(vars)
         .map_err(|e| anyhow::anyhow!("Failed to serialize variables: {}", e))?;
@@ -29,7 +56,7 @@ pub fn extract_variables(template: &str) -> Vec<String> {
     let var_pattern = Regex::new(r"\{\{([^}]+)\}\}").unwrap();
     let mut vars: Vec<String> = Vec::new();
     let keywords = [
-        "if", "else", "each", "with", "unless", "log", "lookup", "this", ".",
+        "if", "if_eq", "else", "each", "with", "unless", "log", "lookup", "this", ".",
     ];
 
     for cap in var_pattern.captures_iter(template) {
@@ -47,7 +74,7 @@ pub fn extract_variables(template: &str) -> Vec<String> {
 
             let parts: Vec<&str> = content.splitn(2, char::is_whitespace).collect();
             let var_name = if parts.len() >= 2 && keywords.contains(&parts[0]) {
-                parts[1].trim()
+                parts[1].split_whitespace().next().unwrap_or("")
             } else {
                 parts[0]
             };
@@ -191,5 +218,45 @@ mod tests {
 
         assert_eq!(vars.len(), 1);
         assert_eq!(vars[0], "items");
+    }
+
+    #[test]
+    fn test_handlebars_if_eq_helper() {
+        let vars: HashMap<_, _> = [
+            ("scope".to_string(), "module".to_string()),
+            ("name".to_string(), "auth".to_string()),
+        ]
+        .into_iter()
+        .collect();
+
+        let template =
+            "{{#if_eq scope \"module\"}}dir={{name}}{{else}}root={{name}}{{/if_eq}}";
+        let result = interpolate(template, &vars).unwrap();
+        assert_eq!(result, "dir=auth");
+    }
+
+    #[test]
+    fn test_handlebars_if_eq_helper_else() {
+        let vars: HashMap<_, _> = [
+            ("scope".to_string(), "feature".to_string()),
+            ("name".to_string(), "login".to_string()),
+        ]
+        .into_iter()
+        .collect();
+
+        let template =
+            "{{#if_eq scope \"module\"}}dir={{name}}{{else}}root={{name}}{{/if_eq}}";
+        let result = interpolate(template, &vars).unwrap();
+        assert_eq!(result, "root=login");
+    }
+
+    #[test]
+    fn test_extract_if_eq_variable() {
+        let template = "{{#if_eq scope \"module\"}}{{name}}{{/if_eq}}";
+        let vars = extract_variables(template);
+
+        assert_eq!(vars.len(), 2);
+        assert!(vars.contains(&"scope".to_string()));
+        assert!(vars.contains(&"name".to_string()));
     }
 }

@@ -320,6 +320,7 @@ mod tests {
                 run_always: None,
                 skip_if: None,
                 timeout_secs: None,
+                append: None,
             }],
         }
     }

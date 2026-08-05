@@ -284,6 +284,19 @@ impl Runner {
                     if let Some(ref out) = captured {
                         vars.insert(format!("step_{}_output", step_num), out.clone());
                         vars.insert("last_output".to_string(), out.clone());
+                        for token in out.split_whitespace() {
+                            if let Some((k, v)) = token.split_once('=') {
+                                let k = k.trim();
+                                let v = v.trim();
+                                if !k.is_empty()
+                                    && !v.is_empty()
+                                    && k.chars()
+                                        .all(|c| c.is_alphanumeric() || c == '_')
+                                {
+                                    vars.entry(k.to_string()).or_insert_with(|| v.to_string());
+                                }
+                            }
+                        }
                     }
                 }
                 StepType::Write => {
@@ -298,8 +311,19 @@ impl Runner {
                     fs::create_dir_all(parent)
                         .with_context(|| format!("Failed to create directory: {:?}", parent))?;
 
-                    fs::write(&interp_path, &interp_content)
-                        .with_context(|| format!("Failed to write file: {}", interp_path))?;
+                    if step.append.unwrap_or(false) {
+                        use std::io::Write;
+                        let mut f = fs::OpenOptions::new()
+                            .create(true)
+                            .append(true)
+                            .open(&interp_path)
+                            .with_context(|| format!("Failed to open file: {}", interp_path))?;
+                        f.write_all(interp_content.as_bytes())
+                            .with_context(|| format!("Failed to append to file: {}", interp_path))?;
+                    } else {
+                        fs::write(&interp_path, &interp_content)
+                            .with_context(|| format!("Failed to write file: {}", interp_path))?;
+                    }
 
                     println!("✓ Wrote: {}", interp_path);
                     results.push(StepResult {

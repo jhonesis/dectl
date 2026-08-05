@@ -171,6 +171,7 @@ mod tests {
                 run_always: None,
                 skip_if: None,
                 timeout_secs: None,
+                append: None,
             }],
         }
     }
@@ -236,6 +237,7 @@ mod tests {
             run_always: None,
             skip_if: None,
             timeout_secs: None,
+                append: None,
         };
         let err = validate_workflow(&workflow).unwrap_err();
         assert!(err.to_string().contains("cmd"));
@@ -258,6 +260,7 @@ mod tests {
             run_always: None,
             skip_if: None,
             timeout_secs: None,
+                append: None,
         };
         let err = validate_workflow(&workflow).unwrap_err();
         assert!(err.to_string().contains("path") && err.to_string().contains("content"));
