@@ -35,7 +35,7 @@ steps:
       dectl workflow run execute_task \
         --var task_id={{task_id}} \
         --var description="{{description}}" \
-        --from-step 4
+        --from-step 4 --auto
       ```
 
       **WARNING: Skipping this command will cause:**
@@ -57,3 +57,36 @@ steps:
     agent_type: documenter
     task: "{{description}}"
     run_always: true
+
+  - type: prompt
+    description: "Final verification - check state files are synced"
+    run_always: true
+    content: |
+      ## FINAL VERIFICATION — Do these 3 checks NOW:
+
+      1. **progress.json**: Read `.dec/state/progress.json`
+         → Should show an entry with `id: "{{task_id}}"` and `status: "done"`, and `updated_at` updated.
+      2. **last_session.md**: Read `.dec/state/last_session.md`
+         → Should show {{task_id}} under the completed-tasks section.
+      3. **tasks.md (only if it exists)**: Run `find specs -name tasks.md -type f`
+         → If a tasks.md exists AND it lists {{task_id}}, that task must be checked `[x]`.
+         → If there is no tasks.md, or {{task_id}} is not listed there, this check is satisfied.
+
+      If ANY check fails, fix it before ending the session.
+
+  - type: action
+    description: "Hard gate: verify state files are synced"
+    shell: true
+    run_always: true
+    cmd:
+      - |
+        P=.dec/state/progress.json; S=.dec/state/last_session.md; T='{{task_id}}'; ok=0
+        grep -qiF "\"id\": \"$T\"" "$P" 2>/dev/null && grep -qi '"status": "done"' "$P" 2>/dev/null && ok=$((ok+1))
+        grep -qiF "$T" "$S" 2>/dev/null && ok=$((ok+1))
+        TM=$(find specs -name tasks.md -type f 2>/dev/null)
+        if [ -z "$TM" ] || ! grep -qiF "$T" $TM 2>/dev/null; then
+          ok=$((ok+1))
+        elif grep -iF "$T" $TM 2>/dev/null | grep -q "\[x\]"; then
+          ok=$((ok+1))
+        fi
+        if [ "$ok" -eq 3 ]; then echo STATE_OK; else echo STATE_MISSING; exit 1; fi

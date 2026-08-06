@@ -12,6 +12,7 @@ struct Step {
     #[serde(rename = "type")]
     step_type: String,
     content: Option<String>,
+    cmd: Option<Vec<String>>,
     run_always: Option<bool>,
 }
 
@@ -126,7 +127,7 @@ fn execute_task_workflow_has_run_always_on_steps_4_and_5() {
     let workflow: Workflow =
         serde_yaml::from_str(&content).unwrap_or_else(|e| panic!("Failed to parse YAML: {}", e));
 
-    assert_eq!(workflow.steps.len(), 5, "Workflow should have 5 steps");
+    assert!(workflow.steps.len() >= 6, "Workflow should have at least 6 steps");
 
     let step3 = &workflow.steps[2];
     assert_eq!(step3.step_type, "prompt", "Step 3 should be a prompt");
@@ -150,5 +151,18 @@ fn execute_task_workflow_has_run_always_on_steps_4_and_5() {
         step5.run_always,
         Some(true),
         "Step 5 (documenter) must have run_always: true"
+    );
+
+    let last = workflow.steps.last().expect("Workflow should have steps");
+    assert_eq!(last.step_type, "action", "Last step should be the hard gate action");
+    assert_eq!(
+        last.run_always,
+        Some(true),
+        "Hard gate must have run_always: true"
+    );
+    let last_cmd = last.cmd.as_ref().expect("Hard gate should have cmd");
+    assert!(
+        last_cmd.iter().any(|c| c.contains("STATE_OK")),
+        "Hard gate must check STATE_OK"
     );
 }

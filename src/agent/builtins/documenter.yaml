@@ -73,14 +73,14 @@ steps:
       - Memory updated with technical decisions
       - Task summary written to `.dec/agent-output/{{task_id}}-summary.md`
 
-      ### Your documentation tasks:
-      1. **Update progress.json** — mark this task as `done` in `.dec/state/progress.json`
-         ```json
-         { "id": "{{task_id}}", "status": "done", "description": "{{task}}" }
-         ```
-      2. **Update tasks.md** — change `[ ]` to `[x]` for task {{task_id}} in the relevant `specs/*/tasks.md`
-      3. **Add decision file** (if architectural) — write `.dec/decisions/{{task_id}}-<name>.md`
-      4. **Update last_session.md** — add {{task_id}} to the completed tasks list
+       ### Your documentation tasks:
+       1. **Update progress.json** — mark this task as `done` in `.dec/state/progress.json`
+          ```json
+          { "id": "{{task_id}}", "status": "done", "description": "{{task}}" }
+          ```
+       2. **Update tasks.md** (only if it exists AND lists {{task_id}}) — change `[ ]` to `[x]` for task {{task_id}} in the relevant `specs/*/tasks.md`; otherwise SKIP, not every task is tracked in specs
+       3. **Add decision file** (if architectural) — write `.dec/decisions/{{task_id}}-<name>.md`
+       4. **Update last_session.md** — add {{task_id}} to the completed tasks list
 
       ### Task artifacts for reference:
       {{step_7_output}}
@@ -88,6 +88,53 @@ steps:
       ### Task cycle complete
       To verify everything was recorded:
         dectl memory search "{{task_id}}" --json
+
+  - type: prompt
+    description: Update progress.json
+    run_always: true
+    content: |
+      ## CRITICAL: Update progress.json
+      You MUST update the project progress state in `.dec/state/progress.json`:
+
+      1. Read the current file.
+      2. For task {{task_id}}:
+         - If an entry with this `id` already exists in the `features` array, update its `status` to `"done"`.
+         - If it does NOT exist, add a new entry to the `features` array with:
+           - `id`: "{{task_id}}"
+           - `description`: a short summary of the completed task ({{task}})
+           - `status`: "done"
+      3. Update the global `updated_at` timestamp to the current time (ISO 8601 UTC).
+      4. Preserve the `_comment`, `schema_version`, and ALL other existing entries exactly as they are.
+      5. Verify the file is valid JSON after your edit.
+
+  - type: prompt
+    description: Update last_session.md
+    run_always: true
+    content: |
+      ## CRITICAL: Update last_session.md
+      You MUST record the completion of this task in `.dec/state/last_session.md`:
+
+      1. Read the current session log.
+      2. Update the session date at the top to the current time.
+      3. Append a new bullet under the "Qué se hizo" (or "Completed") section:
+         - "- {{task_id}} completada: {{task}}"
+      4. Do NOT overwrite the entire file. Preserve the history of ALL other tasks completed in this session.
+      5. If relevant, update the "Qué quedó pendiente" and "Próximo paso recomendado" sections.
+
+  - type: prompt
+    description: Update tasks.md checkbox
+    run_always: true
+    content: |
+      ## CRITICAL: Update tasks.md checkbox
+      Before the session ends:
+
+      1. Check whether a `tasks.md` exists under `specs/`:
+         run `find specs -name "tasks.md" -type f 2>/dev/null`
+      2. If NO tasks.md exists, SKIP this step — not all tasks are tracked in specs.
+      3. If it exists, open it and find the line referencing task {{task_id}}.
+      4. If the task IS listed there, change `- [ ]` to `- [x]` for that task and verify with:
+            grep -n "\[x\]" <the tasks.md file>
+      5. If the task is NOT listed there, SKIP — the task lives outside the specs index (different nomenclature or scope).
 
   - type: prompt
     description: Pipeline completion notice

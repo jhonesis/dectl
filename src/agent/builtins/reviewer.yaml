@@ -35,22 +35,23 @@ steps:
 
   - type: action
     description: Show detailed changes
-    cmd: ["git", "diff", "--stat", "--no-color"]
+    shell: true
+    cmd: ["git diff --stat --no-color 2>/dev/null || echo 'No git repository - skipping diff'"]
 
   - type: action
     description: Show full diff for review
     shell: true
-    cmd: ["git diff --no-color | head -500"]
+    cmd: ["git diff --no-color 2>/dev/null | head -500 || echo 'No git repository'"]
 
   - type: action
     description: Count changes
     shell: true
-    cmd: ["git diff --shortstat 2>/dev/null || echo 'No changes'"]
+    cmd: ["git diff --shortstat 2>/dev/null || echo 'No changes (no git repo)'"]
 
   - type: action
     description: Check untracked files
     shell: true
-    cmd: ["git ls-files --others --exclude-standard | head -20 || echo 'No untracked files'"]
+    cmd: ["git ls-files --others --exclude-standard 2>/dev/null | head -20 || echo 'No git repo'"]
 
   - type: write
     description: Save review report
