@@ -181,6 +181,7 @@ dectl workflow run execute_task --var task_id=T001 --var description="test" --au
 ### Spec-Driven Development (SDD)
 - `dectl spec init [--from <path>]` — ensure `.dec/sdd/` exists with SDD methodology (built into `project init --standard`)
 - **`--from <path>`**: pass a `.md` file with requirements as input — content is injected as `[SOURCE FILE CONTENT]` for the agent
+- **`specifications.md` template** — auto-generated at the project root on every init level (Level1/2/3) alongside `AGENTS.md`; a ready-to-fill requirements template (tier signals, identity, users & personas, scope, success & acceptance criteria, technical constraints, data, regulation & compliance, risks & dependencies, CRITICAL-only owner/incident-response/audit) that you complete and pass via `dectl spec init --from specifications.md`
 - Auto-creates 3 embedded templates:
   - **SKILL.md** — SDD workflow: 8 interview questions, clarification phase, adversarial agent pattern (Coordinator/Implementer/Verifier), model tiering, WHAT vs HOW enforcement, memory integration
   - **templates.md** — 9 document templates per project type (spec, architecture, tasks, API, data, auth, deployment, testing, monitoring), edge case catalog, purity boundaries, drift detection
@@ -238,6 +239,17 @@ This creates a `.dec/` directory with:
 - `decisions/` — for architectural decisions
 - `workflows/` — for reusable workflows
 - `AGENTS.md` — AI configuration file
+
+It also creates `specifications.md` at the project root (on all init levels — it's needed
+for good development regardless of level). Fill it in (in English) and pass it to the agent:
+
+```bash
+dectl spec init --from specifications.md
+```
+
+The template covers: tier signals checklist, identity, users & personas, scope, success &
+acceptance criteria, technical constraints, data, regulation & compliance, risks & dependencies,
+and CRITICAL-only sections (owner, incident response, audit).
 
 ### 2. Add Context to Memory
 
@@ -424,7 +436,7 @@ When executed, `dectl session end` performs five actions (plus optional hooks):
 
 | Command | Description |
 |---------|-------------|
-| `dectl spec init [--from <path>]` | Ensure `.dec/sdd/` exists with SKILL.md + references/, update bridge. `--from`: pass `.md` file as input to agent |
+| `dectl spec init [--from <path>]` | Ensure `.dec/sdd/` exists with SKILL.md + references/, update bridge. `--from`: pass `.md` file (e.g. the generated `specifications.md` template) as input to agent |
 | `dectl spec init --json` | JSON output with envelope |
 | `dectl spec add <name> [--scope feature\|module] [--from <path>]` | Add features/modules to specs via `spec_writer` agent — reads any format, preserves requirement IDs |
 

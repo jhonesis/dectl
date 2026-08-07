@@ -62,6 +62,14 @@ fn test_project_init_level1() {
     assert!(tmp.path().join(".dec/config/project.toml").exists());
     assert!(tmp.path().join(".dec/isa/project.isa.md").exists());
     assert!(tmp.path().join(".dec/.gitignore").exists());
+    assert!(
+        tmp.path().join("specifications.md").exists(),
+        "specifications.md should exist at project root in Level1"
+    );
+    assert!(
+        tmp.path().join("AGENTS.md").exists(),
+        "AGENTS.md should exist at project root in Level1"
+    );
 }
 
 #[test]
@@ -487,5 +495,15 @@ fn test_project_init_standard_creates_sdd_with_bridge() {
     assert!(
         !tmp.path().join("specs").exists(),
         "specs/ should NOT exist after project init --standard"
+    );
+
+    // specifications.md template at project root (alongside AGENTS.md)
+    assert!(
+        tmp.path().join("specifications.md").exists(),
+        "specifications.md should exist at project root after project init --standard"
+    );
+    assert!(
+        tmp.path().join("AGENTS.md").exists(),
+        "AGENTS.md should exist at project root after project init --standard"
     );
 }

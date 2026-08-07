@@ -154,6 +154,7 @@ impl Templates {
             InitLevel::Level3 => Self::level3(),
         };
         files.push(("AGENTS.md", include_str!("txt/agents.md")));
+        files.push(("specifications.md", include_str!("txt/specifications.md")));
         files
     }
 

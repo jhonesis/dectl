@@ -62,6 +62,8 @@ pub fn is_project_empty() -> bool {
         "CLAUDE.md",
         "AGENTS.MD",
         "CLAUDE.MD",
+        "specifications.md",
+        "SPECIFICATIONS.MD",
         ".gitignore",
     ]
     .into_iter()
