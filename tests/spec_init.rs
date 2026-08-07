@@ -52,52 +52,60 @@ fn test_spec_init_creates_sdd_dir() {
     assert!(skill.contains("Spec-Driven Development"));
     assert!(skill.contains("Build: + Verify: + Gate:"));
 
-    // Phase 1: 4 diverse examples, no TaskFlow, traceability
+    // Fused examples: TaskFlow (STANDARD) + LedgerPay (CRITICAL), no legacy examples
     let examples = fs::read_to_string(tmp.path().join(".dec/sdd/references/examples.md")).unwrap();
-    assert!(examples.contains("logsnap"), "examples.md missing logsnap");
+    assert!(examples.contains("TaskFlow"), "examples.md missing TaskFlow");
     assert!(
-        examples.contains("SnippetVault"),
-        "examples.md missing SnippetVault"
+        examples.contains("LedgerPay"),
+        "examples.md missing LedgerPay"
     );
     assert!(
-        examples.contains("LegacyPay"),
-        "examples.md missing LegacyPay"
+        !examples.contains("logsnap"),
+        "examples.md should not contain old logsnap example"
     );
     assert!(
-        examples.contains("EventStream"),
-        "examples.md missing EventStream"
+        !examples.contains("SnippetVault"),
+        "examples.md should not contain old SnippetVault example"
     );
     assert!(
-        examples.contains("HabitStack"),
-        "examples.md missing HabitStack web example"
+        !examples.contains("LegacyPay"),
+        "examples.md should not contain old LegacyPay example"
     );
     assert!(
-        !examples.contains("TaskFlow"),
-        "examples.md should not contain old TaskFlow example"
+        !examples.contains("EventStream"),
+        "examples.md should not contain old EventStream example"
     );
     assert!(
-        examples.contains("Traceability Matrix"),
-        "examples.md missing Traceability Matrix"
+        !examples.contains("HabitStack"),
+        "examples.md should not contain old HabitStack example"
+    );
+    assert!(
+        examples.contains("Build Gate"),
+        "examples.md missing Build Gate in tasks"
     );
 
-    // Phase 2: project-agnostic templates with new sections
+    // Fused templates: CRITICAL docs + BVG (Build/Verify/Gate) preserved
     let templates =
         fs::read_to_string(tmp.path().join(".dec/sdd/references/templates.md")).unwrap();
     assert!(
-        templates.contains("Program Type") || templates.contains("Interface Type"),
-        "templates.md missing project-type-agnostic sections"
+        templates.contains("[CRITICAL ONLY]"),
+        "templates.md missing [CRITICAL ONLY] markers"
     );
     assert!(
-        templates.contains("Edge Case Catalog"),
-        "templates.md missing Edge Case Catalog"
+        templates.contains("threat-model.md"),
+        "templates.md missing threat-model.md template"
     );
     assert!(
-        templates.contains("Purity Boundaries"),
-        "templates.md missing Purity Boundaries"
+        templates.contains("compliance-matrix.md"),
+        "templates.md missing compliance-matrix.md template"
     );
     assert!(
-        templates.contains("Drift Detection"),
-        "templates.md missing Drift Detection"
+        templates.contains("access-control-matrix.md"),
+        "templates.md missing access-control-matrix.md template"
+    );
+    assert!(
+        templates.contains("Task Readiness"),
+        "templates.md missing Task Readiness checklist"
     );
     assert!(
         templates.contains("Constitution compliance review"),
@@ -207,18 +215,18 @@ fn test_spec_init_file_sizes() {
         .count();
 
     assert!(
-        (260..=400).contains(&skill_lines),
-        "SKILL.md has {} lines, expected 260-400",
+        (480..=650).contains(&skill_lines),
+        "SKILL.md has {} lines, expected 480-650",
         skill_lines
     );
     assert!(
-        (480..=700).contains(&templates_lines),
-        "templates.md has {} lines, expected 480-700",
+        (800..=1000).contains(&templates_lines),
+        "templates.md has {} lines, expected 800-1000",
         templates_lines
     );
     assert!(
-        (1800..=2200).contains(&examples_lines),
-        "examples.md has {} lines, expected 1800-2200",
+        (750..=950).contains(&examples_lines),
+        "examples.md has {} lines, expected 750-950",
         examples_lines
     );
 }

@@ -1,1756 +1,116 @@
 # SDD Worked Examples
 
-## How to Use These Examples
-
-These examples illustrate nine SDD documents (constitution, spec, requirements, research, plan, data-model, interface-contracts, tasks) for different project types.
-
-### Choosing an Example
-- **"logsnap"** — Rust CLI tool. Use for local-first, terminal-based, single-binary projects.
-- **"SnippetVault"** — Python REST API. Use for web API, CRUD, database-backed projects.
-- **"LegacyPay"** — Brownfield/modernization. Use when extracting a spec from existing code.
-- **"EventStream"** — Event-driven architecture. Use for async, message broker, microservices projects.
-- **"HabitStack"** — Next.js full-stack web app. Use for frontend + backend, SSR, auth, database projects.
+Two complete worked examples:
+1. **TaskFlow** (STANDARD tier) — a simple team task management web app, showing the base 9-document flow.
+2. **LedgerPay Funds Transfer** (CRITICAL tier) — a bank-grade money-movement feature, showing every
+   additional document (threat-model, compliance-matrix, risk-register) and how CRITICAL-only sections
+   of the standard documents get filled in.
+Use Example 1 as the template for ordinary product/feature work. Use Example 2 as the template whenever
+the project touches money, regulated data, or was explicitly described as needing to be "bank-grade,"
+"audit-ready," or "production-critical."
 
 ### Adaptation Guidelines
 - Adapt **structure**, not content. Every project needs a constitution with Core Principles, a spec with REQ-00X format, a plan with architecture, etc.
-- Include **all 9 documents** even if your chosen example doesn't show all sections — extrapolate from similar documents across examples.
 - Customize **Build/Verify/Gate** commands in tasks.md to match your project's toolchain.
-- Add a **Traceability Matrix** (see examples) mapping REQ → plan phase → task ID → verify → test.
+- Each task is atomic + individually verifiable; each phase keeps its Build Gate + Verify Gate.
 
 ---
 
-## Example: "logsnap" — A Rust CLI Log Parser
-
----
-
-## constitution.md (example)
-
-```markdown
-# Project Constitution — logsnap
-
-## 1. Project Identity
-- **Name**: logsnap
-- **Purpose**: A CLI tool that parses, filters, and formats log files from the terminal. Designed for developers and SREs who need fast ad-hoc log analysis without leaving the terminal.
-- **Owners**: Maintainer team
-
-## 2. Core Principles
-- Performance first — parse 100MB+ log files in under 2 seconds
-- Unix-philosophy — do one thing well (log parsing), composable with pipes
-- No runtime dependencies — single static binary, zero external runtime deps
-- Predictable output — same input always produces same output (pure parsing)
-
-## 3. Technology Constraints
-### Mandatory Stack
-- Language: Rust (stable)
-- CLI framework: clap v4 (derive API)
-- Output: colored with NO_COLOR support, JSON via --json flag
-- Error handling: anyhow, no panics in production paths
-
-### Forbidden Technologies
-- No async runtime (not needed for file parsing)
-- No external databases or services
-- No network calls whatsoever
-- No dynamic dispatch in hot paths
-
-## 4. Testing Strategy
-- Unit tests: #[cfg(test)] modules in every .rs file
-- Integration tests: tests/ directory with sample log fixtures
-- Benchmark: criterion benchmarks for parser hot paths
-- Coverage target: 85%
-
-## 5. Definition of Done
-- [ ] Code compiles without errors (cargo build)
-- [ ] Verify step passes (cargo run -- --help works)
-- [ ] Unit + integration tests pass (cargo test)
-- [ ] No clippy warnings (cargo clippy)
-- [ ] At least one benchmark covers the parser
-- [ ] Constitution compliance: no async, no network, no databases
-```
-
----
-
-## spec.md (example)
-
-```markdown
-# Feature Specification: Log File Parsing
-> Technology-agnostic | Version: 1.0 | Status: Approved
-
-## Overview
-A CLI tool that reads log files, applies user-specified filters, and outputs the results in one of several formats (text, JSON, CSV).
-
-## Users & Personas
-- **Developer**: Debugs application issues by searching logs for error patterns
-- **SRE**: Monitors production logs by filtering on severity, service, or timeframe
-- **CI Pipeline**: Runs logsnap as part of automated incident analysis scripts
-
-## Functional Requirements
-
-### REQ-001: Log File Reading
-**User Story**:
-> As a Developer, I want to pass a log file path to logsnap so that the tool reads and parses its contents.
-
-**Acceptance Criteria**:
-- WHEN a user provides a valid file path as a positional argument THEN the system SHALL read and parse the file
-- WHEN a user provides a non-existent file path THEN the system SHALL exit with a descriptive error message
-- WHEN a user provides a pipe via stdin (no file argument) THEN the system SHALL read from stdin
-- WHEN the file is larger than 1GB THEN the system SHALL stream-parse without loading the entire file into memory
-
-### REQ-002: Log Filtering
-**User Story**:
-> As an SRE, I want to filter logs by severity level (INFO, WARN, ERROR) so that I can focus on relevant entries.
-
-**Acceptance Criteria**:
-- WHEN a user specifies --level ERROR THEN the system SHALL only output entries with that severity
-- WHEN a user specifies --level WARN,ERROR THEN the system SHALL output entries matching any of the listed levels
-- WHEN a user specifies an invalid severity level THEN the system SHALL exit with a list of valid levels
-- WHEN no --level flag is provided THEN the system SHALL output all entries unfiltered
-
-### REQ-003: Output Formatting
-**User Story**:
-> As a CI Pipeline, I want logsnap to output in JSON format so that downstream tools can parse the results.
-
-**Acceptance Criteria**:
-- WHEN a user specifies --format json THEN the system SHALL output a JSON array of parsed entries
-- WHEN a user specifies --format csv THEN the system SHALL output CSV with headers
-- WHEN a user specifies --format text (or no format flag) THEN the system SHALL output human-readable colored text
-- WHEN NO_COLOR environment variable is set THEN the system SHALL NOT use ANSI color codes
-
-## Non-Functional Requirements
-- **Performance**: Parse 100MB log file in < 2 seconds on a modern laptop
-- **Reliability**: Zero panics for any valid or invalid input
-- **Composability**: Works as a UNIX pipe (stdin → logsnap --level ERROR --json → jq)
-
-## Out of Scope
-- Real-time log tailing (-f flag, v2)
-- Log file rotation detection (v2)
-- Remote log fetching over SSH/HTTP (v2)
-```
-
----
-
-## requirements.md (example)
-
-```markdown
-# Requirements Traceability — logsnap
-
-## REQ-001: Log File Reading
-| Attribute | Value |
-|-----------|-------|
-| Priority | P0 |
-| Effort | S (2h) |
-| Dependencies | None |
-| Risk | Low — Rust std::fs::File handles this |
-| Verification | cargo test test_read_file |
-
-## REQ-002: Log Filtering
-| Attribute | Value |
-|-----------|-------|
-| Priority | P0 |
-| Effort | M (4h) |
-| Dependencies | REQ-001 |
-| Risk | Low — simple string matching |
-| Verification | cargo test test_filter_by_level |
-
-## REQ-003: Output Formatting
-| Attribute | Value |
-|-----------|-------|
-| Priority | P0 |
-| Effort | M (4h) |
-| Dependencies | REQ-001 |
-| Risk | Low — serde for JSON, custom for CSV |
-| Verification | cargo test test_json_output |
-
-## REQ-004: Pipe/Stdin Support
-| Attribute | Value |
-|-----------|-------|
-| Priority | P1 |
-| Effort | S (1h) |
-| Dependencies | REQ-001 |
-| Risk | Low — read from stdin if no file arg |
-| Verification | cargo test test_stdin_reading |
-
-## REQ-005: Large File Streaming
-| Attribute | Value |
-|-----------|-------|
-| Priority | P1 |
-| Effort | M (4h) |
-| Dependencies | REQ-001 |
-| Risk | Medium — BufReader with line-by-line iteration |
-| Verification | cargo test test_large_file --release
-```
-
----
-
-## research.md (example)
-
-```markdown
-# Research — logsnap
-
-## Research Question 1: Which Rust CLI framework?
-**Question**: Should we use clap v4 (derive), clap v4 (builder), or structopt?
-
-**Investigation**:
-- structopt is deprecated in favor of clap v4 derive
-- clap derive API is the community standard (90%+ of Rust CLI tools)
-- Builder API is more flexible but unnecessary for our simple CLI
-- clap v4 supports autocomplete generation (bonus)
-
-**Decision**: Use clap v4 with derive API.
-
-## Research Question 2: Which log line format to support?
-**Question**: Should we support only one format, or auto-detect between common formats?
-
-**Formats considered**:
-1. Common Log Format (Apache/nginx)
-2. JSON lines (each line is a JSON object)
-3. Syslog (RFC 5424)
-4. Plain text with level prefix [INFO] [WARN] [ERROR]
-
-**Decision**: Support plain text with level prefix as the baseline. JSON lines as auto-detect (try serde_json::from_str per line). CLF and syslog as opt-in via --format auto-detect. Rationale: plain text + JSON covers 90%+ of real-world log files.
-
-## Open Questions
-- Should we support glob patterns for multi-file input? (deferred to v2)
-- How aggressive should auto-format detection be? (soft fail: try each format, use first that parses all lines)
-```
-
----
-
-## plan.md (example)
-
-```markdown
-# Technical Plan — logsnap CLI
-> Implements: spec.md | Stack defined in constitution.md
-
-## Tech Stack
-| Layer | Technology | Justification |
-|-------|-----------|---------------|
-| Language | Rust stable | Performance, safety, static binary |
-| CLI Framework | clap v4 (derive) | Industry standard, autocomplete |
-| JSON output | serde_json | Standard Rust JSON library |
-| Error handling | anyhow | Project convention, ergonomic |
-| Testing | cargo test + criterion | Built-in + benchmarks for perf |
-| Program Type | CLI | Terminal application, no web/API |
-
-## Architecture
-```
-stdin ─┐
-       ├──> clap arg parser ──> LogConfig ──> LogReader ──> Filter ──> Formatter ──> stdout
-file ──┘                                   (BufReader)    (level)    (text|json|csv)
-```
-
-## Purity Boundaries
-| Component | Type | Reason |
-|-----------|------|--------|
-| `LogConfig::parse` | Pure | Parses CLI args, no I/O |
-| `LogReader::read_lines` | Impure | Reads from file or stdin (I/O) |
-| `Filter::matches` | Pure | String matching, no side effects |
-| `Formatter::to_json` | Pure | Transforms data, no I/O |
-| `Formatter::to_text` | Pure | Transforms data, no I/O |
-| `main` | Impure | Orchestrates I/O |
-| Testing implication: Pure functions need unit tests only; impure components need integration tests with fixtures.
-
-## Implementation Phases
-
-### Phase 1: Foundation (1 day)
-- Project scaffolding (cargo init, clap setup, CI config)
-- Requirements: satisfies REQ-001 (file reading)
-
-### Phase 2: Core Features (3 days)
-- Log parsing with format detection
-- Level-based filtering
-- Text, JSON, and CSV output formatting
-- Requirements: REQ-001, REQ-002, REQ-003
-
-### Phase 3: Polish & Performance (2 days)
-- Stdin support, large file streaming
-- Color output with NO_COLOR compliance
-- CLI autocomplete generation
-- Benchmark suite and optimization
-- Requirements: REQ-004, REQ-005
-
-## Risks
-| Risk | Mitigation |
-|------|-----------|
-| Large files cause high memory | BufReader + line-by-line, never load all into memory |
-| Log format ambiguity | Auto-detect with fallback to user-specified --format |
-| Performance regression | Criterion benchmarks in CI, compare against baseline |
-```
-
----
-
-## data-model.md (example)
-
-```markdown
-# Data Model — logsnap
-
-## Core Structs
-
-### LogConfig
-| Field | Type | Description |
-|-------|------|-------------|
-| file_path | Option<PathBuf> | Path to log file (None = read stdin) |
-| levels | Vec<Level> | Filter by severity (empty = no filter) |
-| format | OutputFormat | text / json / csv |
-| color | ColorPolicy | auto / always / never |
-
-### LogEntry
-| Field | Type | Description |
-|-------|------|-------------|
-| timestamp | Option<DateTime<Utc>> | Parsed timestamp (None if not found) |
-| level | Option<Level> | Parsed severity (None if not found) |
-| message | String | The log message body |
-| raw | String | Original raw line (for text output) |
-
-### Level (Enum)
-- Info
-- Warn
-- Error
-- Debug
-- Trace
-
-### OutputFormat (Enum)
-- Text
-- Json
-- Csv
-
-## Indexes & Constraints
-For CLI projects without databases, this section documents validation rules instead of DB indexes:
-- LogEntry.timestamp: optional — if present, must be valid RFC 3339
-- LogEntry.level: optional — if present, must match exactly one of the Level enum variants
-- LogEntry.message: never empty (empty messages are skipped with a warning)
-- LogConfig.file_path and stdin are mutually exclusive (error if both missing)
-```
-
----
-
-## interface-contracts/cli.md (example)
-
-```markdown
-# CLI Interface — logsnap
-
-## Interface Type: CLI
-
-## Usage
-```
-logsnap [FILE] [OPTIONS]
-```
-
-## Commands
-No subcommands. Single-shot execution.
-
-## Arguments
-| Argument | Type | Required | Description |
-|----------|------|----------|-------------|
-| FILE | Path | No | Path to log file. Reads from stdin if omitted. |
-
-## Options
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--level, -l` | String... | (all) | Filter by severity level (INFO, WARN, ERROR, DEBUG, TRACE). Repeatable. |
-| `--format, -f` | String | text | Output format: text, json, csv |
-| `--color` | String | auto | Color policy: auto, always, never |
-| `--json` | Flag | false | Shorthand for --format json |
-| `--help` | Flag | — | Print help and exit |
-| `--version` | Flag | — | Print version and exit |
-
-## Exit Codes
-| Code | Meaning |
-|------|---------|
-| 0 | Success (at least one entry matched) |
-| 1 | No entries matched the filter |
-| 2 | Error (file not found, invalid args, parse failure) |
-
-## Examples
-```bash
-# Parse all entries from a file
-logsnap server.log
-
-# Filter errors only, with JSON output
-logsnap server.log --level ERROR --json
-
-# Pipe from another command
-tail -n 100 app.log | logsnap --level WARN,ERROR --format csv
-
-# Disable color
-NO_COLOR=1 logsnap server.log
-```
-```
-
----
-
-## tasks.md (example)
-
-```markdown
-# Implementation Tasks — logsnap
-
-## Phase 1: Foundation
-
-- [ ] [T001] Initialize Rust project with clap v4 and anyhow — S
-  - **Build**: `cargo build` compiles without errors
-  - **Verify**: `cargo run -- --help` shows usage string
-  - **Gate**: Code compiles, no warnings
-
-- [ ] [T002][P] Define LogConfig struct with clap derive — S (REQ-001)
-  - **Build**: `cargo build` passes
-  - **Verify**: `cargo test test_config_parse` passes
-  - **Gate**: Struct fields match spec (file_path, levels, format, color)
-
-- [ ] [T003][P] Define LogEntry struct and Level enum — S (REQ-001)
-  - **Build**: `cargo build` passes
-  - **Verify**: `cargo test test_log_entry_creation` passes
-  - **Gate**: All Level variants defined, LogEntry has timestamp/level/message/raw
-
-## Phase 2: Core Features
-
-- [ ] [T004] Implement LogReader with BufReader line iteration — M (REQ-001)
-  - **Build**: `cargo build` passes
-  - **Verify**: `cargo test test_read_file` and `cargo test test_stdin_reading` pass
-  - **Gate**: Reads file line by line, returns Vec<LogEntry>
-
-- [ ] [T005][P] Implement format auto-detection (plain text + JSON lines) — M (REQ-001)
-  - **Build**: `cargo build` passes
-  - **Verify**: `cargo test test_format_detection` passes
-  - **Gate**: Correctly identifies format from first few lines
-
-- [ ] [T006] Implement Filter::matches with level filtering — S (REQ-002)
-  - **Build**: `cargo build` passes
-  - **Verify**: `cargo test test_filter_by_level` passes
-  - **Gate**: Only matching levels pass through filter
-
-- [ ] [T007][P] Implement Formatter (text, json, csv) — M (REQ-003)
-  - **Build**: `cargo build` passes
-  - **Verify**: `cargo test test_json_output` and `cargo test test_csv_output` pass
-  - **Gate**: JSON output is valid serde_json, CSV has headers
-
-- [ ] [T008] Implement color output with NO_COLOR support — S (REQ-003)
-  - **Build**: `cargo build` passes
-  - **Verify**: `NO_COLOR=1 cargo run -- server.log | cat -v` shows no escape codes
-  - **Gate**: ColorPolicy logic implemented correctly
-
-## Phase 3: Polish & Performance
-
-- [ ] [T009] Add large file streaming (BufReader, no full load) — M (REQ-005)
-  - **Build**: `cargo build` passes
-  - **Verify**: `cargo test test_large_file --release` passes (< 2s for 100MB)
-  - **Gate**: Memory usage stays under 10MB for any file size
-
-- [ ] [T010] Add shell completion generation — S
-  - **Build**: `cargo build` passes
-  - **Verify**: `cargo run -- --completions bash > logsnap.bash` works
-  - **Gate**: Generated completions parse without errors
-
-- [ ] [T011] Add criterion benchmarks for parser hot paths — S
-  - **Build**: `cargo bench` compiles without errors
-  - **Verify**: `cargo bench` runs and shows timing
-  - **Gate**: Baseline benchmark results recorded
-
-- [ ] [T012] Write integration tests with sample log fixtures — S
-  - **Build**: `cargo test` passes
-  - **Verify**: All integration tests in tests/ directory pass
-  - **Gate**: Test fixtures cover happy path + error cases + edge cases
-
----
-
-## Progress: 0/12 tasks complete
-```
-
----
-
-## Example: "SnippetVault" — A Python API for Code Snippets
+# EXAMPLE 1 (STANDARD): "TaskFlow" — A team task management web app
 
 ---
 
 ## constitution.md (example)
 
 ```markdown
-# Project Constitution — SnippetVault
+# Project Constitution — TaskFlow
 
 ## 1. Project Identity
-- **Name**: SnippetVault
-- **Purpose**: A REST API that lets developers save, tag, search, and share code snippets. Designed for teams that need a shared snippet repository.
-- **Owners**: Platform team
+- **Name**: TaskFlow
+- **Purpose**: A web app that lets small teams create, assign, and track tasks collaboratively.
+- **Owners**: Product team
 
 ## 2. Core Principles
-- API-first — every feature is accessible via REST API; any client can be built on top
-- Stateless by default — horizontal scaling without session affinity
-- Explicit error responses — every error returns a structured JSON body with a machine-readable code
-- Data portability — all snippets exportable via a single API call
+- Simplicity first — no feature ships if it can't be explained in one sentence
+- Offline-tolerant — critical read operations work without network
+- Mobile-first responsive design
 
 ## 3. Technology Constraints
 ### Mandatory Stack
-- Language: Python 3.12+
-- Web framework: FastAPI
-- Database: SQLite (development), PostgreSQL (production) via SQLAlchemy
-- Testing: pytest with httpx for async API tests
-
-### Forbidden Technologies
-- No synchronous database drivers (use asyncpg/aiosqlite, not psycopg2)
-- No class-based views (FastAPI dependency injection only)
-- No hardcoded secrets — all configuration via environment variables
-- No XML responses — JSON only, consistent envelope format
-
-## 4. Testing Strategy
-- Unit tests: pytest with pytest-asyncio for all service functions
-- Integration tests: httpx AsyncClient against the FastAPI app
-- Test database: separate SQLite file per test run (random tmpfile)
-- Coverage target: 90% (enforced via pytest-cov in CI)
-
-## 5. Definition of Done
-- [ ] Code passes linter (ruff) and type checker (mypy strict)
-- [ ] Verify step passes (pytest with httpx client)
-- [ ] Unit + integration tests pass (pytest -v --cov)
-- [ ] API docs render at /docs (FastAPI auto-generated OpenAPI)
-- [ ] No hardcoded secrets or credentials in code
-```
-
----
-
-## spec.md (example)
-
-```markdown
-# Feature Specification: Snippet API
-> Technology-agnostic | Version: 1.0 | Status: Approved
-
-## Overview
-A REST API where developers can create, read, search, update, and delete code snippets. Each snippet has a title, language tag, code body, and optional description.
-
-## Users & Personas
-- **Developer**: Creates and searches snippets by language or keyword
-- **Team Lead**: Organizes snippets into collections and manages team access (v2)
-
-## Functional Requirements
-
-### REQ-001: Create Snippet
-**User Story**:
-> As a Developer, I want to create a code snippet with a title, language, and code body so that I can save useful code patterns.
-
-**Acceptance Criteria**:
-- WHEN a client POSTs valid snippet data (title, language, code) THEN the system SHALL return the created snippet with a unique ID and 201 status
-- WHEN a client POSTs snippet data without a title THEN the system SHALL return 422 with a validation error
-- WHEN a client POSTs snippet data with an unsupported language tag THEN the system SHALL return 422 with a list of supported languages
-
-### REQ-002: Search Snippets
-**User Story**:
-> As a Developer, I want to search snippets by language or keyword so that I can find relevant code quickly.
-
-**Acceptance Criteria**:
-- WHEN a client GETs /snippets?q=sorting&lang=python THEN the system SHALL return snippets matching both query and language
-- WHEN a client GETs /snippets?q=sorting THEN the system SHALL return snippets matching the query across title, description, and code
-- WHEN a client GETs /snippets with no query params THEN the system SHALL return the 20 most recent snippets
-- WHEN no snippets match THEN the system SHALL return an empty array (not 404)
-
-### REQ-003: Get Snippet by ID
-**User Story**:
-> As a Developer, I want to view a specific snippet by its ID so that I can see its full content.
-
-**Acceptance Criteria**:
-- WHEN a client GETs /snippets/{id} for an existing snippet THEN the system SHALL return the full snippet with 200 status
-- WHEN a client GETs /snippets/{id} for a non-existent snippet THEN the system SHALL return 404 with a descriptive message
-
-## Non-Functional Requirements
-- **Performance**: Search returns results in < 200ms for up to 10,000 snippets
-- **Consistency**: Snippets are immutable after creation (only title/description can be updated)
-- **JSON envelope**: Every response is wrapped in { "status": "ok"|"error", "data": ..., "error": ... }
-
-## Out of Scope
-- User authentication and authorization (v2)
-- Snippet collections/grouping (v2)
-- Syntax highlighting for code preview (v2 — frontend concern)
-```
-
----
-
-## requirements.md (example)
-
-```markdown
-# Requirements Traceability — SnippetVault
-
-## REQ-001: Create Snippet
-| Attribute | Value |
-|-----------|-------|
-| Priority | P0 |
-| Effort | S (3h) |
-| Dependencies | None |
-| Risk | Low — standard CRUD pattern |
-| Verification | pytest -k test_create_snippet |
-
-## REQ-002: Search Snippets
-| Attribute | Value |
-|-----------|-------|
-| Priority | P0 |
-| Effort | M (5h) |
-| Dependencies | REQ-001 (data must exist to search) |
-| Risk | Low — SQL LIKE + language filter |
-| Verification | pytest -k test_search_snippets |
-
-## REQ-003: Get Snippet by ID
-| Attribute | Value |
-|-----------|-------|
-| Priority | P0 |
-| Effort | S (1h) |
-| Dependencies | REQ-001 |
-| Risk | Low — simple SELECT by PK |
-| Verification | pytest -k test_get_snippet_by_id |
-```
-
----
-
-## research.md (example)
-
-```markdown
-# Research — SnippetVault
-
-## Research Question 1: FastAPI vs Flask for async API
-**Question**: Should we use FastAPI or Flask for the REST API layer?
-
-**Investigation**:
-- FastAPI has built-in async support, OpenAPI generation, and type validation via Pydantic
-- Flask is more mature but requires extensions for async, validation (Flask-RESTful), and OpenAPI
-- FastAPI's dependency injection reduces boilerplate compared to Flask's request globals
-- Both have excellent SQLAlchemy integration
-
-**Decision**: Use FastAPI. Built-in OpenAPI docs (/docs) and Pydantic validation reduce implementation effort.
-
-## Research Question 2: Full-text search strategy
-**Question**: Should we use SQLite FTS5, PostgreSQL tsvector, or Elasticsearch for snippet search?
-
-**Investigation**:
-- SQLite FTS5 is sufficient for < 10K snippets (no external dependency)
-- PostgreSQL tsvector is more powerful but couples us to PostgreSQL even in dev
-- Elasticsearch is overkill for the expected scale and adds operational complexity
-- SQLite FTS5 with MATCH queries is simple and effective
-
-**Decision**: Use SQLite FTS5 in development, PostgreSQL tsvector in production, abstracted behind a SearchService interface.
-
-## Open Questions
-- Should we support snippet fork/versioning? (deferred, requires storage impact analysis)
-- Should we support image attachments? (deferred, separate attachment service)
-```
-
----
-
-## plan.md (example)
-
-```markdown
-# Technical Plan — SnippetVault API
-> Implements: spec.md | Stack defined in constitution.md
-
-## Tech Stack
-| Layer | Technology | Justification |
-|-------|-----------|---------------|
-| Language | Python 3.12+ | Team standard, async-native |
-| Web Framework | FastAPI | Async, OpenAPI gen, type validation |
-| ORM | SQLAlchemy 2.0 (async) | Mature, async-native, multi-DB |
-| Validation | Pydantic v2 | Built into FastAPI, fast |
-| Testing | pytest + httpx | Async test client |
-| Database | SQLite dev / PostgreSQL prod | Standard progression |
-| Program Type | API | REST JSON API |
-
-## Architecture
-```
-┌─────────────┐     ┌──────────────┐     ┌─────────────┐
-│ HTTP Client  │────▶│  FastAPI App  │────▶│ SQLAlchemy  │
-│ (curl,axios) │◀────│  (async)     │◀────│  (async)    │
-└─────────────┘     └──────────────┘     └──────┬──────┘
-                                                │
-                                        ┌───────┴───────┐
-                                        │  SQLite / Pg   │
-                                        └───────────────┘
-```
-
-## Purity Boundaries
-| Component | Type | Reason |
-|-----------|------|--------|
-| `schemas.py` (Pydantic models) | Pure | Data validation, no I/O |
-| `models.py` (SQLAlchemy models) | Pure | ORM mapping, no I/O |
-| `repository.py` (DB access) | Impure | Database queries (I/O) |
-| `service.py` (business logic) | Pure | Orchestrates repository calls |
-| `router.py` (API endpoints) | Impure | HTTP request/response (I/O) |
-| `search_service.py` | Impure | FTS/tsvector queries (I/O) |
-
-## Implementation Phases
-
-### Phase 1: Foundation (2 days)
-- Project scaffolding (FastAPI app, SQLAlchemy setup, config)
-- Database models and migrations
-- Requirements: prerequisites for REQ-001
-
-### Phase 2: Core CRUD (3 days)
-- Create snippet endpoint
-- Get snippet by ID endpoint
-- Search snippets endpoint
-- Requirements: REQ-001, REQ-002, REQ-003
-
-### Phase 3: Testing & Polish (2 days)
-- Full test coverage for all endpoints
-- Error handling middleware
-- Performance testing with 10K snippets
-- OpenAPI docs customization
-
-## Risks
-| Risk | Mitigation |
-|------|-----------|
-| SQLite vs PostgreSQL differences | Abstract DB access behind repository pattern |
-| Search performance at scale | SQLite FTS5 is fast enough for < 10K, plan migration to PG tsvector |
-| No auth in v1 | Rate limiting per IP to prevent abuse until auth ships |
-```
-
----
-
-## data-model.md (example)
-
-```markdown
-# Data Model — SnippetVault
-
-## Entity: Snippet
-
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | UUID | PK, default uuid4 | Unique snippet identifier |
-| title | VARCHAR(200) | NOT NULL | Snippet title |
-| description | TEXT | NULLABLE | Optional description |
-| language | VARCHAR(30) | NOT NULL, INDEX | Programming language tag |
-| code | TEXT | NOT NULL | The snippet code body |
-| created_at | TIMESTAMP | NOT NULL, default now | Creation timestamp |
-| updated_at | TIMESTAMP | NOT NULL, auto-update | Last modification timestamp |
-
-## Indexes & Constraints
-- PK: id (UUID, auto-generated)
-- INDEX: language (for filtering by language)
-- INDEX: created_at (for recent-snippets query)
-- CONSTRAINT: title must not be empty (validation in Pydantic schema)
-- CONSTRAINT: language must be one of supported_languages list
-
-## Example: SQLAlchemy Model
-```python
-class Snippet(Base):
-    __tablename__ = "snippets"
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-    title: Mapped[str] = mapped_column(String(200), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    language: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
-    code: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
-```
-
-## Example: Pydantic Schema
-```python
-class SnippetCreate(BaseModel):
-    title: str = Field(..., min_length=1, max_length=200)
-    description: str | None = None
-    language: str = Field(..., pattern=r"^(python|javascript|go|rust|typescript|java)$")
-    code: str = Field(..., min_length=1)
-
-class SnippetResponse(BaseModel):
-    id: uuid.UUID
-    title: str
-    description: str | None
-    language: str
-    code: str
-    created_at: datetime
-    updated_at: datetime
-```
-```
-
----
-
-## interface-contracts/api.md (example)
-
-```markdown
-# API Interface — SnippetVault
-
-## Interface Type: API (REST)
-
-## Base URL
-```
-http://localhost:8000/api/v1
-```
-
-## Endpoints
-
-### POST /snippets
-Create a new snippet.
-
-**Request Body:**
-```json
-{
-  "title": "Bubble sort in Python",
-  "description": "Classic bubble sort implementation",
-  "language": "python",
-  "code": "def bubble_sort(arr):\n    for i in range(len(arr)):\n        for j in range(len(arr)-1):\n            if arr[j] > arr[j+1]:\n                arr[j], arr[j+1] = arr[j+1], arr[j]\n    return arr"
-}
-```
-
-**Response** (201):
-```json
-{
-  "status": "ok",
-  "data": {
-    "id": "a1b2c3d4-...",
-    "title": "Bubble sort in Python",
-    "description": "Classic bubble sort implementation",
-    "language": "python",
-    "code": "def bubble_sort(arr):\n    ...",
-    "created_at": "2025-01-15T10:30:00Z",
-    "updated_at": "2025-01-15T10:30:00Z"
-  }
-}
-```
-
-**Errors**:
-| Status | Condition |
-|--------|-----------|
-| 422 | Missing title, unsupported language, empty code |
-| 500 | Database error |
-
-### GET /snippets
-Search or list snippets.
-
-**Query Parameters:**
-| Param | Type | Required | Description |
-|-------|------|----------|-------------|
-| q | string | No | Full-text search query |
-| lang | string | No | Filter by language tag |
-| limit | int | No | Max results (default 20, max 100) |
-
-**Response** (200):
-```json
-{
-  "status": "ok",
-  "data": {
-    "snippets": [
-      {
-        "id": "a1b2c3d4-...",
-        "title": "Bubble sort in Python",
-        "language": "python",
-        "created_at": "2025-01-15T10:30:00Z"
-      }
-    ],
-    "total": 1
-  }
-}
-```
-
-### GET /snippets/{id}
-Get a snippet by its UUID.
-
-**Response** (200): Full snippet object.
-**Error** (404): `{ "status": "error", "error": { "code": "NOT_FOUND", "message": "Snippet not found" } }`
-```
-
----
-
-## tasks.md (example)
-
-```markdown
-# Implementation Tasks — SnippetVault
-
-## Phase 1: Foundation
-
-- [ ] [T001] Initialize FastAPI project with async SQLAlchemy — S
-  - **Build**: `ruff check .` passes with 0 errors
-  - **Verify**: `uvicorn app.main:app --port 8000` starts and /docs returns 200
-  - **Gate**: App starts, /docs renders OpenAPI
-
-- [ ] [T002] Define Pydantic schemas (SnippetCreate, SnippetResponse) — S (REQ-001)
-  - **Build**: `mypy app/ --strict` passes
-  - **Verify**: `pytest -k test_schema_validation -v` passes
-  - **Gate**: Schemas include all fields with type annotations
-
-- [ ] [T003] Define SQLAlchemy model and create migration — S (REQ-001)
-  - **Build**: `python -m alembic upgrade head` succeeds
-  - **Verify**: `sqlite3 test.db .schema` shows snippets table
-  - **Gate**: Table has all required columns with correct types
-
-## Phase 2: Core CRUD
-
-- [ ] [T004][P] Implement repository layer (create, get, search) — M (REQ-001, REQ-002, REQ-003)
-  - **Build**: `ruff check .` passes
-  - **Verify**: `pytest -k test_repository -v` passes
-  - **Gate**: All CRUD operations work against SQLite
-
-- [ ] [T005][P] Implement POST /api/v1/snippets endpoint — M (REQ-001)
-  - **Build**: `mypy app/ --strict` passes
-  - **Verify**: `curl -X POST localhost:8000/api/v1/snippets -H "Content-Type: application/json" -d '{"title":"test","language":"python","code":"print()"}'` returns 201
-  - **Gate**: Snippet is persisted and queryable
-
-- [ ] [T006] Implement GET /api/v1/snippets search endpoint — M (REQ-002)
-  - **Build**: `ruff check .` passes
-  - **Verify**: `pytest -k test_search -v` passes
-  - **Gate**: Search by keyword and language works independently and combined
-
-- [ ] [T007] Implement GET /api/v1/snippets/{id} endpoint — S (REQ-003)
-  - **Build**: `ruff check .` passes
-  - **Verify**: `curl localhost:8000/api/v1/snippets/a1b2c3d4` returns 404 (non-existent)
-  - **Gate**: Existing snippet returns 200, non-existent returns 404
-
-## Phase 3: Testing & Polish
-
-- [ ] [T008] Write full test suite for all endpoints — M
-  - **Build**: `pytest -v --cov` passes with 90%+ coverage
-  - **Verify**: All 15+ tests pass (sad paths + happy paths)
-  - **Gate**: Coverage report shows >= 90%
-
-- [ ] [T009] Add error handling middleware for consistent JSON errors — S
-  - **Build**: `ruff check .` passes
-  - **Verify**: `curl -v localhost:8000/api/v1/nonexistent` returns JSON error, not HTML
-  - **Gate**: All errors return `{ status, error: { code, message } }` envelope
-
-- [ ] [T010] Load test with 10K snippets — S
-  - **Build**: Seed script inserts 10K snippets without error
-  - **Verify**: `GET /snippets?q=search` returns in < 200ms
-  - **Gate**: P95 response time under 200ms
-
----
-
-## Progress: 0/10 tasks complete
-```
-
----
-
-## Example: "LegacyPay" — Extracting a Spec from a Legacy PHP Monolith
-
----
-
-## Legacy Analysis (example)
-
-```markdown
-# Legacy Analysis — LegacyPay
-
-## Source Code Examined
-- Repository: github.com/company/payments-legacy
-- Language: PHP 7.4 (no types, no tests)
-- Age: ~8 years, ~50K lines
-- Database: MySQL 5.7
-
-## Extraction Process
-1. **Read entry points** (public/index.php, CLI scripts) — identify user-facing features
-2. **Trace data flow** — map HTTP routes → controller methods → SQL queries
-3. **Infer intent** — from column names, comments, and client usage patterns
-4. **Interview stakeholders** — confirm observed behavior matches expected behavior
-5. **Write spec** — capture *actual* behavior as the baseline contract
-
-## Key Findings
-- The "refund" endpoint actually archives the transaction (doesn't reverse it)
-- Error responses vary by controller — some return JSON, some HTML, some plain text
-- Three different date formats in use across the codebase
-- No input validation on 40% of endpoints (trusting client-side only)
-```
-
-## Tech Debt Inventory (example)
-
-```markdown
-# Tech Debt Inventory — LegacyPay
-
-| ID | Issue | Location | Severity | Impact |
-|----|-------|----------|----------|--------|
-| TD-001 | No input validation on POST /payment | PaymentController.php | Critical | SQL injection risk |
-| TD-002 | Inconsistent error format (JSON vs HTML) | All controllers | High | Client parsing failures |
-| TD-003 | Hardcoded database credentials | config.php | Critical | Security breach risk |
-| TD-004 | No transaction atomicity | PaymentService.php | High | Partial writes on failure |
-| TD-005 | Mixed date formats (Y-m-d, d/m/Y, timestamp) | DateHelper.php | Medium | Reporting inaccuracies |
-| TD-006 | Dead code: legacy SOAP client (unused 3+ years) | soap/ | Low | Maintenance overhead |
-```
-
----
-
-## constitution.md (example)
-
-```markdown
-# Project Constitution — LegacyPay (Modernized)
-
-## 1. Project Identity
-- **Name**: LegacyPay — Modernization Initiative
-- **Purpose**: Extract the specification from an undocumented PHP payment monolith and incrementally migrate to a maintainable architecture.
-- **Owners**: Platform team
-
-## 2. Core Principles
-- Behavior-preserving — the new system matches the old system's observable behavior exactly (including known bugs, initially)
-- Strangler fig — new code grows alongside old code; no big-bang rewrite
-- Test-first — every extracted module gets tests before any refactoring
-- Transparency — all extracted specs are reviewed with stakeholders for accuracy
-
-## 3. Technology Constraints
-### Mandatory Stack
-- New services: Go 1.22+ (performance, static typing)
-- API gateway: Envoy (route traffic to old vs new services)
-- Database: PostgreSQL 16 (migrate from MySQL 5.7)
-- Testing: Go testing + testify + dockertest for integration
-
-### Migration Constraints
-- Zero downtime during migration
-- Old PHP monolith stays in production until all traffic is migrated
-- Every new service must pass the legacy test suite before cutover
-
-## 4. Testing Strategy
-- Characterization tests: capture current behavior before changes
-- Integration tests: dockertest with real PostgreSQL
-- Canary testing: route 1% of production traffic to new services
-
-## 5. Definition of Done
-- [ ] Legacy characterization test suite passes on new code
-- [ ] No regression in existing behavior
-- [ ] New service compiles and passes all tests
-- [ ] Tech debt item(s) for this module are resolved or documented
-```
-
----
-
-## spec.md (example)
-
-```markdown
-# Feature Specification: Payment Processing (Legacy Baseline)
-> Technology-agnostic | Version: 1.0 — Legacy Extraction | Status: Draft
-
-## Overview
-Process customer payments and refunds. This spec captures the *actual* behavior of the legacy PHP monolith as the baseline contract for modernization.
-
-**Note**: Some behaviors below are buggy or undesirable. They are documented as-is to ensure the new system matches before improvements are introduced.
-
-## Users & Personas
-- **Customer**: Initiates payments and refunds via the web frontend
-- **Support Agent**: Manually processes failed payments via admin panel
-- **Batch Processor**: Scheduled job that retries failed payments
-
-## Functional Requirements
-
-### REQ-001: Process Payment
-**User Story**:
-> As a Customer, I want to submit a payment so that my order is completed.
-
-**Acceptance Criteria** (Legacy Baseline):
-- WHEN a customer submits a payment with valid card details THEN the system SHALL record the transaction and return HTTP 200 with JSON body `{ "status": "success", "transaction_id": "..." }`
-- WHEN a customer submits a payment with invalid card details THEN the system SHALL return HTTP 200 with JSON body `{ "status": "failure", "message": "Card declined" }` (note: HTTP 200 even on failure — legacy constraint)
-- WHEN a customer submits a payment without an amount THEN the system SHALL return HTTP 500 (known bug: missing validation)
-- WHEN the database is unreachable THEN the system SHALL return HTTP 500 with HTML error page (known bug: no JSON error handler)
-
-### REQ-002: Process Refund
-**User Story**:
-> As a Support Agent, I want to refund a payment so that the customer gets their money back.
-
-**Acceptance Criteria** (Legacy Baseline):
-- WHEN a support agent submits a refund request THEN the system SHALL mark the transaction as `archived` (not "reversed" — known behavior)
-- WHEN a refund is for an already-archived transaction THEN the system SHALL return `{ "status": "already_archived" }` and take no action
-
-## Out of Scope (Deferred)
-- Input validation improvements (Phase 2 after baseline match)
-- Consistent error format (Phase 3 after all services migrated)
-```
----
-
-## plan.md (example)
-
-```markdown
-# Technical Plan — LegacyPay Migration
-> Implements: spec.md | Strategy: Strangler Fig
-
-## Migration Architecture
-```
-┌──────────────┐       ┌──────────────┐
-│   Envoy GW   │──────▶│  PHP Monolith │ (existing)
-│  (router)    │       └──────────────┘
-│              │       ┌──────────────┐
-│              │──┐───▶│  Go Service  │ (new)
-│              │  │    │  - payments  │
-│              │  │    └──────────────┘
-│              │  │    ┌──────────────┐
-│              │  └───▶│  Go Service  │ (new)
-│              │       │  - refunds   │
-└──────────────┘       └──────────────┘
-```
-
-## Tech Stack
-| Layer | New (Go) | Old (PHP) |
-|-------|----------|-----------|
-| Language | Go 1.22 | PHP 7.4 |
-| Database | PostgreSQL 16 | MySQL 5.7 |
-| Transport | gRPC + REST | REST |
-| Testing | Go test + dockertest | None |
-
-## Implementation Phases
-
-### Phase 1: Characterization (lowest risk)
-| Task | Risk | Scope |
-|------|------|-------|
-| Write characterization tests for payment flow | Low | Read-only, no prod impact |
-| Document all error responses per endpoint | Low | Analysis only |
-| Extract database schema to migration scripts | Low | Read-only |
-
-### Phase 2: New Payment Service (medium risk)
-| Task | Risk | Scope |
-|------|------|-------|
-| Build Go payment service | Medium | New code, parallel-run with old |
-| Dual-write payments to both systems | Medium | Requires sync mechanism |
-| Compare outputs in staging | Low | Automated diff |
-
-### Phase 3: Cutover (highest risk — deferred)
-| Task | Risk | Scope |
-|------|------|-------|
-| Envoy route payment traffic to new service | High | Production cutover |
-| Monitor for errors and rollback if needed | High | Requires rollback plan |
-| Decommission old payment code | Medium | After stability verified |
-
-## Purity Boundaries
-| Component | Type | Reason |
-|-----------|------|--------|
-| Legacy spec extraction | Pure | Documenting existing behavior, no changes |
-| Characterization tests | Pure | Read-only, no side effects |
-| Envoy routing config | Impure | Affects production traffic |
-| Dual-write sync | Impure | Writes to two databases |
-```
-
----
-
-## tasks.md (example)
-
-```markdown
-# Implementation Tasks — LegacyPay Migration
-
-## Phase 1: Characterization (Risk: Low)
-
-- [ ] [T001] Write characterization tests for payment flow — S
-  - **Build**: `go build ./...` compiles without errors
-  - **Verify**: `go test ./characterization/... -v` passes against legacy PHP API
-  - **Gate**: All legacy behaviors captured as test assertions
-
-- [ ] [T002] Document all endpoint error responses — S
-  - **Build**: Markdown list in `specs/legacy-errors.md`
-  - **Verify**: Each endpoint has at least one success and one error documented
-  - **Gate**: No undocumented endpoints remain
-
-- [ ] [T003] Extract MySQL schema to migration files — S
-  - **Build**: `golang-migrate` source files created
-  - **Verify**: `golang-migrate up` creates identical tables in PostgreSQL
-  - **Gate**: All tables and indexes present in PostgreSQL
-
-## Phase 2: New Payment Service (Risk: Medium)
-
-- [ ] [T004] Build Go payment service with REST endpoints — M
-  - **Build**: `go build ./services/payments/...` passes
-  - **Verify**: `go test ./services/payments/...` passes against test PostgreSQL
-  - **Gate**: Endpoints match legacy API contract exactly
-
-- [ ] [T005] Implement dual-write strategy (write to both old and new DB) — M
-  - **Build**: `go vet ./...` passes
-  - **Verify**: Both databases have identical rows after write (integration test)
-  - **Gate**: Data consistency verified in staging
-
-- [ ] [T006] Add comparison tool for staging verification — S
-  - **Build**: `go build ./cmd/compare` passes
-  - **Verify**: Tool runs against staging and reports 0 differences
-  - **Gate**: Able to detect drift between old and new
-
-## Phase 3: Cutover (Risk: High)
-
-- [ ] [T007] Configure Envoy routing for payment traffic — S
-  - **Build**: Envoy config passes validation (`envoy --mode validate`)
-  - **Verify**: Canary traffic (1%) routes to new service without errors
-  - **Gate**: 100% of canary requests succeed
-
-- [ ] [T008] Monitor and rollback plan — S
-  - **Build**: Rollback script tested in staging
-  - **Verify**: `make rollback` restores old routing within 30 seconds
-  - **Gate**: Rollback verified in dry-run
-
-- [ ] [T009] Decommission old payment code — S
-  - **Build**: Remove old PHP payment controller
-  - **Verify**: All traffic routes to Go service for 7 days with zero incidents
-  - **Gate**: Old code removal approved by team lead
-
----
-
-## Progress: 0/9 tasks complete
-```
-
----
-
-## Example: "EventStream" — Event-Driven Architecture with AsyncAPI
-
----
-
-## constitution.md (example)
-
-```markdown
-# Project Constitution — EventStream
-
-## 1. Project Identity
-- **Name**: EventStream
-- **Purpose**: A real-time event processing platform that ingests, enriches, and routes domain events between microservices using Apache Kafka.
-- **Owners**: Platform infrastructure team
-
-## 2. Core Principles
-- Eventual consistency — services are eventually consistent; no distributed transactions
-- Schema-first — every event has a versioned CloudEvents schema published before any producer or consumer
-- At-least-once delivery — consumers must be idempotent (duplicate events are expected and safe)
-- No synchronous coupling — services only communicate via events; no HTTP between services
-
-## 3. Technology Constraints
-### Mandatory Stack
-- Message broker: Apache Kafka 3.6+ with Kraft (no Zookeeper)
-- Event format: CloudEvents 1.0 with JSON encoding
-- Services: Go 1.22+ with Confluent Kafka client
-- Schema registry: Confluent Schema Registry (Avro for binary, JSON Schema for JSON)
-- Containers: Docker + docker-compose for local dev, Kubernetes for production
-
-### Forbidden Technologies
-- No HTTP calls between services (events only)
-- No shared databases between services
-- No synchronous transactions spanning multiple services
-- No manual topic creation (IaC with Terraform or Kubernetes operator)
-
-## 4. Testing Strategy
-- Unit tests: Go testing for individual service logic
-- Integration tests: testcontainers-go with real Kafka + Schema Registry
-- Contract tests: verify event schemas match between producer and consumer
-- End-to-end tests: docker-compose with full service topology
-
-## 5. Definition of Done
-- [ ] Event schema published and registered in Schema Registry
-- [ ] Producer service emits the event correctly
-- [ ] Consumer service processes the event with idempotency
-- [ ] Integration test passes with real Kafka
-- [ ] E2E docker-compose test passes end-to-end
-```
-
----
-
-## spec.md (example)
-
-```markdown
-# Feature Specification: Order Lifecycle Events
-> Technology-agnostic | Version: 1.0 | Status: Approved
-
-## Overview
-When a customer places an order, the Order Service emits events that other services consume: Inventory (reserve stock), Billing (charge customer), Notification (email confirmation), and Analytics (track metrics).
-
-## Users & Personas
-- **Order Service (Producer)**: Emits order.created, order.paid, order.shipped, order.cancelled
-- **Inventory Service (Consumer)**: Reserves/releases stock on order.created / order.cancelled
-- **Billing Service (Consumer)**: Charges customer on order.paid, issues refund on order.cancelled
-- **Notification Service (Consumer)**: Sends email on order.created and order.shipped
-- **Analytics Service (Consumer)**: Records all events for dashboards
-
-## Functional Requirements
-
-### REQ-001: Emit order.created Event
-**User Story**:
-> As the Order Service, I want to emit an order.created event when a customer places an order so that downstream services can react.
-
-**Acceptance Criteria**:
-- WHEN a customer successfully places an order THEN the Order Service SHALL emit an event with type `order.created` and a CloudEvents-compliant payload
-- WHEN the event is emitted THEN it SHALL contain order_id, customer_id, items[], total_amount, and timestamp
-- WHEN the Kafka cluster is unavailable THEN the Order Service SHALL retry with exponential backoff (max 3 retries) before failing the order
-
-### REQ-002: Consume order.created in Inventory
-**User Story**:
-> As the Inventory Service, I want to consume order.created events so that I can reserve stock for the order items.
-
-**Acceptance Criteria**:
-- WHEN the Inventory Service receives an order.created event THEN it SHALL decrement the reserved stock for each item
-- WHEN an item has insufficient stock THEN the Inventory Service SHALL emit an inventory.reservation_failed event
-- WHEN a duplicate order.created event is received THEN the Inventory Service SHALL be idempotent (no double-decrement)
-
-### REQ-003: Emit order.paid Event
-**User Story**:
-> As the Billing Service, I want to emit an order.paid event after successful charge so that downstream services can proceed.
-
-**Acceptance Criteria**:
-- WHEN the Billing Service successfully charges the customer THEN it SHALL emit an order.paid event
-- WHEN the charge fails THEN the Billing Service SHALL emit a billing.charge_failed event (not order.paid)
-
-## Non-Functional Requirements
-- **Throughput**: System handles 10,000 events/second at peak (Black Friday)
-- **Latency**: Event produced to event consumed in < 500ms (P99)
-- **Durability**: No event loss under any failure scenario (acks=all, min.insync.replicas=2)
-
-## Out of Scope
-- Event replay / reprocessing UI (v2)
-- Dead letter queue management (v2)
-- Schema evolution governance beyond compatibility checks (v2)
-```
-
----
-
-## plan.md (example)
-
-```markdown
-# Technical Plan — EventStream Order Lifecycle
-> Implements: spec.md | Stack defined in constitution.md
-
-## Service Topology
-```
-┌──────────────┐    ┌──────────────┐    ┌──────────────────┐
-│  Order Svc   │───▶│   Kafka      │◀───│  Schema Registry  │
-│  (Go)        │    │  (3 brokers) │    │  (Avro + JSON)    │
-└──────────────┘    └──────┬───────┘    └──────────────────┘
-                           │
-              ┌────────────┼────────────┐
-              ▼            ▼            ▼
-       ┌──────────┐ ┌──────────┐ ┌──────────┐
-       │Inventory │ │ Billing  │ │Notific.  │
-       │(Go)      │ │(Go)      │ │(Go)      │
-       └──────────┘ └──────────┘ └──────────┘
-```
-
-## Tech Stack
-| Layer | Technology |
-|-------|-----------|
-| Services | Go 1.22+ |
-| Message Broker | Apache Kafka 3.6+ (Kraft) |
-| Event Format | CloudEvents 1.0 (JSON) |
-| Schema Registry | Confluent Schema Registry |
-| Client Library | confluent-kafka-go |
-| Testing | testcontainers-go |
-| Orchestration | Docker Compose (dev) / K8s (prod) |
-
-## Implementation Phases
-
-### Phase 1: Infrastructure (3 days)
-- Kafka cluster with docker-compose
-- Schema Registry setup
-- Topic creation (IaC scripts)
-- Requirements: infrastructure prerequisites for REQ-001
-
-### Phase 2: Core Events (5 days)
-- Order Service: emit order.created
-- Inventory Service: consume order.created, emit inventory.reservation_failed
-- Billing Service: consume order.created, emit order.paid / billing.charge_failed
-- Notification Service: consume order.created + order.paid
-- Requirements: REQ-001, REQ-002, REQ-003
-
-### Phase 3: Testing & Resilience (3 days)
-- Idempotency testing (replay events, verify no side effects)
-- Failure scenario testing (Kafka broker down, service crash)
-- Load testing (10K events/sec)
-- E2E docker-compose test suite
-
-## Purity Boundaries
-| Component | Type | Reason |
-|-----------|------|--------|
-| Event schema definitions | Pure | No I/O, only data structures |
-| Event serialization/deserialization | Pure | Transform in/out, no side effects |
-| Kafka producer wrapper | Impure | Network I/O to Kafka broker |
-| Kafka consumer loop | Impure | Network I/O, stateful offset management |
-| Stock reservation logic | Pure | Pure business logic, testable without Kafka |
-| Idempotency check | Impure | Reads/writes to state store (I/O) |
-```
-
----
-
-## data-model.md (example)
-
-```markdown
-# Data Model — EventStream
-
-## Event Schema (CloudEvents 1.0)
-
-### order.created
-```json
-{
-  "specversion": "1.0",
-  "type": "com.eventstream.order.created",
-  "source": "/order-service/v1",
-  "id": "a1b2c3d4-...",
-  "time": "2025-01-15T10:30:00Z",
-  "datacontenttype": "application/json",
-  "data": {
-    "order_id": "ord_12345",
-    "customer_id": "cus_67890",
-    "items": [
-      { "sku": "ABC-123", "quantity": 2, "unit_price": 19.99 }
-    ],
-    "total_amount": 39.98,
-    "currency": "USD",
-    "timestamp": "2025-01-15T10:30:00Z"
-  }
-}
-```
-
-### order.paid
-```json
-{
-  "specversion": "1.0",
-  "type": "com.eventstream.order.paid",
-  "source": "/billing-service/v1",
-  "id": "e5f6g7h8-...",
-  "time": "2025-01-15T10:30:05Z",
-  "datacontenttype": "application/json",
-  "data": {
-    "order_id": "ord_12345",
-    "transaction_id": "txn_98765",
-    "amount": 39.98,
-    "currency": "USD",
-    "charged_at": "2025-01-15T10:30:05Z"
-  }
-}
-```
-
-### inventory.reservation_failed
-```json
-{
-  "specversion": "1.0",
-  "type": "com.eventstream.inventory.reservation_failed",
-  "source": "/inventory-service/v1",
-  "id": "i9j0k1l2-...",
-  "time": "2025-01-15T10:30:02Z",
-  "datacontenttype": "application/json",
-  "data": {
-    "order_id": "ord_12345",
-    "failed_items": [
-      { "sku": "ABC-123", "requested": 2, "available": 0 }
-    ],
-    "reason": "insufficient_stock"
-  }
-}
-```
-
-## Topics
-| Topic | Partitions | Retention | Cleanup Policy |
-|-------|-----------|-----------|----------------|
-| order.events | 6 | 7 days | delete |
-| inventory.events | 3 | 3 days | delete |
-| billing.events | 3 | 30 days | compact (audit) |
-| notification.events | 1 | 1 day | delete |
-
-## Indexes & Constraints
-For event-driven systems, indexes apply to state stores in consumer services:
-- Consumer offset: committed to `__consumer_offsets` topic (managed by Kafka)
-- Idempotency key: order_id stored in consumer state store (unique constraint)
-- Event ID: globally unique across all services (UUID v4)
-```
-
----
-
-## interface-contracts/asyncapi.md (example)
-
-```markdown
-# AsyncAPI Interface — EventStream
-
-## Interface Type: AsyncAPI (Event-Driven)
-
-## Server
-```
-production:
-  host: kafka-cluster.prod.example.com:9092
-  protocol: kafka
-  description: Production Kafka cluster (3 brokers, min.insync.replicas=2)
-```
-
-## Channels
-
-### channel: order.events
-Publish-subscribe channel for order lifecycle events.
-
-**Publish** (Order Service):
-```
-subscribe:
-  operationId: emitOrderCreated
-  message:
-    $ref: '#/components/messages/OrderCreated'
-```
-
-**Subscribe** (Inventory, Billing, Notification Services):
-```
-publish:
-  operationId: consumeOrderEvents
-  message:
-    oneOf:
-      - $ref: '#/components/messages/OrderCreated'
-      - $ref: '#/components/messages/OrderPaid'
-      - $ref: '#/components/messages/OrderCancelled'
-```
-
-### channel: inventory.events
-Events emitted by the Inventory Service.
-
-**Publish**:
-```
-subscribe:
-  operationId: emitReservationFailed
-  message:
-    $ref: '#/components/messages/ReservationFailed'
-```
-
-## Components
-
-### OrderCreated
-```
-payload:
-  type: object
-  properties:
-    order_id: { type: string, pattern: "^ord_" }
-    customer_id: { type: string, pattern: "^cus_" }
-    items:
-      type: array
-      items:
-        type: object
-        properties:
-          sku: { type: string }
-          quantity: { type: integer, minimum: 1 }
-          unit_price: { type: number, exclusiveMinimum: 0 }
-    total_amount: { type: number }
-    currency: { type: string, enum: ["USD", "EUR", "GBP"] }
-```
-
-### ReservationFailed
-```
-payload:
-  type: object
-  properties:
-    order_id: { type: string }
-    failed_items:
-      type: array
-      items:
-        type: object
-        properties:
-          sku: { type: string }
-          requested: { type: integer }
-          available: { type: integer }
-    reason: { type: string, enum: ["insufficient_stock", "sku_not_found"] }
-```
-```
-
----
-
-## tasks.md (example)
-
-```markdown
-# Implementation Tasks — EventStream
-
-## Phase 1: Infrastructure
-
-- [ ] [T001] Set up Kafka cluster with docker-compose (3 brokers, Kraft) — S
-  - **Build**: `docker-compose up -d` starts all 3 brokers
-  - **Verify**: `kafka-topics --bootstrap-server localhost:9092 --list` succeeds
-  - **Gate**: All brokers show in `kafka-broker-api-versions`
-
-- [ ] [T002] Set up Schema Registry with docker-compose — S
-  - **Build**: `docker-compose up -d schema-registry`
-  - **Verify**: `curl localhost:8081/subjects` returns `[]`
-  - **Gate**: Schema Registry is health at / health endpoint
-
-- [ ] [T003] Create topics via Terraform or scripts — S
-  - **Build**: `terraform apply` creates order.events, inventory.events, billing.events
-  - **Verify**: `kafka-topics --describe --topic order.events` shows 6 partitions, RF=3
-  - **Gate**: All expected topics exist with correct config
-
-## Phase 2: Core Events
-
-- [ ] [T004][P] Define CloudEvents schemas and register in Schema Registry — M
-  - **Build**: `make register-schemas` succeeds
-  - **Verify**: `curl localhost:8081/subjects/order.created-value/versions` returns version 1
-  - **Gate**: All event types registered (order.created, order.paid, order.cancelled, reservation_failed)
-
-- [ ] [T005] Build Order Service: emit order.created event — M (REQ-001)
-  - **Build**: `go build ./services/order/...` passes
-  - **Verify**: `go test ./services/order/... -v` with testcontainers passes
-  - **Gate**: Event appears in Kafka topic (verified via test consumer)
-
-- [ ] [T006] Build Inventory Service: consume order.created, emit reservation_failed — M (REQ-002)
-  - **Build**: `go build ./services/inventory/...` passes
-  - **Verify**: `go test ./services/inventory/... -v` with testcontainers passes
-  - **Gate**: Insufficient stock triggers reservation_failed event
-
-- [ ] [T007] Build Billing Service: consume order.created, emit order.paid — M (REQ-003)
-  - **Build**: `go build ./services/billing/...` passes
-  - **Verify**: `go test ./services/billing/... -v` with testcontainers passes
-  - **Gate**: Successful charge emits order.paid, failed charge emits billing.charge_failed
-
-## Phase 3: Testing & Resilience
-
-- [ ] [T008] Write idempotency tests (replay events, verify no side effects) — M
-  - **Build**: `go test ./tests/idempotency/... -v` passes
-  - **Verify**: Replaying the same event 3 times produces same state
-  - **Gate**: No duplicate processing detected
-
-- [ ] [T009] Write failure scenario tests (broker down, service crash) — M
-  - **Build**: `go test ./tests/resilience/... -v` passes
-  - **Verify**: Service recovers after broker restart without data loss
-  - **Gate**: No events lost during broker outage (consumer resumes from last committed offset)
-
-- [ ] [T010] Load test at 10K events/second — M
-  - **Build**: `go run ./cmd/loadtest` produces 10K events/sec for 5 minutes
-  - **Verify**: P99 latency < 500ms, zero consumer lag growth
-  - **Gate**: No memory leak or OOM during sustained load
-
----
-
-## Progress: 0/10 tasks complete
-```
-
----
-
-## Example: "HabitStack" — A Next.js Full-Stack Habit Tracker
-
-Stack: **Next.js 14 (App Router) + React + TypeScript + Tailwind CSS + Prisma + PostgreSQL + NextAuth.js**
-
----
-
-## constitution.md (example)
-
-```markdown
-# Project Constitution — HabitStack
-
-## 1. Project Identity
-- **Name**: HabitStack
-- **Purpose**: A full-stack web application for tracking daily habits. Users create habits (e.g., "Read 30 min"), log daily completions, and view streak-based progress analytics.
-- **Owners**: Frontend team
-
-## 2. Core Principles
-- Server-rendered by default — use React Server Components unless interactivity requires client JS
-- Type-safe end-to-end — Prisma types flow into React components via tRPC or Server Actions
-- Mobile-first responsive — Tailwind CSS breakpoints, touch-friendly interactions
-- Progressive enhancement — core features work without JavaScript
-
-## 3. Technology Constraints
-### Mandatory Stack
+- Language: TypeScript (strict mode)
 - Framework: Next.js 14 (App Router)
-- Language: TypeScript 5+
-- Styling: Tailwind CSS + shadcn/ui components
-- Database: PostgreSQL via Prisma ORM
-- Auth: NextAuth.js v5 (Auth.js) with Google OAuth
-- Testing: Vitest + React Testing Library + Playwright for E2E
+- Database: PostgreSQL via Supabase
+- Auth: Supabase Auth (OAuth + magic link)
 
 ### Forbidden Technologies
-- No Redux or context-based global state (use URL/search params for shareable state)
-- No raw SQL queries (use Prisma exclusively)
-- No client-side data fetching unless SSR is impossible
-- No CSS-in-JS libraries (Tailwind utility classes only)
+- No class components in React (hooks only)
+- No `any` type in TypeScript
+- No direct database queries from client components
 
 ## 4. Testing Strategy
-- Unit tests: Vitest for pure functions and validation
-- Component tests: React Testing Library with vitest-dom matchers
-- API/action tests: Vitest mocking Prisma client
-- E2E tests: Playwright for critical user flows (sign-up, create habit, log entry)
-- Coverage target: 80% (unit + component), 100% of auth flows
+- Unit tests: Vitest for all utility functions and hooks
+- Integration tests: Playwright for critical user flows
+- Coverage target: 80%
 
 ## 5. Definition of Done
-- [ ] Code compiles (next build passes with strict TypeScript)
-- [ ] Verify step passes (vitest run + lint:next)
-- [ ] Unit + component tests pass
-- [ ] Mobile viewport renders correctly (≥320px width)
-- [ ] No hardcoded secrets — all via env vars (AUTH_SECRET, DATABASE_URL)
-- [ ] E2E smoke test passes for the feature
+- [ ] Feature matches spec acceptance criteria
+- [ ] Build passes without errors
+- [ ] Verify step passes — the feature runs and produces expected output
+- [ ] Unit tests written and passing
+- [ ] No TypeScript errors
+- [ ] Reviewed by one team member
 ```
+
 ---
 
 ## spec.md (example)
 
 ```markdown
-# Specification — HabitStack
+# Feature Specification: Task Management
+> Technology-agnostic | Version: 1.0 | Status: Approved
 
 ## Overview
-A web app where users sign up, create habit definitions, log daily completions, and view progress streaks.
+Allow team members to create, assign, update, and complete tasks within a shared workspace.
 
 ## Users & Personas
-- **Individual User**: wants to build habits, track streaks, stay motivated
-- **Guest**: can view a demo (read-only, no persistence)
+- **Team Member**: Creates and works on tasks
+- **Team Manager**: Assigns tasks and monitors progress
 
 ## Functional Requirements
 
-### REQ-001: User Registration & Authentication
-- **User Story**: As a new user, I want to sign in with Google so that I can start tracking habits without creating another password
-- **Acceptance Criteria**:
-  - WHEN a user clicks "Sign in with Google" THEN the system SHALL redirect to Google OAuth
-  - WHEN Google returns a valid token THEN the system SHALL create or retrieve the user record
-  - WHEN authenticated THEN the system SHALL redirect to the dashboard
-- **Implementation Notes**: Implemented as 3 atomic tasks: NextAuth config, Prisma adapter, login UI
+### REQ-001: Task Creation
+**User Story**:
+> As a Team Member, I want to create a task with a title and description so that I can document work that needs to be done.
 
-### REQ-002: Create a Habit
-- **User Story**: As a logged-in user, I want to define a new habit so that I can track it daily
-- **Acceptance Criteria**:
-  - WHEN a user navigates to /habits/new THEN the system SHALL display a form (name, description, icon, target frequency)
-  - WHEN the user submits the form THEN the system SHALL create the habit and redirect to /habits
-  - WHEN the name is empty THEN the system SHALL show a validation error
-- **Implementation Notes**: Implemented as 2 atomic tasks: Server Action + form component, Prisma habit model
+**Acceptance Criteria**:
+- WHEN a user submits a task form with a valid title THEN the system SHALL create the task and display it in the task list
+- WHEN a user submits a task form without a title THEN the system SHALL display an error and not create the task
+- WHEN a task is created THEN the system SHALL automatically set its status to "pending" and record the creator
 
-### REQ-003: Log Daily Entry
-- **User Story**: As a user, I want to mark a habit as done for today so that I can track my streak
-- **Acceptance Criteria**:
-  - WHEN a user clicks "Log" on a habit card THEN the system SHALL create today's entry
-  - WHEN the user logs the same habit twice in one day THEN the system SHALL update the existing entry (not duplicate)
-  - WHEN the entry is logged THEN the habit card SHALL show a checkmark for today
-- **Implementation Notes**: Implemented as 2 atomic tasks: upsert server action, optimistic UI update
+### REQ-002: Task Assignment
+**User Story**:
+> As a Team Manager, I want to assign tasks to team members so that responsibility is clear.
 
-### REQ-004: View Progress & Streaks
-- **User Story**: As a user, I want to see my current streak and completion history so that I stay motivated
-- **Acceptance Criteria**:
-  - WHEN a user visits /dashboard THEN the system SHALL show each habit with: total days, current streak, longest streak
-  - WHEN a habit has 7+ consecutive days THEN the system SHALL display a "🔥" icon
-  - WHEN there are no habits yet THEN the system SHALL show an empty state with a CTA to create one
-- **Implementation Notes**: Implemented as 2 atomic tasks: streak query in Prisma, dashboard server component
+**Acceptance Criteria**:
+- WHEN a manager selects a team member from the assignment dropdown THEN the system SHALL update the task assignee
+- WHEN a task is assigned THEN the system SHALL notify the assigned member
+
+### REQ-003: Task Status Updates
+**User Story**:
+> As a Team Member, I want to update the status of my tasks so that the team can track progress.
+
+**Acceptance Criteria**:
+- WHEN a team member changes a task status THEN the system SHALL update it to one of: pending, in-progress, done
+- WHEN a task is marked "done" THEN the system SHALL record the completion timestamp
 
 ## Non-Functional Requirements
-- Page load: < 2s on 3G (SSR + streaming)
-- Auth session: < 500ms overhead per request
-- Database: < 100ms per query (p99)
+- **Performance**: Task list loads in < 1.5s for up to 200 tasks
+- **Accessibility**: WCAG 2.1 AA
 
 ## Out of Scope
-- Mobile app (native or PWA)
-- Social features (sharing, following)
-- Habit templates library
-```
-
----
-
-## requirements.md (example)
-
-```markdown
-# Requirements Checklist — HabitStack
-
-## REQ-001: User Registration & Authentication
-- [ ] Google OAuth redirect flow works end-to-end
-- [ ] User record created on first login
-- [ ] Session persists across page reloads
-- [ ] Sign-out clears session
-
-## REQ-002: Create a Habit
-- [ ] Form rendered at /habits/new
-- [ ] Validation rejects empty name
-- [ ] Habit appears on dashboard after creation
-- [ ] Form is accessible (labels, focus, error announcements)
-
-## REQ-003: Log Daily Entry
-- [ ] Clicking "Log" creates entry for today
-- [ ] Second click on same day updates (not duplicates)
-- [ ] Checkmark appears immediately (optimistic)
-- [ ] Entry persists on page refresh
-
-## REQ-004: View Progress & Streaks
-- [ ] Dashboard shows all user habits
-- [ ] Current streak computed correctly
-- [ ] Fire emoji shown for 7+ day streak
-- [ ] Empty state shown when no habits exist
-```
-
----
-
-## research.md (example)
-
-```markdown
-# Research — HabitStack
-
-## Research Question 1: Auth strategy for Next.js
-- Options: NextAuth.js v5 vs Clerk vs Supabase Auth vs custom
-- Decision: **NextAuth.js v5** with Google OAuth + Prisma adapter
-- Rationale: Free, self-hosted, Prisma adapter matches our stack, no vendor lock-in
-
-## Research Question 2: Server Actions vs API routes for mutations
-- Options: Next.js Server Actions vs traditional API routes
-- Decision: **Server Actions** for mutations, **Server Components** for reads
-- Rationale: Less boilerplate, co-located types, progressive enhancement by default
-
-## Open Questions
-- Should habit ordering be drag-and-drop? Deferred to post-MVP.
-- Should we support notification reminders? Deferred.
+- Comments on tasks (v2)
+- File attachments (v2)
+- Time tracking (v2)
 ```
 
 ---
@@ -1758,174 +118,61 @@ A web app where users sign up, create habit definitions, log daily completions, 
 ## plan.md (example)
 
 ```markdown
-# Plan — HabitStack
+# Technical Plan — Task Management Feature
+> Implements: spec.md | Stack defined in constitution.md
 
 ## Tech Stack
 | Layer | Technology | Justification |
 |-------|-----------|---------------|
-| Framework | Next.js 14 (App Router) | SSR + Server Components + API in one project |
-| Language | TypeScript 5 | End-to-end type safety with Prisma |
-| Database | PostgreSQL + Prisma | Type-safe queries, migrations, relationships |
-| Auth | NextAuth.js v5 + Google OAuth | Zero-config OAuth, Prisma adapter |
-| Styling | Tailwind CSS + shadcn/ui | Rapid UI, accessible components |
-| Hosting | Vercel | Native Next.js support, edge functions |
-| Testing | Vitest + Playwright | Fast unit tests + reliable E2E |
+| Frontend | Next.js 14 + React | SSR + App Router, team standard |
+| Styling | Tailwind CSS | Utility-first, fast iteration |
+| Backend | Next.js API Routes | Co-located with frontend |
+| Database | PostgreSQL (Supabase) | Relational, real-time subscriptions |
+| Auth | Supabase Auth | Handles OAuth + session |
+| ORM | Prisma | Type-safe queries |
 
 ## Architecture
 ```
-Browser ←→ Next.js Edge/Server
-              ├── Server Components (data fetching via Prisma)
-              ├── Server Actions (mutations via Prisma)
-              └── NextAuth.js (session via Prisma adapter)
-                      ↓
-              PostgreSQL (via Prisma ORM)
+Browser → Next.js App Router
+              ├── Server Components (data fetching)
+              ├── API Routes (mutations)
+              └── Supabase Client (real-time)
+                       └── PostgreSQL
 ```
-All data fetching happens on the server. Client components only handle interactivity (forms, optimistic UI). No REST API layer — Server Actions are the mutation boundary.
-
-## Purity Boundaries
-| Component | Type | Reason |
-|-----------|------|--------|
-| Prisma schema | Pure | Type definitions, no runtime behavior |
-| Streak calculation | Pure | Same input → same output, no I/O |
-| Server Actions | Impure | Database writes, auth context |
-| Dashboard page | Impure | Database reads, session lookup |
-| UI components | Pure | Props in → JSX out (no I/O) |
 
 ## Implementation Phases
 
-### Phase 1: Foundation (1 day)
-- T001: Next.js project scaffold (App Router, Tailwind, shadcn/ui, TypeScript strict)
-- T002: Prisma schema + PostgreSQL setup + first migration
-- T003: NextAuth.js v5 config with Google OAuth + Prisma adapter
+### Phase 1: Foundation (3 days)
 
-### Phase 2: Core Features (2 days)
-- T004: Habit form (Server Action + validation + form component)
-- T005: Dashboard page showing habit list (Server Component)
-- T006: Daily log upsert (Server Action + optimistic UI)
+**Goal**: Project scaffolded, database and auth wired.
+**Build Gate**: `npm run build` — must pass with 0 errors
+**Verify Gate**: `npm run dev` serves the app and `/docs` or home loads
+**Rule**: Each task in this phase MUST compile and verify BEFORE the next task begins
 
-### Phase 3: Progress & Streaks (1 day)
-- T007: Streak query (Prisma raw query or aggregation)
-- T008: Dashboard progress display (streak, fire icon, empty state)
+- Project setup, database schema, auth
+- Requirements: prerequisites for REQ-001, REQ-002, REQ-003
 
-### Phase 4: Polish (1 day)
-- T009: Error boundaries and loading skeletons
-- T010: E2E tests with Playwright (sign-up, create habit, log entry)
+### Phase 2: Core Task Features (4 days)
+
+**Goal**: Create, list, assign, update tasks end-to-end.
+**Build Gate**: `npm run build` — must pass with 0 errors
+**Verify Gate**: `npx playwright test` passes
+**Rule**: Each task in this phase MUST compile and verify BEFORE the next task begins
+
+- Requirements: REQ-001, REQ-002, REQ-003
+
+### Phase 3: Polish & Testing (2 days)
+
+**Goal**: Loading states, error handling, accessibility, E2E coverage.
+**Build Gate**: `npm run build` — must pass with 0 errors
+**Verify Gate**: `npx playwright test` passes; `npm run lint` clean
+**Rule**: Each task in this phase MUST compile and verify BEFORE the next task begins
 
 ## Risks
-- Next.js Server Actions are experimental — API may change
-- Prisma cold start on Vercel serverless functions (~300ms overhead)
-```
-
----
-
-## data-model.md (example)
-
-```markdown
-# Data Model — HabitStack
-
-## Entity: User
-| Field | Type | Constraints |
-|-------|------|-------------|
-| id | String (UUID) | Primary key |
-| name | String | Required |
-| email | String | Unique, required |
-| image | String? | Nullable (Google avatar) |
-| createdAt | DateTime | Auto-generated |
-
-## Entity: Habit
-| Field | Type | Constraints |
-|-------|------|-------------|
-| id | String (UUID) | Primary key |
-| userId | String (UUID) | Foreign key → User, indexed |
-| name | String | Required, max 100 chars |
-| description | String? | Nullable, max 500 chars |
-| icon | String | Default: "⭐" |
-| targetFrequency | String | Default: "daily" |
-| createdAt | DateTime | Auto-generated |
-
-## Entity: Entry
-| Field | Type | Constraints |
-|-------|------|-------------|
-| id | String (UUID) | Primary key |
-| habitId | String (UUID) | Foreign key → Habit, indexed |
-| date | Date | Required |
-| createdAt | DateTime | Auto-generated |
-
-## Indexes & Constraints
-- `Entry(habitId, date)` — unique compound index (one entry per habit per day)
-- `Habit(userId)` — index for dashboard queries
-- `User(email)` — unique index for auth lookup
-
-## Example: Prisma Schema
-```prisma
-model User {
-  id        String   @id @default(uuid())
-  name      String
-  email     String   @unique
-  image     String?
-  habits    Habit[]
-  createdAt DateTime @default(now())
-}
-
-model Habit {
-  id              String   @id @default(uuid())
-  userId          String
-  user            User     @relation(fields: [userId], references: [id])
-  name            String
-  description     String?
-  icon            String   @default("⭐")
-  targetFrequency String   @default("daily")
-  entries         Entry[]
-  createdAt       DateTime @default(now())
-
-  @@index([userId])
-}
-
-model Entry {
-  id        String   @id @default(uuid())
-  habitId   String
-  habit     Habit    @relation(fields: [habitId], references: [id])
-  date      DateTime
-  createdAt DateTime @default(now())
-
-  @@unique([habitId, date])
-}
-```
-```
-
----
-
-## interface-contracts/actions.md (example)
-
-```markdown
-# Interface Contracts — HabitStack (Server Actions)
-
-## Interface Type: Server Actions (Next.js)
-
-## Actions
-
-### `createHabit(data: HabitFormData) → Promise<{ habit: Habit, error?: string }>`
-- **Method**: Server Action (POST via form action)
-- **Input**: `{ name: string, description?: string, icon?: string, targetFrequency?: string }`
-- **Output**: `{ habit: Habit }` on success, `{ error: string }` on validation failure
-- **Errors**:
-  - `UNAUTHENTICATED` — user not logged in
-  - `VALIDATION_ERROR` — name is empty or too long
-- **Side effects**: Inserts row in Habit table
-
-### `logEntry(habitId: string) → Promise<{ entry: Entry }>`
-- **Method**: Server Action (POST via form action or button click)
-- **Input**: `habitId: string`
-- **Output**: `{ entry: Entry }` — upserts entry for today
-- **Errors**:
-  - `UNAUTHENTICATED` — user not logged in
-  - `NOT_FOUND` — habit does not exist or belongs to another user
-- **Side effects**: Upserts row in Entry table
-
-### `getDashboard() → Promise<{ habits: Array<HabitWithStreak> }>`
-- **Method**: Server Component (direct Prisma call)
-- **Output**: array of habits with computed streak fields
-- **Access control**: Returns only the current user's habits
+| Risk | Mitigation |
+|------|-----------|
+| Supabase real-time latency | Optimistic UI updates |
+| Prisma migration complexity | Use shadow DB in staging |
 ```
 
 ---
@@ -1933,119 +180,665 @@ model Entry {
 ## tasks.md (example)
 
 ```markdown
-# Tasks — HabitStack
+# Implementation Tasks — TaskFlow
 
 ## Phase 1: Foundation
-- [ ] [T001] Next.js project scaffold — S
-  - **Build**: `npx create-next-app@latest habitstack --typescript --tailwind --app`
-  - **Verify**: `npm run dev` serves a page at localhost:3000
-  - **Gate**: Static page renders without errors
-- [ ] [T002] Prisma schema + PostgreSQL setup — S
-  - **Build**: `npx prisma init && npx prisma db push`
-  - **Verify**: `npx prisma studio` shows empty tables
-  - **Gate**: Schema compiles and database responds
-- [ ] [T003] [P] NextAuth.js with Google OAuth — M
-  - **Build**: `npm install next-auth@beta @auth/prisma-adapter`
-  - **Verify**: Sign in with Google, dashboard shows user name
-  - **Gate**: Auth session persists on page reload
+
+**Build Gate**: `npm run build` — must pass with 0 errors before phase is complete
+
+- [ ] [T001] Initialize Next.js 14 project with TypeScript strict mode — S
+  **Build**: `npm run build` passes without errors
+  **Verify**: `npm run dev` starts and renders the home page
+  **Gate**: must pass before T002
+
+- [ ] [T002] Configure Supabase project and environment variables — S
+  **Build**: `npm run build` passes without errors
+  **Verify**: `.env.local` loads; Supabase client connects
+  **Gate**: must pass before T003
+
+- [ ] [T003] Set up Prisma with PostgreSQL connection — S
+  **Build**: `npx prisma generate` succeeds
+  **Verify**: `npx prisma db push` creates the schema
+  **Gate**: must pass before T004
+
+- [ ] [T004][P] Create database migration: users table — S (REQ-001)
+  **Build**: `npm run build` passes without errors
+  **Verify**: `npx prisma migrate dev` applies cleanly
+  **Gate**: must pass before T005
+
+- [ ] [T005][P] Create database migration: tasks table (id, title, description, status, assignee_id, creator_id, created_at, completed_at) — S (REQ-001, REQ-002, REQ-003)
+  **Build**: `npm run build` passes without errors
+  **Verify**: migration applies; table has all required columns
+  **Gate**: must pass before T006
+
+- [ ] [T006] Configure Supabase Auth with magic link — M
+  **Build**: `npm run build` passes without errors
+  **Verify**: sign-in flow completes in staging
+  **Gate**: must pass before T007
+
+- [ ] [T007] Create auth middleware for protected routes — M
+  **Build**: `npm run build` passes without errors
+  **Verify**: unauthenticated access redirects to login
+  **Gate**: must pass before T008
 
 ## Phase 2: Core Features
-- [ ] [T004] Create habit form + Server Action — M
-  - **Build**: Implement createHabit server action + form component
-  - **Verify**: Submit form → habit appears on dashboard
-  - **Gate**: Validation rejects empty name
-- [ ] [T005] Dashboard habit list — M
-  - **Build**: Server Component queries habits and renders cards
-  - **Verify**: Dashboard shows habits sorted by creation date
-  - **Gate**: Empty state renders when no habits exist
-- [ ] [T006] Daily log upsert — M
-  - **Build**: Implement logEntry server action + optimistic button
-  - **Verify**: Click "Log" → checkmark appears; second click updates
-  - **Gate**: Duplicate entries are prevented (unique constraint)
 
-## Phase 3: Progress & Streaks
-- [ ] [T007] Streak calculation query — M
-  - **Build**: Prisma query that groups entries and computes consecutive days
-  - **Verify**: 3 consecutive days → streak is 3
-  - **Gate**: Gap in entries resets streak to 0
-- [ ] [T008] Dashboard progress display — M
-  - **Build**: Render streak, total days, fire icon, percentage bar
-  - **Verify**: 7+ day streak shows 🔥; 0 entries shows "Start your first habit"
-  - **Gate**: All states render without data from other users
+**Build Gate**: `npm run build` — must pass with 0 errors before phase is complete
 
-## Phase 4: Polish
-- [ ] [T009] [P] Error boundaries + loading skeletons — S
-  - **Build**: Add error.tsx and loading.tsx at route group level
-  - **Verify**: Simulate DB failure → error page shows retry button
-  - **Gate**: Skeleton matches card layout (no layout shift)
-- [ ] [T010] [P] E2E tests with Playwright — M
-  - **Build**: `npm init playwright` + test files for auth + create + log flows
-  - **Verify**: `npx playwright test` passes headlessly
-  - **Gate**: All 3 critical flows covered
+- [ ] [T008][P] Build POST /api/tasks endpoint (create task) — M (REQ-001)
+  **Build**: `npm run build` passes without errors
+  **Verify**: POST returns 201 and task persists
+  **Gate**: must pass before T009
 
-## Progress: 0/10 tasks complete
+- [ ] [T009][P] Build GET /api/tasks endpoint (list tasks) — M (REQ-001)
+  **Build**: `npm run build` passes without errors
+  **Verify**: GET returns task list ordered by creation
+  **Gate**: must pass before T010
+
+- [ ] [T010] Build PATCH /api/tasks/[id] endpoint (update status + assignee) — M (REQ-002, REQ-003)
+  **Build**: `npm run build` passes without errors
+  **Verify**: PATCH updates status/assignee; validation rejects bad values
+  **Gate**: must pass before T011
+
+- [ ] [T011] Build TaskForm component with validation — M (REQ-001)
+  **Build**: `npm run build` passes without errors
+  **Verify**: empty-title submission shows error, no task created
+  **Gate**: must pass before T012
+
+- [ ] [T012] Build TaskList component with status badges — M (REQ-001)
+  **Build**: `npm run build` passes without errors
+  **Verify**: tasks render with correct status badges
+  **Gate**: must pass before T013
+
+- [ ] [T013] Build AssigneeDropdown component — S (REQ-002)
+  **Build**: `npm run build` passes without errors
+  **Verify**: assigning a member updates the task and notifies
+  **Gate**: must pass before T014
+
+- [ ] [T014] Implement status change handler — S (REQ-003)
+  **Build**: `npm run build` passes without errors
+  **Verify**: status transitions restricted to pending/in-progress/done; done records timestamp
+  **Gate**: must pass before T015
+
+- [ ] [T015] Write unit tests for task service functions — M (REQ-001, REQ-002, REQ-003)
+  **Build**: `npm run build` passes without errors
+  **Verify**: `npm test` passes for service functions
+  **Gate**: must pass before T016
+
+## Phase 3: Polish & Testing
+
+**Build Gate**: `npm run build` — must pass with 0 errors before phase is complete
+
+- [ ] [T016] Add loading skeletons for task list — S
+  **Build**: `npm run build` passes without errors
+  **Verify**: skeletons render during fetch
+  **Gate**: must pass before T017
+
+- [ ] [T017] Add error boundary and toast notifications — S
+  **Build**: `npm run build` passes without errors
+  **Verify**: API errors surface as toasts, app doesn't crash
+  **Gate**: must pass before T018
+
+- [ ] [T018] Write Playwright E2E test: create task flow — M
+  **Build**: `npm run build` passes without errors
+  **Verify**: `npx playwright test create-task` passes
+  **Gate**: must pass before T019
+
+- [ ] [T019] Write Playwright E2E test: assign and complete task flow — M
+  **Build**: `npm run build` passes without errors
+  **Verify**: `npx playwright test assign-complete` passes
+  **Gate**: must pass before T020
+
+- [ ] [T020] Accessibility audit and fixes — M
+  **Build**: `npm run build` passes without errors
+  **Verify**: axe scan reports 0 critical/high issues
+  **Gate**: must pass before phase close
+
+---
+
+## Progress: 0/20 tasks complete
 ```
----
-
-## Traceability Matrix — logsnap
-
-| REQ | Plan Phase | Task ID | Verify | Test |
-|-----|-----------|---------|--------|------|
-| REQ-001: Log File Reading | Phase 1: Foundation | T001, T002, T003 | `cargo test test_config_parse` | Unit: config_parsing |
-| REQ-001 (stdin) | Phase 3: Polish | T004 | `cargo test test_stdin_reading` | Integration: stdin |
-| REQ-001 (large file) | Phase 3: Polish | T009 | `cargo test test_large_file --release` | Integration: large_file |
-| REQ-002: Log Filtering | Phase 2: Core | T006 | `cargo test test_filter_by_level` | Unit: filter |
-| REQ-003: Output Formatting | Phase 2: Core | T007, T008 | `cargo test test_json_output` | Unit: formatter |
-| REQ-004: Pipe/Stdin | Phase 3: Polish | T004 | `cargo test test_stdin_reading` | Integration: stdin |
-| REQ-005: Large File | Phase 3: Polish | T009 | `cargo test test_large_file --release` | Integration: large_file |
-
-Every line of production code in the final implementation should trace back to a requirement in spec.md. This matrix ensures no untracked code.
 
 ---
 
-## Traceability Matrix — SnippetVault
+---
 
-| REQ | Plan Phase | Task ID | Verify | Test |
-|-----|-----------|---------|--------|------|
-| REQ-001: Create Snippet | Phase 1–2 | T001–T005 | `curl -X POST` returns 201 | Integration: test_create_snippet |
-| REQ-002: Search Snippets | Phase 2 | T006 | `pytest -k test_search` | Integration: test_search |
-| REQ-003: Get by ID | Phase 2 | T007 | `curl /snippets/{id}` returns 200/404 | Integration: test_get_by_id |
+# EXAMPLE 2 (CRITICAL — bank-grade): "LedgerPay" Funds Transfer Feature
 
-Every line of production code in the final implementation should trace back to a requirement in spec.md. This matrix ensures no untracked code.
+Context: a fictional digital bank's core service needs a feature letting customers transfer funds
+between their own accounts and to other verified LedgerPay users, in real time, with full auditability.
+This is the kind of feature where getting the spec suite right — not just the code — is the actual job.
 
 ---
 
-## Traceability Matrix — LegacyPay
+## constitution.md (example, excerpt — CRITICAL sections only)
 
-| REQ | Plan Phase | Task ID | Verify | Test |
-|-----|-----------|---------|--------|------|
-| REQ-001: Process Payment | Phase 1–2 | T001, T004 | `go test ./characterization/...` | Integration: payment_flow_test |
-| REQ-002: Process Refund | Phase 1–2 | T001, T004 | `go test ./characterization/...` | Integration: refund_flow_test |
+```markdown
+# Project Constitution — LedgerPay Core Banking Platform
 
-Every line of production code in the final implementation should trace back to a requirement in spec.md. This matrix ensures no untracked code.
+## 1. Project Identity
+- **Name**: LedgerPay
+- **Purpose**: Digital bank platform enabling account management and real-time funds transfers.
+- **Owners**: Head of Engineering (eng), Chief Compliance Officer (compliance), CISO (security)
+- **Regulatory scope**: PCI-DSS v4.0 (card data), GLBA (US financial privacy), SOC 2 Type II,
+  applicable state money-transmitter regulations — final applicability confirmed by Legal, not by this document.
+
+## 2. Core Principles
+- Least privilege by default — every credential, role, and service account gets the minimum access needed
+- No silent failures on money movement — every state-changing financial operation is idempotent, logged,
+  and reconcilable
+- Maker-checker for anything irreversible — no single human or service can unilaterally move money above
+  a defined threshold without a second approver
+- Fail closed — if a downstream dependency (fraud check, balance service) is unavailable, the transfer
+  is rejected, never silently allowed
+
+## 6. Security Non-Negotiables
+- All Confidential/Restricted data encrypted at rest (AES-256) and in transit (TLS 1.2+)
+- All privileged actions (manual balance adjustment, transfer reversal, limit override) require step-up
+  auth (MFA) and are logged with actor, timestamp, and reason
+- Segregation of duties: the engineer who can deploy code cannot also approve production financial
+  reconciliation reports
+- Secrets rotated every 90 days minimum; never logged, never committed
+
+## 7. Data Classification Policy
+| Class | Examples in this system | Handling rules |
+|---|---|---|
+| Confidential | Account balance, transaction history | Encrypted, access-logged, need-to-know |
+| Restricted | Card PAN, SSN/tax ID, bank routing+account numbers, auth credentials | Encrypted, tokenized (PAN via a PCI-scoped tokenization vault — never stored raw), strict RBAC, audit-logged, retention per regulatory minimum then deleted |
+
+## 8. Change Management & Approval
+- Production deploys touching the ledger service require: 1 engineering reviewer + 1 approval from
+  the on-call financial-systems lead
+- Changes to `constitution.md` or `compliance-matrix.md` require CISO + Compliance Officer sign-off
+- Break-glass emergency changes are permitted but require a same-day post-hoc review and ticket
+
+## 9. Incident Response Ownership
+- On-call: Financial Systems on-call rotation (PagerDuty)
+- Breach notification: escalate to Compliance Officer within 1 hour of confirmed Restricted-data exposure;
+  actual regulatory notification language is drafted by Legal, not engineering
+- Target time to detect anomalous transfer patterns: < 5 minutes (via real-time fraud monitoring)
+```
 
 ---
 
-## Traceability Matrix — EventStream
+## spec.md (example, excerpt)
 
-| REQ | Plan Phase | Task ID | Verify | Test |
-|-----|-----------|---------|--------|------|
-| REQ-001: Emit order.created | Phase 2 | T005 | `go test ./services/order/...` | Integration: order_created_test |
-| REQ-002: Consume in Inventory | Phase 2 | T006 | `go test ./services/inventory/...` | Integration: inventory_consumer_test |
-| REQ-003: Emit order.paid | Phase 2 | T007 | `go test ./services/billing/...` | Integration: billing_flow_test |
+```markdown
+# Feature Specification: Funds Transfer
+> Technology-agnostic | Tier: CRITICAL | Version: 1.0 | Status: Approved
 
-Every line of production code in the final implementation should trace back to a requirement in spec.md. This matrix ensures no untracked code.
+## Overview
+Allow an authenticated customer to transfer funds from their own LedgerPay account to another account
+they own, or to another verified LedgerPay customer, with the transfer reflected in both parties' balances
+atomically and irreversibly once settled.
+
+## Users & Personas
+- **Customer (Sender)**: Initiates a transfer from their account
+- **Customer (Recipient)**: Receives funds
+- **Fraud Analyst** (privileged): Reviews flagged transfers before they settle
+- **Compliance Officer** (privileged): Audits transfer history for regulatory reporting
+
+## Data Sensitivity Overview
+- Data touched: account balance (Confidential), account/routing numbers if external transfer (Restricted),
+  transaction history (Confidential)
+- Regulatory tags potentially applicable: GLBA (financial privacy), state money-transmitter rules,
+  BSA/AML transaction monitoring — flagged for compliance-matrix.md, not asserted here.
+
+## Functional Requirements
+
+### REQ-001: Initiate Internal Transfer
+**User Story**:
+> As a Customer, I want to transfer funds between my own accounts so that I can manage my money across accounts.
+
+**Acceptance Criteria**:
+- WHEN a customer submits a transfer with a valid amount ≤ available balance THEN the system SHALL debit
+  the source account and credit the destination account atomically
+- WHEN a customer submits a transfer exceeding available balance THEN the system SHALL reject it with
+  `INSUFFICIENT_FUNDS` and SHALL NOT partially apply the transfer
+- WHEN a transfer is submitted twice with the same idempotency key THEN the system SHALL process it only once
+- WHEN a transfer completes THEN the system SHALL create an immutable ledger entry recording amount,
+  timestamp, source, destination, and initiating actor
+
+**Data sensitivity**: Confidential (balances)
+**Regulatory tag**: BSA/AML transaction monitoring (flag for compliance-matrix.md)
 
 ---
 
-## Traceability Matrix — HabitStack
+### REQ-002: Transfer to External LedgerPay Customer
+**User Story**:
+> As a Customer, I want to send funds to another verified LedgerPay user so that I can pay another person.
 
-| REQ | Plan Phase | Task ID | Verify | Test |
-|-----|-----------|---------|--------|------|
-| REQ-001: Auth | Phase 1 | T003 | Sign in with Google → dashboard shows name | E2E: auth_flow |
-| REQ-002: Create Habit | Phase 2 | T004 | Submit form → habit appears on dashboard | Component: habit_form_test |
-| REQ-003: Log Daily Entry | Phase 2 | T006 | Click "Log" → checkmark, second click updates | Component: log_button_test |
-| REQ-004: View Progress | Phase 3 | T007, T008 | Dashboard shows streak + fire icon | Integration: streak_query_test |
+**Acceptance Criteria**:
+- WHEN a customer submits a transfer to a verified recipient within their daily limit THEN the system
+  SHALL process it per REQ-001's atomicity guarantee
+- WHEN a transfer would exceed the customer's daily transfer limit THEN the system SHALL reject it with
+  `LIMIT_EXCEEDED`
+- WHEN a transfer is flagged by the fraud detection service THEN the system SHALL hold it in a
+  `pending_review` state and SHALL NOT settle it until a Fraud Analyst approves or rejects it
+- WHEN a Fraud Analyst approves a held transfer THEN the system SHALL log the analyst's identity and
+  reasoning before settling
 
-Every line of production code in the final implementation should trace back to a requirement in spec.md. This matrix ensures no untracked code.
+**Data sensitivity**: Confidential / Restricted (if external bank details involved)
+**Regulatory tag**: BSA/AML, GLBA
+
+## Non-Functional Requirements
+- **Performance**: Transfer decision (accept/reject/hold) returned in < 500ms at p95
+- **Availability**: 99.95% uptime; RTO 15 minutes; RPO zero for committed transactions
+- **Auditability**: every transfer state change produces an immutable, actor-attributed, timestamped log
+  entry retained 7 years (pending Legal confirmation of exact regulatory retention period)
+
+## Out of Scope
+- International wire transfers (separate spec)
+- Recurring/scheduled transfers (v2)
+
+## Open Questions
+- [ ] Exact regulatory retention period for transaction logs — requires Legal confirmation
+- [ ] Whether state money-transmitter licensing applies in all operating states — requires Legal review
+```
+
+---
+
+## threat-model.md (example, excerpt)
+
+```markdown
+# Threat Model: Funds Transfer
+> Tier: CRITICAL | Reviewed by: CISO
+
+## Trust Boundary Diagram
+```
+graph LR
+    Customer[Customer App] -->|HTTPS, untrusted| Gateway[API Gateway + WAF]
+    Gateway -->|trust boundary| TransferSvc[Transfer Service]
+    TransferSvc -->|internal, mTLS| LedgerDB[(Ledger DB - source of truth)]
+    TransferSvc -->|trust boundary: 3rd party| FraudAPI[External Fraud Scoring API]
+    TransferSvc -->|internal| AuditLog[(Append-only Audit Log)]
+```
+
+## Assets in Scope
+Account balances, transfer integrity/atomicity, customer PII, audit log integrity, service availability.
+
+## Threats (STRIDE)
+
+### T-001: Replayed transfer request causes duplicate debit
+- **Category**: Tampering
+- **Actor**: External attacker intercepting/replaying a request, or a buggy client retry
+- **Entry point**: POST /transfers endpoint
+- **Impact**: Critical — direct financial loss to customer, reconciliation failure
+- **Mitigating control**: Mandatory `Idempotency-Key` header; server rejects/dedupes repeated keys
+  (see interface-contracts/api.md, task T0XX)
+- **Residual risk**: Mitigated
+
+### T-002: Insider manually adjusts a balance without approval
+- **Category**: Elevation of Privilege / Repudiation
+- **Actor**: Employee with legitimate database or admin-panel access
+- **Entry point**: Internal admin tooling
+- **Impact**: Critical — undetected fraud, regulatory violation
+- **Mitigating control**: All balance adjustments go through a maker-checker workflow; direct DB writes
+  to balance fields are disabled outside the transfer service; all adjustments audit-logged with two
+  attributed identities
+- **Residual risk**: Mitigated
+
+### T-003: Fraud-scoring third-party API is unavailable
+- **Category**: Denial of Service (of a control, not the system)
+- **Actor**: N/A (dependency failure)
+- **Entry point**: External Fraud Scoring API integration
+- **Impact**: High — could allow fraudulent transfers through if the system fails open
+- **Mitigating control**: Fail-closed policy — if fraud API times out or errors, transfer is held in
+  `pending_review` for manual analyst review rather than auto-approved
+- **Residual risk**: Mitigated
+
+## Abuse Cases
+- **AC-001**: A Fraud Analyst approves their own flagged transfer. **Control**: analysts are blocked from
+  approving transfers where they are the sender or recipient; enforced at the application layer and
+  reviewed in periodic access audits.
+
+## Unmitigated / Accepted Risks Summary
+| Threat ID | Description | Why accepted | Accepted by | Review date |
+|---|---|---|---|---|
+| T-004 | Sophisticated SIM-swap attack bypassing SMS-based MFA | Full mitigation (hardware key mandate) deferred to Q3 due to UX cost; interim: risk-based step-up + transaction limits | CISO | Next quarterly review |
+```
+
+---
+
+## data-model.md (example, excerpt)
+
+```markdown
+# Data Model — LedgerPay Funds Transfer
+
+## Entities
+
+### Account
+| Field | Type | Required | Classification | Description |
+|-------|------|----------|-----------------|-------------|
+| id | UUID | ✅ | Internal | Primary key |
+| owner_id | UUID | ✅ | Internal | FK to Customer |
+| balance_cents | bigint | ✅ | Confidential | Current balance, stored as integer cents to avoid float errors |
+| currency | string(3) | ✅ | Internal | ISO 4217 code |
+| status | enum | ✅ | Internal | active / frozen / closed |
+
+### Transfer (append-only ledger entry)
+| Field | Type | Required | Classification | Description |
+|-------|------|----------|-----------------|-------------|
+| id | UUID | ✅ | Internal | Primary key |
+| idempotency_key | string | ✅ | Internal | Client-supplied, unique per transfer attempt |
+| source_account_id | UUID | ✅ | Internal | FK to Account |
+| destination_account_id | UUID | ✅ | Internal | FK to Account |
+| amount_cents | bigint | ✅ | Confidential | Transfer amount |
+| status | enum | ✅ | Internal | pending / pending_review / settled / rejected |
+| initiated_by | UUID | ✅ | Internal | Actor who initiated (customer or system) |
+| approved_by | UUID | ⛔ nullable | Internal | Fraud analyst, if held for review |
+| created_at | timestamp | ✅ | Internal | |
+| settled_at | timestamp | ⛔ nullable | Internal | |
+
+Transfer rows are **never updated in place** for the amount/accounts fields — status transitions are
+appended as new rows referencing the original transfer id, preserving a full audit trail.
+
+## Data Retention & Deletion Policy
+| Entity/Field | Retention period | Deletion/anonymization method | Regulatory driver |
+|---|---|---|---|
+| Transfer ledger | 7 years (pending Legal confirmation) | Cold-archived, never hard-deleted within window | BSA recordkeeping (to confirm) |
+| Account PII | Duration of relationship + 7 years | Anonymized after retention window | GLBA (to confirm) |
+
+## Audit Trail Requirements
+Every Transfer status transition is logged to the append-only audit log with: actor id, actor role,
+timestamp, previous status, new status, and (if applicable) reason text. No anonymous or system-only
+writes are permitted to Transfer or Account balance fields — every write traces to an attributable actor,
+including scheduled/automated jobs (which log a designated service-account identity).
+```
+
+---
+
+## interface-contracts/api.md (example, excerpt)
+
+```markdown
+# API Interface Contracts — Funds Transfer
+
+## Authentication
+`Authorization: Bearer <token>` (OIDC access token, 15-min lifetime). Step-up MFA token required for
+transfers above the customer's configured "no-step-up" threshold.
+
+## Standard Error Taxonomy
+```json
+{
+  "error_code": "INSUFFICIENT_FUNDS",
+  "message": "The transfer amount exceeds the available balance.",
+  "trace_id": "b3f1-...-uuid"
+}
+```
+
+---
+
+### POST /transfers
+**Description**: Initiate a funds transfer between accounts.
+**Requirements**: REQ-001, REQ-002
+**Idempotency**: Requires `Idempotency-Key` header. Duplicate keys within 24h return the original result
+without reprocessing; a duplicate key with a different payload returns `409 Conflict`.
+**Audit logging**: Logs actor, timestamp, source/destination account ids, amount, and outcome. Amount and
+account identifiers are logged in full internally (Confidential-tier access only); never returned in
+client-facing error messages beyond what the customer already knows.
+**Rate limiting**: 20 requests/minute per account; `429 Too Many Requests` on breach.
+
+**Request Body**:
+```json
+{
+  "source_account_id": "uuid",
+  "destination_account_id": "uuid",
+  "amount_cents": 5000,
+  "currency": "USD"
+}
+```
+
+**Response 201 (settled)**:
+```json
+{
+  "transfer_id": "uuid",
+  "status": "settled",
+  "settled_at": "2026-07-07T12:00:00Z"
+}
+```
+
+**Response 202 (held for review)**:
+```json
+{
+  "transfer_id": "uuid",
+  "status": "pending_review"
+}
+```
+
+**Error Responses**:
+- `400 Bad Request`: Invalid input (e.g., malformed amount)
+- `401 Unauthorized`: Missing/invalid token
+- `403 Forbidden`: Token valid but account not owned by caller
+- `409 Conflict`: Idempotency key reused with a different payload
+- `422 Unprocessable Entity`: `INSUFFICIENT_FUNDS`, `LIMIT_EXCEEDED`, `DESTINATION_ACCOUNT_FROZEN`
+- `503 Service Unavailable`: Downstream fraud-check dependency unavailable — transfer is held, not silently approved
+```
+
+---
+
+## compliance-matrix.md (example, excerpt)
+
+```markdown
+# Compliance Traceability Matrix — Funds Transfer
+
+## Frameworks in Scope
+GLBA (financial privacy) — confirmed applicable. BSA/AML transaction monitoring — confirmed applicable.
+State money-transmitter licensing — under legal review, not yet confirmed for all operating states.
+
+## Traceability Table
+| Control ID | Framework | Control description | Spec requirement | Implementation task | Evidence/test | Status |
+|---|---|---|---|---|---|---|
+| GLBA-1 | GLBA | Customer financial data encrypted at rest and in transit | REQ-001 | T041 | Automated encryption-at-rest test in CI | Implemented |
+| AML-1 | BSA/AML | Transfers above threshold or matching risk pattern are held for review | REQ-002 | T045 | Test suite: transfer_holds_on_fraud_flag.spec | Verified |
+| AML-2 | BSA/AML | All settled transfers retained in immutable audit form for examiner access | REQ-001 | T048 | Manual audit-log query sample reviewed by Compliance | In progress |
+
+## Gaps & Remediation Plan
+| Gap | Risk if unaddressed | Remediation | Target date | Owner |
+|---|---|---|---|---|
+| State money-transmitter licensing status unconfirmed for 3 states | Potential unlicensed operation | Legal review of licensing requirement per state | Before GA in those states | Compliance Officer |
+
+## Sign-off
+| Role | Name | Date | Notes |
+|---|---|---|---|
+| Compliance owner | [pending] | | Awaiting licensing review completion |
+| Security owner | [pending] | | |
+| Engineering owner | [pending] | | |
+```
+
+---
+
+## risk-register.md (example, excerpt)
+
+```markdown
+# Risk Register — Funds Transfer
+
+### RISK-001: Fraud-scoring vendor outage causes transfer backlog
+- **Category**: Third-Party/Vendor
+- **Description**: If the external fraud API has extended downtime, transfers fail-closed into
+  `pending_review`, potentially overwhelming the Fraud Analyst queue.
+- **Likelihood**: Medium
+- **Impact**: Medium (customer experience, not financial loss, since fail-closed prevents fraud exposure)
+- **Current mitigation**: Fail-closed design (see threat-model T-003); on-call alert if queue depth exceeds threshold
+- **Residual risk after mitigation**: Low
+- **Owner**: Financial Systems on-call lead
+- **Review date**: Quarterly
+- **Status**: Mitigated
+
+### RISK-002: Regulatory licensing gap in 3 states
+- **Category**: Regulatory
+- **Description**: Money-transmitter licensing status unconfirmed in 3 operating states (see
+  compliance-matrix.md gap).
+- **Likelihood**: Low (Legal review in progress)
+- **Impact**: Critical (regulatory action, forced service suspension)
+- **Current mitigation**: Legal review underway; feature gated by state until confirmed
+- **Residual risk after mitigation**: Medium until review completes
+- **Owner**: Chief Compliance Officer
+- **Review date**: Before GA
+- **Status**: Open
+
+## Summary by Category
+| Category | Open | Mitigated | Accepted | Highest residual severity |
+|---|---|---|---|---|
+| Security | 0 | 3 | 1 | Medium (T-004, accepted) |
+| Operational | 0 | 1 | 0 | Low |
+| Financial | 0 | 0 | 0 | — |
+| Third-Party/Vendor | 0 | 1 | 0 | Low |
+| Regulatory | 1 | 0 | 0 | Critical (open) |
+```
+
+---
+
+## access-control-matrix.md (example, excerpt)
+
+```markdown
+# Access Control Matrix — LedgerPay Funds Transfer
+
+## Roles Overview
+| Role | Description | Privileged? |
+|---|---|---|
+| Customer | Owns and operates their own accounts | No |
+| Support Agent | Views masked account info to help with tickets | Yes (read) |
+| Fraud Analyst | Approves/rejects held transfers | Yes |
+| Financial Systems Admin | Can manually adjust balances | Yes |
+
+## Permission Matrix
+| Role | Data class accessed | Actions allowed | Approval workflow | Justification |
+|---|---|---|---|---|
+| Customer | Own Confidential balance/history | Initiate own transfers | Self-service | Core function |
+| Support Agent | Confidential, Restricted fields masked | Read-only | Access logged, no approval needed | Ticket resolution |
+| Fraud Analyst | Confidential + flagged transfer detail | Approve/reject held transfers | Cannot approve own transfers (see threat-model AC-001) | Fraud control |
+| Financial Systems Admin | Confidential + Restricted | Manual balance adjustment | Second admin must co-approve (maker-checker) | Irreversible financial action |
+
+## Access Review & Recertification
+- Cadence: Quarterly
+- Owner: Security Operations Lead
+- Deprovisioning SLA: within 4 hours of role change or termination, enforced via HR-system integration
+
+## Break-Glass / Emergency Access
+- Permitted for: Sev-1 production incident with no other path to restore service
+- Who can invoke: On-call Financial Systems Lead + one witness approver
+- Post-hoc requirement: automatically logged and reviewed by CISO within 24 hours
+```
+
+---
+
+## disaster-recovery-plan.md (example, excerpt)
+
+```markdown
+# Disaster Recovery Plan — LedgerPay Core
+
+## Recovery Objectives
+| Component | RTO | RPO |
+|---|---|---|
+| Ledger / balances | 15 min | 0 (zero data loss on committed transactions) |
+| Fraud scoring integration | 30 min (fails closed in the meantime) | N/A (no persisted state) |
+| Customer-facing dashboard | 4 hours | 1 hour |
+
+## Failover Procedure (summary)
+1. Automated health checks detect ledger DB primary failure
+2. On-call Financial Systems Lead confirms and authorizes failover to standby replica in secondary AZ
+3. Standby promoted; idempotency-key store validated for consistency before traffic resumes
+4. Reconciliation job runs immediately post-failover to confirm no double-processed transfers
+
+## Testing & Drills
+- Last tested: [date] — tabletop exercise simulating primary-region outage
+- Result: Failover completed within target RTO; found gap in alerting for the fraud-scoring dependency —
+  remediation task opened (see tasks.md)
+- Next scheduled test: live failover drill, next quarter
+```
+
+---
+
+## vendor-risk-assessment.md (example, excerpt)
+
+```markdown
+# Vendor Risk Assessment — LedgerPay Funds Transfer
+
+### Vendor: External Fraud Scoring API
+- What they access: transaction metadata (amount, accounts involved — tokenized, not raw account numbers)
+- Compliance attestations on file: SOC 2 Type II report, dated within last 12 months
+- Contractual terms: DPA signed; 24-hour breach notification clause
+- Criticality: High — but system fails closed if unavailable (see threat-model T-003), so customer risk is bounded
+- Exit strategy: fraud-scoring interface is abstracted behind an internal service so a replacement vendor
+  can be swapped without changing the transfer service itself
+
+### Vendor: Cloud Infrastructure Provider
+- What they access: full infrastructure hosting, encrypted data at rest
+- Compliance attestations on file: SOC 2 Type II, PCI-DSS attestation of compliance (relevant to hosted
+  tokenization vault)
+- Criticality: Critical (single hosting provider)
+- Open concern: no secondary cloud provider for true multi-cloud failover — tracked as RISK-003 in risk-register.md
+
+## Vendor Risk Summary
+| Vendor | Criticality | Attestation on file? | Open concerns |
+|---|---|---|---|
+| Fraud Scoring API | High | Yes (SOC 2) | None — fails closed |
+| Cloud Infrastructure Provider | Critical | Yes (SOC 2 + PCI) | No secondary provider (RISK-003) |
+```
+
+---
+
+## tasks.md (example, excerpt — security/compliance phase)
+
+```markdown
+# Implementation Tasks — Funds Transfer (excerpt)
+
+## Phase 3: Security, Compliance & Release Readiness
+
+**Build Gate**: `go build ./...` — must pass with 0 errors before phase is complete
+
+- [ ] [T041][SEC] Implement encryption-at-rest for balance and account-number fields — M (REQ-001)
+  **Build**: `go build ./...` passes without errors
+  **Verify**: automated encryption-at-rest test in CI passes
+  **Gate**: must pass before T042
+
+- [ ] [T042][SEC] Implement Idempotency-Key handling and dedup store for POST /transfers — M (REQ-001)
+  **Build**: `go build ./...` passes without errors
+  **Verify**: duplicate-key replay test returns original result; conflict on different payload
+  **Gate**: must pass before T043
+
+- [ ] [T043][SEC] Implement maker-checker workflow for manual balance adjustments — L
+  **Build**: `go build ./...` passes without errors
+  **Verify**: single-approver adjustment is rejected; second approval settles
+  **Gate**: must pass before T044
+
+- [ ] [T044][SEC] Implement fail-closed handling when fraud-scoring API is unavailable — M (REQ-002)
+  **Build**: `go build ./...` passes without errors
+  **Verify**: fraud API outage → transfer held in `pending_review`, never auto-approved
+  **Gate**: must pass before T045
+
+- [ ] [T045][SEC] Write test suite verifying transfers hold on fraud-flag and reject on limit breach — M (REQ-002)
+  **Build**: `go build ./...` passes without errors
+  **Verify**: `go test ./transfers/...` passes for hold-on-flag and limit-reject cases
+  **Gate**: must pass before T046
+
+- [ ] [T046][SEC] Run SAST/DAST scans; remediate all Critical/High findings — L
+  **Build**: `go build ./...` passes without errors
+  **Verify**: scan report shows 0 Critical/High open findings
+  **Gate**: must pass before T047
+
+- [ ] [T047][SEC] Conduct third-party penetration test on transfer flow; remediate Critical/High findings — L
+  **Build**: `go build ./...` passes without errors
+  **Verify**: pen-test report shows 0 Critical/High open findings
+  **Gate**: must pass before T048
+
+- [ ] [T048][COMPLIANCE] Verify audit log immutability and completeness for all transfer state transitions — M
+  **Build**: `go build ./...` passes without errors
+  **Verify**: audit-log completeness query reviewed by Compliance
+  **Gate**: must pass before T049
+
+- [ ] [T049][COMPLIANCE] Complete compliance-matrix.md traceability table with evidence links — M
+  **Build**: `go build ./...` passes without errors
+  **Verify**: every matrix row has an evidence/test link
+  **Gate**: must pass before T050
+
+- [ ] [T050][COMPLIANCE] Confirm state money-transmitter licensing status with Legal for all launch states — S
+  **Build**: `go build ./...` passes without errors
+  **Verify**: Legal confirmation recorded in compliance-matrix.md
+  **Gate**: must pass before T051
+
+- [ ] [T051] Release go/no-go review with CISO, Compliance Officer, and Engineering owner — S
+  **Build**: `go build ./...` passes without errors
+  **Verify**: all three owners sign off; blocking risks resolved or accepted
+  **Gate**: must pass before release
 ```

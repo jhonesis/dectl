@@ -1,6 +1,8 @@
 # SDD Document Templates
 
 Full content templates for each document in the Spec-Driven Development suite.
+Documents marked **[CRITICAL ONLY]** are required for regulated, financial, health, or otherwise
+high-stakes ("bank-grade") systems — see SKILL.md Step 0 for tier classification.
 
 ---
 
@@ -9,11 +11,15 @@ Full content templates for each document in the Spec-Driven Development suite.
 ```markdown
 # Project Constitution
 > *Governing principles for [Project Name]. This document is the supreme authority — all other documents must comply with it.*
+> *Tier: [STANDARD | CRITICAL] | Version: 1.0 | Last updated: YYYY-MM-DD | Approved by: [name/role]*
 
 ## 1. Project Identity
 - **Name**: 
 - **Purpose**: One sentence describing what this project does and for whom.
 - **Owners**: 
+- **Regulatory scope** (CRITICAL only): List named frameworks in scope, e.g. PCI-DSS, SOX, GDPR, GLBA,
+  PSD2, DORA, HIPAA, SOC 2 Type II, ISO 27001. If unsure, write "TBD — requires legal/compliance review"
+  rather than guessing.
 
 ## 2. Core Principles
 List 3–7 non-negotiable principles guiding all decisions.
@@ -21,6 +27,10 @@ Example:
 - Simplicity over cleverness — prefer boring, readable code
 - Security by default — never expose sensitive data without explicit intent
 - Test everything — no feature ships without tests
+- (CRITICAL) Least privilege by default — every credential, role, and service account gets the minimum
+  access needed and nothing more
+- (CRITICAL) No silent failures on money movement — every state-changing financial operation is
+  idempotent, logged, and reconcilable
 
 ## 3. Technology Constraints
 ### Mandatory Stack
@@ -46,14 +56,42 @@ Example:
 - **Integration tests**: required for all API endpoints
 - **E2E tests**: required for critical user flows
 - **Coverage target**: _%
+- (CRITICAL) **Security testing**: SAST/DAST in CI, dependency vulnerability scanning, mandatory
+  penetration test before first production release and annually thereafter
 
 ## 6. Security Non-Negotiables
 - All inputs validated and sanitized
 - Authentication required on all private routes
-- No secrets in source code (use env vars)
+- No secrets in source code (use env vars / secrets manager)
 - (Add project-specific rules)
+- (CRITICAL) All data classified as Confidential or Restricted is encrypted at rest (AES-256 or
+  equivalent) and in transit (TLS 1.2+)
+- (CRITICAL) All privileged actions (admin, financial approval, data export) require step-up
+  authentication and are logged with actor, timestamp, and reason
+- (CRITICAL) Segregation of duties: the person/service that initiates a financial transaction cannot
+  be the sole approver of it
+- (CRITICAL) Secrets and cryptographic keys are rotated on a defined schedule and never logged
 
-## 7. Definition of Done
+## 7. Data Classification Policy [CRITICAL ONLY]
+| Class | Definition | Examples | Handling rules |
+|---|---|---|---|
+| Public | No harm if disclosed | Marketing copy | No restrictions |
+| Internal | Minor harm if disclosed | Internal docs | Access limited to employees |
+| Confidential | Real harm to business or individual | Account balances, contact info | Encrypted, access-logged, need-to-know |
+| Restricted | Severe harm; regulatory exposure | Card numbers, SSN, health records, credentials | Encrypted, tokenized/masked where possible, strict RBAC, audit-logged, retention-limited |
+
+## 8. Change Management & Approval [CRITICAL ONLY]
+- Who can approve production deployments:
+- Who can approve changes to `constitution.md` or `compliance-matrix.md`:
+- Required reviewers for changes touching money movement or Restricted data:
+- Emergency change ("break-glass") process and post-hoc review requirement:
+
+## 9. Incident Response Ownership [CRITICAL ONLY]
+- On-call/escalation owner:
+- Breach notification process pointer (link to runbook — do not draft legal notification language here):
+- Maximum time to detect / time to contain targets:
+
+## 10. Definition of Done
 A task is complete when:
 - [ ] **Code compiles** without errors (Build passes)
 - [ ] **Verify step passes** — the feature runs and produces expected output
@@ -62,6 +100,8 @@ A task is complete when:
 - [ ] **No new linting errors**
 - [ ] **PR reviewed and approved**
 - [ ] **Spec/plan updated** if implementation deviated
+- [ ] (CRITICAL) **Audit logging verified** for the change, where applicable
+- [ ] (CRITICAL) **Compliance-matrix row updated** with evidence, where applicable
 
 > **Note**: DoD is non-negotiable. No task is complete until ALL checklist items pass. The "Constitution compliance review" prevents gradual erosion of project principles.
 ```
@@ -73,15 +113,7 @@ A task is complete when:
 ```markdown
 # Feature Specification: [Feature Name]
 > *Technology-agnostic. Describes WHAT to build, not HOW.*
-> *Version: 1.0 | Status: Draft | Last updated: YYYY-MM-DD*
-
-## Project Type
-Select the type that best matches this project. This persona choice affects how requirements are framed:
-
-- **CLI project** — User interacts via terminal, not browser. Personas include "Terminal User", "CI Pipeline", "Sysadmin".
-- **Library project** — User imports the library, not an API. Personas include "Developer integrating this library", "Downstream project".
-- **API project** — User calls HTTP endpoints. Personas include "API Client", "Frontend developer", "Third-party integrator".
-- **Web application** — User interacts via browser. Personas include "End user", "Admin", "Visitor".
+> *Tier: [STANDARD | CRITICAL] | Version: 1.0 | Status: Draft | Last updated: YYYY-MM-DD*
 
 ## Overview
 Brief description of the feature and the problem it solves.
@@ -92,6 +124,14 @@ Why is this feature needed? What user pain does it address?
 ## Users & Personas
 - **[Persona 1]**: Description of this type of user and their goals
 - **[Persona 2]**: ...
+- (CRITICAL) Note any privileged personas explicitly (e.g., "Compliance Officer", "Fraud Analyst",
+  "System Admin") since they typically carry different acceptance criteria and audit requirements.
+
+## Data Sensitivity Overview [CRITICAL ONLY]
+State up front what classes of data this feature touches (per constitution.md's classification):
+- Data touched: [e.g., account balance (Confidential), card PAN (Restricted)]
+- Regulatory tags potentially applicable: [e.g., PCI-DSS, GDPR] — flag for compliance-matrix.md, do not
+  assert compliance here.
 
 ## Functional Requirements
 
@@ -103,7 +143,8 @@ Why is this feature needed? What user pain does it address?
 - WHEN [condition] THEN the system SHALL [expected behavior]
 - WHEN [condition] THEN the system SHALL [expected behavior]
 
-**Implementation Notes**: This requirement SHALL be implemented as 2–3 atomic, individually verifiable tasks. Each task must compile and verify before the next begins.
+**Data sensitivity** (CRITICAL only): [Public/Internal/Confidential/Restricted]
+**Regulatory tag** (CRITICAL only): [e.g., PCI-DSS 3.4, or "none identified"]
 
 **Notes**: Any clarifications or edge cases.
 
@@ -116,15 +157,16 @@ Why is this feature needed? What user pain does it address?
 **Acceptance Criteria**:
 - WHEN [condition] THEN the system SHALL [expected behavior]
 
-**Implementation Notes**: This requirement SHALL be implemented as 2–3 atomic, individually verifiable tasks. Each task must compile and verify before the next begins.
-
 ---
 
 ## Non-Functional Requirements
 - **Performance**: (e.g., processes input in < 2s for typical workload)
-- **Reliability**: (e.g., zero data loss on crash)
-- **Security**: (e.g., all data encrypted at rest)
-- **Composability**: (e.g., works as a UNIX pipe for CLI projects)
+- **Availability** (CRITICAL: state target, e.g., "99.95% uptime, RTO 15 min, RPO 1 min")
+- **Accessibility**: (e.g., WCAG 2.1 AA compliance)
+- **Security**: (e.g., all data encrypted at rest and in transit; see constitution.md §6)
+- **Auditability** (CRITICAL ONLY): every state-changing action produces an immutable, timestamped,
+  attributable log entry retained for [X years per regulatory requirement]
+- **Localization**: (e.g., supports English and Spanish)
 
 ## Out of Scope
 Explicitly list what this feature does NOT include:
@@ -135,17 +177,8 @@ Explicitly list what this feature does NOT include:
 List unresolved questions that need answers before development starts:
 - [ ] Question 1
 - [ ] Question 2
-
-## Edge Case Catalog
-The agent MUST enumerate at least 3 edge cases per REQ. If the user has not specified edge case behavior, the agent MUST ask before proceeding. Evaluate each category:
-
-- [ ] **Null/missing input**: what happens when required data is absent?
-- [ ] **Network failure**: what happens when an external dependency is unreachable?
-- [ ] **Duplicate data**: what happens when a unique constraint is violated?
-- [ ] **Concurrent access**: what happens when two users modify the same resource?
-- [ ] **Empty state**: what does the system look like with zero data?
-- [ ] **Maximum load**: what happens at or beyond the performance threshold?
-- [ ] **Malicious input**: what happens with injection, overflow, or malformed data?
+- (CRITICAL) [ ] Any question about applicable regulation must be resolved with legal/compliance before
+  `plan.md` is finalized — do not assume an answer.
 ```
 
 ---
@@ -155,6 +188,7 @@ The agent MUST enumerate at least 3 edge cases per REQ. If the user has not spec
 ```markdown
 # Requirements Validation Checklist
 > *Validates that spec.md is complete, unambiguous, and technology-agnostic before planning begins.*
+> *Tier: [STANDARD | CRITICAL]*
 
 ## Completeness
 - [ ] Every user story has at least one acceptance criterion
@@ -182,9 +216,71 @@ The agent MUST enumerate at least 3 edge cases per REQ. If the user has not spec
 - [ ] Each requirement maps to a clear user need
 - [ ] All personas mentioned in user stories are defined
 
+## Security & Compliance [CRITICAL ONLY]
+- [ ] Every requirement touching Confidential/Restricted data has a stated data sensitivity class
+- [ ] Every requirement with a plausible regulatory tag is flagged for compliance-matrix.md
+- [ ] Privileged personas and their distinct acceptance criteria are identified
+- [ ] Auditability requirement is present for every state-changing operation
+- [ ] No requirement assumes a compliance status without a "requires legal/compliance review" flag where relevant
+
 ## Verdict
 - [ ] ✅ READY TO PLAN — All checks passed
 - [ ] ⚠️ NEEDS REVISION — Items marked above must be resolved
+```
+
+---
+
+## threat-model.md [CRITICAL ONLY]
+
+```markdown
+# Threat Model: [Feature/System Name]
+> *STRIDE-based threat analysis. Produced after spec.md, before plan.md is finalized.*
+> *Version: 1.0 | Status: Draft | Last updated: YYYY-MM-DD | Reviewed by: [security owner]*
+
+## System Context
+Brief description of what's being threat-modeled and its boundaries.
+
+## Trust Boundary Diagram
+```
+[Diagram — Mermaid or ASCII — showing actors, systems, and where data crosses from a less-trusted
+zone (e.g., public internet, third-party API) to a more-trusted zone (e.g., internal service, database).]
+
+Example Mermaid:
+graph LR
+    User[External User] -->|HTTPS, untrusted| WAF
+    WAF -->|trusted zone boundary| API[API Gateway]
+    API -->|internal network| Core[Core Banking Service]
+    Core -->|encrypted| DB[(Ledger DB)]
+    Core -->|trust boundary: 3rd party| PaymentRail[External Payment Rail]
+```
+
+## Assets in Scope
+List what needs protecting: account balances, credentials, PII, transaction integrity, availability, etc.
+
+## Threats (STRIDE)
+
+### T-001: [Threat name]
+- **Category**: Spoofing | Tampering | Repudiation | Information Disclosure | Denial of Service | Elevation of Privilege
+- **Actor**: [e.g., external attacker, malicious insider, compromised third-party vendor]
+- **Entry point**: [e.g., public API endpoint, admin panel, third-party webhook]
+- **Description**: What could go wrong and how.
+- **Impact**: [Low | Medium | High | Critical] — justify in terms of financial loss, data exposure, or regulatory exposure
+- **Mitigating control**: [Specific control — reference plan.md section or a tasks.md task ID once assigned]
+- **Residual risk**: [Accepted / Mitigated / Requires further work] — if accepted, name the accepting owner
+
+---
+
+### T-002: [Threat name]
+...
+
+## Abuse Cases (insider / legitimate-access misuse)
+- **AC-001**: [e.g., "An employee with legitimate account access modifies a customer's balance without
+  an approval workflow."] — **Control**: [e.g., dual control / maker-checker required for balance adjustments]
+
+## Unmitigated / Accepted Risks Summary
+| Threat ID | Description | Why accepted | Accepted by | Review date |
+|---|---|---|---|---|
+| | | | | |
 ```
 
 ---
@@ -219,6 +315,9 @@ The agent MUST enumerate at least 3 edge cases per REQ. If the user has not spec
 |-----------|---------|---------|-----------|-------|
 | | | | | |
 
+(CRITICAL) For any dependency handling money movement, cryptography, or Restricted data, note whether it
+is independently audited/certified (e.g., a payment processor's PCI-DSS attestation) and link the evidence.
+
 ## Proof of Concepts
 List any spikes or PoCs conducted:
 - **PoC-001**: [What was tested, what was learned]
@@ -231,18 +330,18 @@ List any spikes or PoCs conducted:
 ```markdown
 # Technical Implementation Plan: [Feature/Project Name]
 > *Technology-specific. Describes HOW to build what spec.md defines.*
-> *Version: 1.0 | Status: Draft | Last updated: YYYY-MM-DD*
+> *Tier: [STANDARD | CRITICAL] | Version: 1.0 | Status: Draft | Last updated: YYYY-MM-DD*
 
 ## References
 - Implements: [link to spec.md]
 - Constitution: [link to constitution.md]
+- Threat model (CRITICAL): [link to threat-model.md]
 - Research: [link to research.md]
 
 ## Tech Stack
 | Layer | Technology | Version | Justification |
 |-------|-----------|---------|---------------|
 | Language | | | |
-| Program Type | CLI / API / Library / Web | | |
 | Framework | | | |
 | Database | | | |
 | Auth | | | |
@@ -274,6 +373,24 @@ graph LR
 
 ## Data Flow
 Describe how data moves through the system for the main use cases.
+
+## Security Architecture [CRITICAL ONLY]
+- **Authentication**: [e.g., OAuth2/OIDC + MFA for all human users; mTLS for service-to-service]
+- **Authorization model**: [e.g., RBAC/ABAC — define roles and what each can do; note maker-checker
+  workflows for money movement]
+- **Encryption**: at rest [algorithm/method], in transit [TLS version], key management [e.g., KMS/HSM,
+  rotation schedule]
+- **Secrets management**: [e.g., vault service, no secrets in code/CI logs]
+- **Audit logging**: what gets logged, where it's stored, retention period, tamper-evidence approach
+  (e.g., append-only, hash-chained, or shipped to a separate log store the app can't modify)
+- **Network segmentation**: how the trust zones from threat-model.md map to actual network/VPC boundaries
+
+## Availability & Resilience [CRITICAL ONLY]
+- **RTO** (Recovery Time Objective): [e.g., 15 minutes]
+- **RPO** (Recovery Point Objective): [e.g., 1 minute / zero data loss for committed transactions]
+- **Failover strategy**: [e.g., active-active across availability zones]
+- **Idempotency strategy for financial operations**: [e.g., idempotency keys on all POST/PATCH state-
+  changing endpoints, reconciliation job to detect drift]
 
 ## Implementation Phases
 
@@ -311,6 +428,8 @@ Describe how data moves through the system for the main use cases.
 |------|-----------|--------|-----------|
 | | | | |
 
+(CRITICAL) For risks with Medium+ impact touching money or Restricted data, also add a row to `risk-register.md`.
+
 ## Dependencies & Prerequisites
 - [ ] Dependency 1 (reason needed)
 - [ ] Dependency 2
@@ -320,28 +439,9 @@ Describe how data moves through the system for the main use cases.
 - Integration tests: [strategy]
 - E2E tests: [strategy]
 - **Per-task verification**: after each task, compile + verify before proceeding to next
-
-## Purity Boundaries
-Define which components are pure (no side effects: same input → same output, no I/O) and which are impure (perform I/O, mutate state, or call external systems).
-
-| Component | Type | Reason |
-|-----------|------|--------|
-| `[module name]` | Pure / Impure | [justification] |
-
-> Marking purity boundaries helps the AI agent reason about testability and parallel safety. Pure functions need only unit tests; impure functions need integration tests.
-
-## Drift Detection
-Drift is when the implemented code no longer matches the spec. Detect drift by:
-
-- **Automated**: run test suite (`cargo test`, `pytest`) — if a test that was passing now fails, drift is detected
-- **Manual**: compare spec acceptance criteria against actual behavior during code review
-- **Structural**: run `dectl session end` at the end of each session — the decision capture log should match the spec REQs
-
-### Drift Detection Checklist
-- [ ] All REQ-xxx acceptance criteria have corresponding tests
-- [ ] Test suite passes before every commit
-- [ ] `dectl session end` confirms no undocumented decisions
-- [ ] If drift detected: pause → update spec.md → update tasks.md → resume
+- (CRITICAL) Security tests: [SAST/DAST tools, pen-test scope and timing, dependency scanning]
+- (CRITICAL) Reconciliation/consistency tests: [how you'll verify the ledger/system of record never
+  drifts silently — e.g., nightly balance reconciliation job]
 ```
 
 ---
@@ -351,17 +451,19 @@ Drift is when the implemented code no longer matches the spec. Detect drift by:
 ```markdown
 # Data Model
 > *Defines all entities, their attributes, and relationships.*
-
-> **Note**: For CLI/library projects without databases, this section documents internal data structures (structs, enums, traits) instead of database tables.
+> *Tier: [STANDARD | CRITICAL]*
 
 ## Entities
 
 ### [EntityName]
-| Field | Type | Required | Indexes | Constraints | Description |
-|-------|------|----------|---------|-------------|-------------|
-| id | UUID | ✅ | PK | | Primary key |
-| created_at | timestamp | ✅ | INDEX | | Auto-set on creation |
-| ... | | | | | |
+| Field | Type | Required | Classification (CRITICAL) | Description |
+|-------|------|----------|---------------------------|-------------|
+| id | UUID | ✅ | Internal | Primary key |
+| created_at | timestamp | ✅ | Internal | Auto-set on creation |
+| ... | | | | |
+
+(CRITICAL) Classification values come from constitution.md §7 (Public/Internal/Confidential/Restricted).
+Any Restricted field must state: masking/tokenization approach, and retention period.
 
 ### [EntityName2]
 ...
@@ -376,36 +478,20 @@ Describe entity relationships:
 [ERD in ASCII or Mermaid format]
 ```
 
-## Code-Level Data Structures (for non-DB projects)
-If the project has no database, document the core data structures instead:
+## Data Retention & Deletion Policy [CRITICAL ONLY]
+| Entity/Field | Retention period | Deletion/anonymization method | Regulatory driver |
+|---|---|---|---|
+| | | | |
 
-```rust
-// Example: Rust struct
-pub struct Config {
-    pub verbose: bool,
-    pub output_format: OutputFormat,
-    pub input_path: Option<PathBuf>,
-}
-
-pub enum OutputFormat {
-    Text,
-    Json,
-    Csv,
-}
-```
-
-```typescript
-// Example: TypeScript interface
-interface Task {
-  id: string;
-  title: string;
-  status: 'pending' | 'in-progress' | 'done';
-  createdAt: Date;
-}
-```
+## Audit Trail Requirements [CRITICAL ONLY]
+For each entity that represents money, balances, or Restricted data, specify:
+- What changes must be logged (every field change vs. specific fields)
+- Whether history is kept via an append-only ledger/event table vs. mutate-in-place with a separate audit log
+- Who/what can be identified as the actor for every change (no anonymous writes to financial state)
 
 ## Migration Notes
-If modifying an existing schema, describe migrations needed.
+If modifying an existing schema, describe migrations needed. (CRITICAL) Include a rollback plan for any
+migration touching a table with financial or Restricted data.
 ```
 
 ---
@@ -431,12 +517,29 @@ Select the type that matches this project:
 
 ## Authentication
 All endpoints require `Authorization: Bearer <token>` unless marked 🔓.
+(CRITICAL) State token lifetime, refresh strategy, and step-up auth requirement for privileged endpoints.
+
+## Standard Error Taxonomy [CRITICAL ONLY]
+Define a consistent error envelope so partial failures are never ambiguous:
+```json
+{
+  "error_code": "INSUFFICIENT_FUNDS",
+  "message": "Human-readable, non-sensitive message",
+  "trace_id": "uuid-for-support-and-audit-correlation"
+}
+```
+
+---
 
 ## Endpoints
 
 ### POST /[resource]
 **Description**: [What this does]
 **Requirements**: REQ-001
+**Idempotency** (CRITICAL, required on all state-changing endpoints): Requires `Idempotency-Key` header;
+duplicate keys within [window] return the original result without reprocessing.
+**Audit logging** (CRITICAL): Logs actor, timestamp, request parameters (redacting Restricted fields), and outcome.
+**Rate limiting** (CRITICAL): [e.g., 10 req/min per account, 429 on breach]
 
 **Request Body**:
 ```json
@@ -457,70 +560,202 @@ All endpoints require `Authorization: Bearer <token>` unless marked 🔓.
 **Error Responses**:
 - `400 Bad Request`: Invalid input
 - `401 Unauthorized`: Missing/invalid token
-- `409 Conflict`: Resource already exists
-
----
-
-### CLI Template
-
-## Usage
-```
-[command] [ARGS] [OPTIONS]
-```
-
-## Arguments
-| Argument | Type | Required | Description |
-|----------|------|----------|-------------|
-| FILE | Path | No | Input file path. Reads from stdin if omitted. |
-
-## Options
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--output, -o` | String | text | Output format |
-| `--verbose, -v` | Flag | false | Enable verbose logging |
-
-## Exit Codes
-| Code | Meaning |
-|------|---------|
-| 0 | Success |
-| 1 | Error |
-
-## Examples
-```bash
-# Basic usage
-command input.txt
-
-# With options
-command input.txt --output json --verbose
+- `403 Forbidden`: Authenticated but not authorized for this action (CRITICAL: distinguish from 401 explicitly)
+- `409 Conflict`: Resource already exists / idempotency key conflict with different payload
+- `422 Unprocessable Entity`: [e.g., INSUFFICIENT_FUNDS, LIMIT_EXCEEDED — CRITICAL: enumerate every
+  domain-specific failure a financial operation can have; never let money-movement failures fall through
+  to a generic 500]
 ```
 
 ---
 
-### Library Template
+## compliance-matrix.md [CRITICAL ONLY]
 
-## Public API
+```markdown
+# Compliance Traceability Matrix
+> *Maps regulatory/control requirements to spec requirements, implementation, and evidence.*
+> *This document structures traceability — it does not itself certify compliance. Formal certification
+> requires review by qualified legal/compliance/audit personnel.*
+> *Version: 1.0 | Last updated: YYYY-MM-DD | Reviewed by: [compliance owner]*
 
-### `fn do_something(input: Type) -> Result<Output>`
-**Description**: What this function does.
-**Parameters**:
-| Name | Type | Description |
-|------|------|-------------|
-| input | Type | Description of the input |
-**Returns**: Description of the return value.
-**Example**:
-```rust
-let result = do_something(my_input);
-assert!(result.is_ok());
+## Frameworks in Scope
+List frameworks named in constitution.md §1 (e.g., PCI-DSS v4.0, GDPR, SOC 2 Type II). If a framework's
+applicability is uncertain, mark it "Under legal review" rather than including or excluding it by assumption.
+
+## Traceability Table
+| Control ID | Framework | Control description | Spec requirement | Implementation task | Evidence/test | Status |
+|---|---|---|---|---|---|---|
+| | | | REQ-00X | T0XX | [e.g., automated test name, audit log sample] | Not started / In progress / Implemented / Verified |
+
+## Gaps & Remediation Plan
+| Gap | Risk if unaddressed | Remediation | Target date | Owner |
+|---|---|---|---|---|
+| | | | | |
+
+## Sign-off
+| Role | Name | Date | Notes |
+|---|---|---|---|
+| Compliance owner | | | |
+| Security owner | | | |
+| Engineering owner | | | |
 ```
 
-### `fn process_data(config: Config) -> Vec<Item>`
-**Description**: Processes data based on configuration.
-**Throws**: Panics if config is invalid.
-**Example**:
-```rust
-let items = process_data(Config::default());
-println!("{} items processed", items.len());
+---
+
+## risk-register.md [CRITICAL ONLY]
+
+```markdown
+# Risk Register
+> *Living document — revisited at every phase gate, not written once and forgotten.*
+> *Version: 1.0 | Last updated: YYYY-MM-DD*
+
+## Risk Categories
+Security | Operational | Financial | Third-Party/Vendor | Regulatory
+
+## Register
+
+### RISK-001: [Short name]
+- **Category**: [one of the above]
+- **Description**: What could happen and why.
+- **Likelihood**: Low / Medium / High
+- **Impact**: Low / Medium / High / Critical
+- **Current mitigation**: What's already in place or planned (reference plan.md / tasks.md)
+- **Residual risk after mitigation**: Low / Medium / High
+- **Owner**: [accountable person/role]
+- **Review date**: [next scheduled review]
+- **Status**: Open / Mitigated / Accepted / Closed
+
+---
+
+### RISK-002: ...
+
+## Summary by Category
+| Category | Open | Mitigated | Accepted | Highest residual severity |
+|---|---|---|---|---|
+| Security | | | | |
+| Operational | | | | |
+| Financial | | | | |
+| Third-Party/Vendor | | | | |
+| Regulatory | | | | |
 ```
+
+---
+
+## access-control-matrix.md [CRITICAL ONLY]
+
+```markdown
+# Access Control Matrix
+> *Every role, what it can access, and how privileged actions are approved.*
+> *Revision History: | Version | Date | Author | Change summary | ... |*
+> *Version: 1.0 | Last updated: YYYY-MM-DD | Reviewed by: [security/compliance owner]*
+
+## Roles Overview
+| Role | Description | Privileged? |
+|---|---|---|
+| Customer | End user, own-account access only | No |
+| Support Agent | Read-only access to customer accounts for support tickets | Yes (read) |
+| Fraud Analyst | Can approve/reject held transactions | Yes |
+| Financial Systems Admin | Can adjust balances, reverse transactions | Yes |
+| Engineer (prod) | Deploy access, no direct data access | Yes |
+
+## Permission Matrix
+| Role | Data class accessed | Actions allowed | Approval workflow required | Justification |
+|---|---|---|---|---|
+| Customer | Own Confidential data | Read, initiate own transfers | N/A (self-service) | Core product function |
+| Support Agent | Customer Confidential data (masked Restricted fields) | Read only | N/A, but access is logged | Support resolution |
+| Fraud Analyst | Confidential + flagged transaction details | Approve/reject held transfers | Cannot approve own transactions | Fraud control |
+| Financial Systems Admin | Confidential + Restricted | Manual balance adjustment | Maker-checker: second admin must approve | High-risk irreversible action |
+| Engineer (prod) | None directly; deploy pipeline only | Deploy code | Peer review + on-call approval | Segregation of duties |
+
+## Access Review & Recertification
+- **Cadence**: [e.g., quarterly]
+- **Owner**: [role responsible for running recertification]
+- **Process**: [e.g., automated report of all privileged-role holders sent to their manager for confirm/revoke]
+- **Deprovisioning SLA**: access revoked within [X hours] of role change or termination
+
+## Break-Glass / Emergency Access
+- **When permitted**: [e.g., production incident requiring direct DB access]
+- **Who can invoke**: [named roles]
+- **Post-hoc requirement**: [e.g., logged automatically, reviewed within 24h by security owner]
+```
+
+---
+
+## disaster-recovery-plan.md [CRITICAL ONLY]
+
+```markdown
+# Disaster Recovery & Business Continuity Plan
+> *Revision History: | Version | Date | Author | Change summary | ... |*
+> *Version: 1.0 | Last updated: YYYY-MM-DD | Reviewed by: [engineering + compliance owners]*
+
+## Scope
+Systems/components covered by this plan: [list].
+
+## Recovery Objectives (per component)
+| Component | RTO | RPO | Justification |
+|---|---|---|---|
+| Ledger / core balances | 15 min | 0 (zero data loss for committed transactions) | Financial integrity non-negotiable |
+| Reporting/analytics dashboard | 4 hours | 1 hour | Non-critical for real-time operation |
+
+## Backup Strategy
+- **What's backed up**: [databases, config, secrets metadata (not secret values)]
+- **Frequency**: [e.g., continuous WAL streaming + daily full snapshot]
+- **Storage location**: [e.g., separate region/account from production]
+- **Encryption**: backups encrypted at rest with the same or stronger standard as production
+
+## Failover Procedure
+1. Detection: [how failure is detected — monitoring alert, health check]
+2. Decision: [who declares a disaster and authorizes failover]
+3. Execution: [step-by-step, or link to runbook — named roles execute, not "the team"]
+4. Validation: [how you confirm the failover system is serving correct, consistent data]
+5. Failback: [process to return to primary once resolved]
+
+## Communication Plan
+| Audience | Who notifies | Within what timeframe | Channel |
+|---|---|---|---|
+| Internal leadership | [role] | [e.g., 30 min] | [e.g., incident Slack channel] |
+| Customers | [role] | [e.g., 2 hours if service-impacting] | [e.g., status page] |
+| Regulators (if applicable) | [role — typically Compliance/Legal, not engineering] | [per regulatory requirement — confirm with Legal] | [formal notification channel] |
+
+## Testing & Drills
+- **Last tested**: [date]
+- **Test type**: [tabletop exercise / partial failover / full live failover]
+- **Result & follow-ups**: [what worked, what didn't, remediation tasks opened]
+- **Next scheduled test**: [date] — an untested plan should appear as an open item in risk-register.md
+```
+
+---
+
+## vendor-risk-assessment.md [CRITICAL ONLY]
+
+```markdown
+# Vendor / Third-Party Risk Assessment
+> *Revision History: | Version | Date | Author | Change summary | ... |*
+> *Version: 1.0 | Last updated: YYYY-MM-DD | Reviewed by: [security/compliance owner]*
+
+## Vendor Inventory
+List every third party in the architecture diagram (plan.md) that touches Confidential/Restricted data,
+money movement, or is a single point of failure.
+
+### Vendor: [Name, e.g., "Fraud Scoring API Provider"]
+- **What they access**: [data/scope]
+- **Why needed**: [business justification]
+- **Compliance attestations on file**: [e.g., SOC 2 Type II report dated X, or "requested, not yet received"]
+- **Contractual data-protection terms**: [e.g., DPA signed, breach-notification clause, data residency commitment]
+- **Criticality**: [Low/Medium/High/Critical — if this vendor fails, what breaks]
+- **Fallback if unavailable**: [e.g., fail-closed per threat-model.md T-003]
+- **Exit strategy / data portability**: [how you'd migrate off this vendor and what happens to data on exit]
+- **Last reviewed**: [date] | **Next review**: [date]
+
+---
+
+### Vendor: [Name 2]
+...
+
+## Vendor Risk Summary
+| Vendor | Criticality | Attestation on file? | Open concerns |
+|---|---|---|---|
+| | | | |
 ```
 
 ---
@@ -532,10 +767,12 @@ println!("{} items processed", items.len());
 > *Atomic, ordered, trackable tasks derived from plan.md.*
 > *Each task = independently implementable + testable + reviewable as single PR.*
 > *CRITICAL: After EACH task, compile + verify before moving to the next task.*
+> *Tier: [STANDARD | CRITICAL]*
 
 ## Legend
 - `[Txxx]` = Task ID
 - `[P]` = Can run in parallel with other [P] tasks in same phase
+- `[SEC]` / `[COMPLIANCE]` = Security or compliance task (CRITICAL tier) — release-blocking, not optional
 - `S/M/L` = Estimated complexity (Small/Medium/Large)
 - `(REQ-xxx)` = Traceability to spec requirement
 - **Build**: command to compile the project after this task
@@ -589,6 +826,19 @@ println!("{} items processed", items.len());
   **Verify**: [specific verify step for this task]
   **Gate**: must pass before T008
 
+## Phase N: Security, Compliance & Release Readiness [CRITICAL ONLY]
+
+- [ ] [T0XX][SEC] Implement audit logging for all state-changing endpoints per interface-contracts/api.md — M
+- [ ] [T0XX][SEC] Configure encryption at rest for Restricted-classified fields — M
+- [ ] [T0XX][SEC] Run SAST/DAST scans and remediate findings above [severity threshold] — L
+- [ ] [T0XX][SEC] Conduct penetration test and remediate critical/high findings — L
+- [ ] [T0XX][COMPLIANCE] Complete compliance-matrix.md traceability and obtain sign-off — M
+- [ ] [T0XX][COMPLIANCE] Verify reconciliation job catches injected test discrepancies — M
+- [ ] [T0XX][SEC] Implement roles/permissions per access-control-matrix.md, including maker-checker on privileged actions — L
+- [ ] [T0XX][SEC] Run first disaster-recovery drill per disaster-recovery-plan.md and log results — M
+- [ ] [T0XX][COMPLIANCE] Confirm attestations on file for every vendor in vendor-risk-assessment.md — M
+- [ ] [T0XX] Release go/no-go review with security, compliance, and engineering owners — S
+
 ---
 
 ## Progress Tracking
@@ -596,4 +846,62 @@ println!("{} items processed", items.len());
 - Completed: 0
 - In progress: 0
 - Blocked: 0
+```
+
+---
+
+## CLAUDE.md (Agent Context File)
+
+```markdown
+# Agent Context: [Project Name]
+
+> *Read this file first in every session. It orients you to the project and its SDD artifacts.*
+> *Tier: [STANDARD | CRITICAL]*
+
+## Project Summary
+One paragraph describing what this project does.
+
+## Current Status
+- Phase: [e.g., Planning / Phase 1 Implementation / Phase 2]
+- Last updated: YYYY-MM-DD
+- Active branch:
+
+## SDD Artifact Index
+| Document | Path | Status |
+|----------|------|--------|
+| Constitution | `specs/constitution.md` | ✅ Final |
+| Spec | `specs/spec.md` | ✅ Approved |
+| Requirements checklist | `specs/requirements.md` | ✅ Passed |
+| Threat model (CRITICAL) | `specs/threat-model.md` | ✅ Approved |
+| Technical plan | `specs/plan.md` | ✅ Approved |
+| Data model | `specs/data-model.md` | ✅ Approved |
+| API contracts | `specs/interface-contracts/api.md` | ✅ Approved |
+| Compliance matrix (CRITICAL) | `specs/compliance-matrix.md` | 🔄 In progress |
+| Risk register (CRITICAL) | `specs/risk-register.md` | 🔄 In progress |
+| Access control matrix (CRITICAL) | `specs/access-control-matrix.md` | 🔄 In progress |
+| Disaster recovery plan (CRITICAL) | `specs/disaster-recovery-plan.md` | 🔄 In progress |
+| Vendor risk assessment (CRITICAL) | `specs/vendor-risk-assessment.md` | 🔄 In progress |
+| Tasks | `specs/tasks.md` | 🔄 In progress |
+
+## Key Rules (from constitution.md)
+- [Extract the 3–5 most critical rules the AI agent must follow]
+- (CRITICAL) Never mark a `[SEC]` or `[COMPLIANCE]` task complete without the evidence required in
+  compliance-matrix.md
+
+## Tech Stack (quick reference)
+- Backend:
+- Frontend:
+- Database:
+- Auth:
+
+## How to Work with This Project
+1. Always check `specs/tasks.md` for the next pending task
+2. When implementing a task, reference its requirement in `spec.md`
+3. Mark tasks `[x]` when complete
+4. If implementation deviates from spec, update spec.md FIRST, then continue
+5. Never write code for tasks not in `tasks.md` without user approval
+6. (CRITICAL) Never implement a task touching money movement or Restricted data without checking
+   `threat-model.md` and `compliance-matrix.md` for applicable controls first
+7. (CRITICAL) Flag — don't silently resolve — any conflict discovered between `plan.md` and
+   `compliance-matrix.md`; these require a human decision
 ```
