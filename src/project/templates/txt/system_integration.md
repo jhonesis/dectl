@@ -1,56 +1,56 @@
-# Instrucciones de Sesión — [Project Name]
-> **Para el modelo**: Lee y sigue estas instrucciones en cada sesión de trabajo.
-> Actualiza este archivo si el equipo quiere cambiar el comportamiento del modelo.
+# Session Instructions — [Project Name]
+> **For the model**: Read and follow these instructions at the start of every working session.
+> Update this file if the team wants to change the model's behavior.
 
 ---
 
-## Al iniciar sesión
+## At session start
 
-1. Lee `.dec/config/project.toml` y `.dec/isa/project.isa.md` para entender el proyecto
-2. Lee `.dec/state/last_session.md` y retoma desde "Próximo paso recomendado"
-3. Ejecuta `dectl project info --json` y escala al developer si hay warnings
-4. Confirma en 2-3 líneas qué entendiste antes de preguntar qué hacer hoy
+1. Read `.dec/config/project.toml` and `.dec/isa/project.isa.md` to understand the project
+2. Read `.dec/state/last_session.md` and resume from "Recommended next step"
+3. Run `dectl project info --json` and escalate to the developer if there are warnings
+4. Confirm in 2-3 lines what you understood before asking what to do today
 
-## Antes de actuar
+## Before acting
 
-1. Para cambios de arquitectura: lee `.dec/decisions/` primero
-2. Para implementar una feature: busca su workflow en `.dec/workflows/`
-3. Para términos de dominio: consulta `.dec/knowledge/glossary.md` si existe
-4. Describe lo que vas a hacer antes de hacerlo — nunca actúes en silencio
+1. For architecture changes: read `.dec/decisions/` first
+2. To implement a feature: look up its workflow in `.dec/workflows/`
+3. For domain terms: consult `.dec/knowledge/glossary.md` if it exists
+4. Describe what you are going to do before doing it — never act silently
 
-## Agentes disponibles
+## Available agents
 
-Usa `dectl agent list` para ver todos los agentes (built-in + custom).
+Use `dectl agent list` to see all agents (built-in + custom).
 
-El proyecto incluye estos agentes built-in:
-- **coder**: implementa código siguiendo las convenciones del stack
-- **reviewer**: revisa código en busca de bugs y desviaciones
-- **researcher**: busca contexto en memoria y decisiones previas
-- **documenter**: genera o actualiza documentación técnica
+The project includes these built-in agents:
+- **coder**: implements code following the stack conventions
+- **reviewer**: reviews code for bugs and deviations
+- **researcher**: searches context in memory and prior decisions
+- **documenter**: generates or updates technical documentation
 
-Para invocar un agente:
+To invoke an agent:
 ```
-dectl agent run <tipo> --task "<descripción de la tarea>"
-dectl agent describe <tipo>     # ver definición completa
-dectl agent run --parallel <t1>,<t2> --task "<desc>"  # ejecutar en paralelo
+dectl agent run <type> --task "<task description>"
+dectl agent describe <type>     # view full definition
+dectl agent run --parallel <t1>,<t2> --task "<desc>"  # run in parallel
 ```
 
-Usa agentes cuando la tarea sea autónoma y especializada. El modelo principal mantiene el contexto global mientras el agente ejecuta.
+Use agents when the task is autonomous and specialized. The main model keeps the global context while the agent executes.
 
-## Al completar una tarea
+## When completing a task
 
-1. Si completaste o avanzaste una feature: actualiza `.dec/state/progress.json`
-2. Para decisiones importantes: ejecuta `dectl memory add "[resumen de la decisión]"`
-3. Para decisiones arquitectónicas: crea `.dec/decisions/XXXX-nombre.md`
+1. If you completed or advanced a feature: update `.dec/state/progress.json`
+2. For important decisions: run `dectl memory add "[decision summary]"`
+3. For architectural decisions: create `.dec/decisions/XXXX-name.md`
 
-## Al finalizar sesión
+## At session end
 
-1. Ejecuta `dectl session end` para automatizar el cierre:
-   - Genera `.dec/state/last_session.md` automáticamente
-   - Sincroniza cambios git a `progress.json`
-   - Captura decisiones y las guarda en memoria
-   - Sincroniza cambios del stack con `project.toml`
-   - Registra actividad de agentes
-2. O manualmente:
-   - Escribe `.dec/state/last_session.md` (qué se hizo, qué quedó pendiente, decisiones, próximo paso)
-   - Ejecuta `dectl memory add "Sesión [fecha]: [resumen en una línea]"`
+1. Run `dectl session end` to automate closing:
+   - Generates `.dec/state/last_session.md` automatically
+   - Syncs git changes to `progress.json`
+   - Captures decisions and saves them to memory
+   - Syncs stack changes with `project.toml`
+   - Records agent activity
+2. Or manually:
+   - Write `.dec/state/last_session.md` (what was done, what's pending, decisions, next step)
+   - Run `dectl memory add "Session [date]: [one-line summary]"`

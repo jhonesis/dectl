@@ -275,7 +275,7 @@ pub fn fill_project_files(
                         .ok()
                         .and_then(|p| p.file_name().map(|s| s.to_string_lossy().to_string()))
                 })
-                .unwrap_or_else(|| "mi-proyecto".to_string())
+                .unwrap_or_else(|| "my-project".to_string())
         });
 
     update_project_toml(project_dir, &project_name, stack)?;

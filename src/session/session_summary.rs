@@ -70,9 +70,9 @@ fn format_summary(summary: &SessionSummary) -> String {
     output.push('\n');
 
     // Actions
-    output.push_str("## Qué se hizo\n");
+    output.push_str("## What was done\n");
     if summary.actions.is_empty() {
-        output.push_str("- No se detectaron cambios\n");
+        output.push_str("- No changes detected\n");
     } else {
         for action in &summary.actions {
             output.push_str(&format!("- {}\n", action));
@@ -81,9 +81,9 @@ fn format_summary(summary: &SessionSummary) -> String {
     output.push('\n');
 
     // Pending
-    output.push_str("## Qué quedó pendiente\n");
+    output.push_str("## What's pending\n");
     if summary.pending.is_empty() {
-        output.push_str("- Nada pendiente\n");
+        output.push_str("- Nothing pending\n");
     } else {
         for item in &summary.pending {
             output.push_str(&format!("- {}\n", item));
@@ -92,9 +92,9 @@ fn format_summary(summary: &SessionSummary) -> String {
     output.push('\n');
 
     // Decisions
-    output.push_str("## Decisiones tomadas\n");
+    output.push_str("## Decisions made\n");
     if summary.decisions.is_empty() {
-        output.push_str("- Ninguna\n");
+        output.push_str("- None\n");
     } else {
         for decision in &summary.decisions {
             output.push_str(&format!("- {}\n", decision));
@@ -103,9 +103,9 @@ fn format_summary(summary: &SessionSummary) -> String {
     output.push('\n');
 
     // Next step
-    output.push_str("## Próximo paso recomendado\n");
+    output.push_str("## Recommended next step\n");
     if summary.next_step.is_empty() {
-        output.push_str("- Revisar el estado del proyecto\n");
+        output.push_str("- Review the project state\n");
     } else {
         output.push_str(&format!("- {}\n", summary.next_step));
     }
@@ -123,7 +123,7 @@ fn extract_git_actions(_project_root: &Path, summary: &mut SessionSummary) -> Re
     let modified = git::diff_since("HEAD~10")?;
     if !modified.is_empty() {
         let file_summary = format!(
-            "{} archivo(s) modificado(s): {}",
+            "{} file(s) modified: {}",
             modified.len(),
             modified
                 .iter()
@@ -135,7 +135,7 @@ fn extract_git_actions(_project_root: &Path, summary: &mut SessionSummary) -> Re
         if modified.len() > 5 {
             summary
                 .decisions
-                .push(format!("{} (y {} más)", file_summary, modified.len() - 5));
+                .push(format!("{} (and {} more)", file_summary, modified.len() - 5));
         } else {
             summary.decisions.push(file_summary);
         }
@@ -151,12 +151,14 @@ fn parse_pending_from_last_session(content: &str, summary: &mut SessionSummary) 
     for line in content.lines() {
         let trimmed = line.trim();
 
-        // Detect section headers
-        if trimmed.starts_with("## Qué quedó pendiente") {
+        // Detect section headers (English generated output + Spanish legacy files)
+        if trimmed.starts_with("## What's pending") || trimmed.starts_with("## Qué quedó pendiente") {
             in_pending = true;
             in_next_step = false;
             continue;
-        } else if trimmed.starts_with("## Próximo paso recomendado") {
+        } else if trimmed.starts_with("## Recommended next step")
+            || trimmed.starts_with("## Próximo paso recomendado")
+        {
             in_pending = false;
             in_next_step = true;
             continue;
@@ -169,7 +171,7 @@ fn parse_pending_from_last_session(content: &str, summary: &mut SessionSummary) 
         // Parse bullet points
         if in_pending {
             if let Some(item) = trimmed.strip_prefix("- ") {
-                if !item.is_empty() && item != "Nada pendiente" {
+                if !item.is_empty() && item != "Nada pendiente" && item != "Nothing pending" {
                     summary.pending.push(item.to_string());
                 }
             }
@@ -177,7 +179,10 @@ fn parse_pending_from_last_session(content: &str, summary: &mut SessionSummary) 
 
         if in_next_step {
             if let Some(item) = trimmed.strip_prefix("- ") {
-                if !item.is_empty() && item != "Revisar el estado del proyecto" {
+                if !item.is_empty()
+                    && item != "Revisar el estado del proyecto"
+                    && item != "Review the project state"
+                {
                     summary.next_step = item.to_string();
                 }
             }

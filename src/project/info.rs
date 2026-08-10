@@ -97,8 +97,9 @@ fn extract_isa_excerpt(path: &PathBuf) -> Result<IsaExcerpt> {
     let content = fs::read_to_string(path).with_context(|| format!("Failed to read {:?}", path))?;
 
     let vision =
-        extract_section(&content, "## Visión").or_else(|| extract_section(&content, "## Vision"));
-    let objective = extract_section(&content, "## Objetivo Principal")
+        extract_section(&content, "## Vision").or_else(|| extract_section(&content, "## Visión"));
+    let objective = extract_section(&content, "## Main Objective")
+        .or_else(|| extract_section(&content, "## Objetivo Principal"))
         .or_else(|| extract_section(&content, "## Objetivo"));
 
     Ok(IsaExcerpt {

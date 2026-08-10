@@ -388,6 +388,7 @@ impl Runner {
                             dry_run,
                             auto,
                             output,
+                            auto,
                         )
                     } else {
                         let agent_def = match crate::agent::loader::load_agent(&agent_types[0]) {

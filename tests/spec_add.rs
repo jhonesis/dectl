@@ -541,8 +541,8 @@ fn e2e_spec_init_from_then_spec_add_from() {
     let reqs1_path = tmp.path().join("project-reqs.md");
     fs::write(
         &reqs1_path,
-        "# Mi Proyecto\n\
-         Sistema de gestión de usuarios\n\n\
+        "# My Project\n\
+         User management system\n\n\
          ### REQ-001: Registro\n\
          **User Story**:\n\
          > As a user, I want to register\n\n\
@@ -695,4 +695,56 @@ fn test_spec_add_feature_sequential_ids() {
     // After the agent appended REQ-002/T002, guidance now emits REQ-003/T003
     assert_eq!(req2, "003", "expected next_req=003");
     assert_eq!(task2, "003", "expected next_task=003");
+}
+
+/// T031 REQ-005: `spec add --auto` must skip the trust prompt even when the
+/// spec_writer agent is not trusted for the project.
+#[test]
+fn test_spec_add_auto_skips_trust() {
+    let tmp = TempDir::new().unwrap();
+    create_dec_base(&tmp);
+
+    let reqs_path = tmp.path().join("req.md");
+    create_reqs_file(&reqs_path);
+    create_specs_root(&tmp);
+
+    // NOTE: we intentionally do NOT trust spec_writer. With --auto the
+    // per-agent trust check must be skipped and guidance emitted.
+    let output = run_dectl(
+        &[
+            "spec",
+            "add",
+            "biometric-auth",
+            "--scope",
+            "feature",
+            "--from",
+            reqs_path.to_str().unwrap(),
+            "--auto",
+        ],
+        tmp.path(),
+    );
+    assert!(
+        output.status.success(),
+        "spec add --auto should succeed without trust: stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{}{}", stdout, stderr);
+    assert!(
+        !combined.contains("Do you trust"),
+        "spec add --auto should not show the trust prompt, got:\n{}",
+        combined
+    );
+    assert!(
+        !combined.contains("is not trusted"),
+        "spec add --auto should not fail with a trust error, got:\n{}",
+        combined
+    );
+    assert!(
+        stdout.contains("FEATURE SPEC GUIDANCE"),
+        "spec add --auto should still emit feature guidance, got:\n{}",
+        stdout
+    );
 }

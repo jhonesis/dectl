@@ -174,7 +174,15 @@ fn extract_decisions(dec_dir: &Path) -> String {
 fn parse_session_date(content: &str) -> Option<chrono::NaiveDate> {
     for line in content.lines() {
         let trimmed = line.trim();
-        if let Some(date_str) = trimmed.strip_prefix("**Fecha**: ") {
+        if let Some(date_str) = trimmed.strip_prefix("**Date**: ") {
+            if let Ok(date) = chrono::NaiveDate::parse_from_str(date_str.trim(), "%Y-%m-%d") {
+                return Some(date);
+            }
+        } else if let Some(date_str) = trimmed.strip_prefix("**Date**:") {
+            if let Ok(date) = chrono::NaiveDate::parse_from_str(date_str.trim(), "%Y-%m-%d") {
+                return Some(date);
+            }
+        } else if let Some(date_str) = trimmed.strip_prefix("**Fecha**: ") {
             if let Ok(date) = chrono::NaiveDate::parse_from_str(date_str.trim(), "%Y-%m-%d") {
                 return Some(date);
             }
@@ -215,10 +223,10 @@ fn truncate_to_budget(text: &str, budget: usize) -> String {
     let truncated: String = text.chars().take(estimated_chars).collect();
     let trimmed = truncated.trim_end();
     if trimmed.is_empty() {
-        return format!("[~0 tokens de {}]\n", current_tokens);
+        return format!("[~0 tokens of {}]\n", current_tokens);
     }
     format!(
-        "{}\n[~{} tokens mostrados de {}]\n",
+        "{}\n[~{} tokens shown of {}]\n",
         trimmed, budget, current_tokens
     )
 }

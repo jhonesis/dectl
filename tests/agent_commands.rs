@@ -14,6 +14,24 @@ fn run_dectl(args: &[&str], cwd: &Path) -> std::process::Output {
         .expect("Failed to execute dectl")
 }
 
+/// Run dectl with the test binary's directory prepended to PATH so nested
+/// `dectl` subprocess calls inside agent action steps resolve correctly.
+fn run_dectl_with_path(args: &[&str], cwd: &Path) -> std::process::Output {
+    let bin_path = dectl_bin();
+    let bin_dir = std::path::Path::new(&bin_path).parent().unwrap();
+    let mut env = std::env::vars().collect::<std::collections::HashMap<_, _>>();
+    if let Some(current_path) = env.get("PATH") {
+        let new_path = format!("{}:{}", bin_dir.display(), current_path);
+        env.insert("PATH".to_string(), new_path);
+    }
+    let mut cmd = Command::new(&bin_path);
+    cmd.args(args).current_dir(cwd);
+    for (key, val) in env.iter() {
+        cmd.env(key, val);
+    }
+    cmd.output().expect("Failed to execute dectl")
+}
+
 #[test]
 fn test_agent_list_shows_builtins() {
     let tmp = TempDir::new().unwrap();
@@ -236,4 +254,42 @@ fn test_agent_trust_then_dry_run() {
     assert!(run_output.status.success());
     let stdout = String::from_utf8_lossy(&run_output.stdout);
     assert!(stdout.contains("[DRY-RUN]"));
+}
+
+#[test]
+fn test_agent_run_auto_skips_trust() {
+    let tmp = TempDir::new().unwrap();
+    // The coder agent contains action steps, so without --auto it would
+    // require trust confirmation. With --auto the trust check must be skipped.
+    let output = run_dectl_with_path(
+        &[
+            "agent",
+            "run",
+            "coder",
+            "--task",
+            "t031 auto test",
+            "--var",
+            "task_id=t031-auto",
+            "--auto",
+        ],
+        tmp.path(),
+    );
+    assert!(
+        output.status.success(),
+        "agent run --auto should succeed without trust: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{}{}", stdout, stderr);
+    assert!(
+        !combined.contains("Do you trust"),
+        "agent run --auto should not show the trust prompt, got:\n{}",
+        combined
+    );
+    assert!(
+        !combined.contains("is not trusted"),
+        "agent run --auto should not fail with a trust error, got:\n{}",
+        combined
+    );
 }

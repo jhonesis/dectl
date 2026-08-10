@@ -4,6 +4,7 @@ use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::mpsc;
 
+#[allow(clippy::too_many_arguments)]
 pub fn run_parallel(
     agent_types: &[String],
     task: &str,
@@ -12,6 +13,7 @@ pub fn run_parallel(
     dry_run: bool,
     non_interactive: bool,
     mode: &crate::core::output::OutputMode,
+    auto: bool,
 ) -> Result<Vec<AgentResult>> {
     let mut agents = Vec::new();
     for agent_type in agent_types {
@@ -53,7 +55,7 @@ pub fn run_parallel(
                     timeout,
                     non_interactive,
                     &mode,
-                    false,
+                    auto,
                     false,
                 )
             }));

@@ -284,7 +284,7 @@ fn test_context_extreme_budget() {
     let output = run_dectl(&["project", "context", "--max-tokens", "50"], tmp.path());
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(!stdout.trim().is_empty(), "Output vacío con budget mínimo");
+    assert!(!stdout.trim().is_empty(), "Output empty with minimum budget");
 }
 
 #[test]

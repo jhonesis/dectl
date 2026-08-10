@@ -225,6 +225,8 @@ enum AgentCommands {
         dry_run: bool,
         #[arg(long)]
         parallel: bool,
+        #[arg(long)]
+        auto: bool,
     },
 }
 
@@ -246,6 +248,10 @@ enum SpecCommands {
         /// Path to a .md file with requirements (parsed automatically)
         #[arg(long)]
         from: Option<PathBuf>,
+
+        /// Skip the trust prompt and run non-interactively
+        #[arg(long)]
+        auto: bool,
     },
 }
 
@@ -500,6 +506,7 @@ fn main() {
                 timeout,
                 dry_run,
                 parallel,
+                auto,
             }) => {
                 if let Err(e) = agent::run::run(
                     r#type,
@@ -509,6 +516,7 @@ fn main() {
                     *timeout,
                     *dry_run,
                     *parallel,
+                    *auto,
                     cli.non_interactive,
                     mode,
                 ) {
@@ -529,6 +537,7 @@ fn main() {
                 ref name,
                 ref scope,
                 ref from,
+                auto,
             }) => {
                 let args = spec::add::SpecAddArgs {
                     name: name.clone(),
@@ -539,6 +548,7 @@ fn main() {
                     from: from.clone(),
                     json: cli.json,
                     non_interactive: cli.non_interactive,
+                    auto: *auto,
                 };
                 if let Err(e) = spec::add::run(args) {
                     core::error::exit_for_error(e, mode);

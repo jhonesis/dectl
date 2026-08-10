@@ -21,6 +21,7 @@ pub fn run(
     timeout: Option<u64>,
     dry_run: bool,
     parallel: bool,
+    auto: bool,
     non_interactive: bool,
     mode: OutputMode,
 ) -> Result<()> {
@@ -58,6 +59,7 @@ pub fn run(
             &vars,
             timeout,
             dry_run,
+            auto,
             non_interactive,
             mode,
         );
@@ -70,6 +72,7 @@ pub fn run(
         &vars,
         timeout,
         dry_run,
+        auto,
         non_interactive,
         mode,
     )
@@ -83,6 +86,7 @@ fn run_single_agent(
     vars: &HashMap<String, String>,
     timeout: Option<u64>,
     dry_run: bool,
+    auto: bool,
     non_interactive: bool,
     mode: OutputMode,
 ) -> Result<()> {
@@ -117,7 +121,7 @@ fn run_single_agent(
         timeout,
         non_interactive,
         &mode,
-        false,
+        auto,
         false,
     )?;
 
@@ -194,6 +198,7 @@ fn run_parallel_agents(
     vars: &HashMap<String, String>,
     timeout: Option<u64>,
     dry_run: bool,
+    auto: bool,
     non_interactive: bool,
     mode: OutputMode,
 ) -> Result<()> {
@@ -224,6 +229,7 @@ fn run_parallel_agents(
         dry_run,
         non_interactive,
         &mode,
+        auto,
     )?;
 
     let all_ok = results

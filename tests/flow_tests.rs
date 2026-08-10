@@ -117,7 +117,7 @@ fn test_flow_session_resume() {
 
     assert!(
         stdout.contains("refresh token"),
-        "Context should contain 'Próximo paso' from last_session.md:\n{}",
+        "Context should contain the next step from last_session.md:\n{}",
         stdout
     );
 

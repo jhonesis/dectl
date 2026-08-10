@@ -18,6 +18,7 @@ pub struct SpecAddArgs {
     pub from: Option<PathBuf>,
     pub json: bool,
     pub non_interactive: bool,
+    pub auto: bool,
 }
 
 pub fn run(args: SpecAddArgs) -> Result<()> {
@@ -156,7 +157,7 @@ fn dispatch_to_spec_writer(
         Some(300),
         args.non_interactive,
         &crate::core::output::OutputMode::Human,
-        false,
+        args.auto,
         false,
     )?;
 

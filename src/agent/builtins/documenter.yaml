@@ -116,10 +116,10 @@ steps:
 
       1. Read the current session log.
       2. Update the session date at the top to the current time.
-      3. Append a new bullet under the "Qué se hizo" (or "Completed") section:
-         - "- {{task_id}} completada: {{task}}"
+      3. Append a new bullet under the "What was done" (or "Completed") section:
+         - "- {{task_id}} completed: {{task}}"
       4. Do NOT overwrite the entire file. Preserve the history of ALL other tasks completed in this session.
-      5. If relevant, update the "Qué quedó pendiente" and "Próximo paso recomendado" sections.
+      5. If relevant, update the "What's pending" and "Recommended next step" sections.
 
   - type: prompt
     description: Update tasks.md checkbox
