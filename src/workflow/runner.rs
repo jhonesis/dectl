@@ -225,10 +225,15 @@ impl Runner {
 
                         Some((captured_out, captured_err))
                     } else {
-                        let program = &interp_cmd[0];
+                        let mut program = interp_cmd[0].clone();
+                        if program == "dectl" {
+                            if let Ok(exe) = std::env::current_exe() {
+                                program = exe.to_string_lossy().to_string();
+                            }
+                        }
                         let args: Vec<&String> = interp_cmd[1..].iter().collect();
 
-                        let mut prog_cmd = Command::new(program);
+                        let mut prog_cmd = Command::new(&program);
                         prog_cmd.args(args.clone());
                         let output = run_cmd_with_timeout(
                             prog_cmd,
