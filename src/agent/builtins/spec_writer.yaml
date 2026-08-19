@@ -49,7 +49,7 @@ steps:
     description: Read existing spec and tasks to find last IDs
     shell: true
     run_always: true
-    cmd: ["LAST_REQ=$(grep -oE 'REQ-[0-9]+' specs/spec.md 2>/dev/null | grep -oE '[0-9]+' | sort -n | tail -1 || echo '0'); LAST_TASK=$(grep -oE 'T[0-9]+' specs/tasks.md 2>/dev/null | grep -oE '[0-9]+' | sort -n | tail -1 || echo '0'); NREQ=$(printf '%03d' $((10#$LAST_REQ+1))); NTASK=$(printf '%03d' $((10#$LAST_TASK+1))); echo last_req=$LAST_REQ last_task=$LAST_TASK next_req=$NREQ next_task=$NTASK"]
+    cmd: ["LAST_REQ=$(grep -oE 'REQ-[0-9]+' specs/spec.md 2>/dev/null | grep -oE '[0-9]+' | sort -n | tail -1 || echo '0'); LAST_TASK=$(grep -oE 'T[0-9]+' specs/tasks.md 2>/dev/null | grep -oE '[0-9]+' | sort -n | tail -1 || echo '0'); REQ_NUM=$(printf '%s' \"$LAST_REQ\" | sed 's/^0*//'); [ -z \"$REQ_NUM\" ] && REQ_NUM=0; TASK_NUM=$(printf '%s' \"$LAST_TASK\" | sed 's/^0*//'); [ -z \"$TASK_NUM\" ] && TASK_NUM=0; NREQ=$(printf '%03d' $((REQ_NUM + 1))); NTASK=$(printf '%03d' $((TASK_NUM + 1))); echo last_req=$LAST_REQ last_task=$LAST_TASK next_req=$NREQ next_task=$NTASK"]
 
   - type: prompt
     description: Module spec guidance
