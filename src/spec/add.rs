@@ -166,7 +166,9 @@ fn dispatch_to_spec_writer(
             if !args.json {
                 println!();
                 println!("Spec guidance emitted for '{}' ({})", name, scope_str);
-                println!("The AI agent must now create/update the spec files following the SDD skill.");
+                println!(
+                    "The AI agent must now create/update the spec files following the SDD skill."
+                );
                 println!("Next steps:");
                 if scope == Scope::Module {
                     println!("  1. Agent: create specs/{}/ with the SDD documents", name);

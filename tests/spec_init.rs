@@ -54,7 +54,10 @@ fn test_spec_init_creates_sdd_dir() {
 
     // Fused examples: TaskFlow (STANDARD) + LedgerPay (CRITICAL), no legacy examples
     let examples = fs::read_to_string(tmp.path().join(".dec/sdd/references/examples.md")).unwrap();
-    assert!(examples.contains("TaskFlow"), "examples.md missing TaskFlow");
+    assert!(
+        examples.contains("TaskFlow"),
+        "examples.md missing TaskFlow"
+    );
     assert!(
         examples.contains("LedgerPay"),
         "examples.md missing LedgerPay"

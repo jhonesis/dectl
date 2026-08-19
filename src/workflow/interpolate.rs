@@ -229,8 +229,7 @@ mod tests {
         .into_iter()
         .collect();
 
-        let template =
-            "{{#if_eq scope \"module\"}}dir={{name}}{{else}}root={{name}}{{/if_eq}}";
+        let template = "{{#if_eq scope \"module\"}}dir={{name}}{{else}}root={{name}}{{/if_eq}}";
         let result = interpolate(template, &vars).unwrap();
         assert_eq!(result, "dir=auth");
     }
@@ -244,8 +243,7 @@ mod tests {
         .into_iter()
         .collect();
 
-        let template =
-            "{{#if_eq scope \"module\"}}dir={{name}}{{else}}root={{name}}{{/if_eq}}";
+        let template = "{{#if_eq scope \"module\"}}dir={{name}}{{else}}root={{name}}{{/if_eq}}";
         let result = interpolate(template, &vars).unwrap();
         assert_eq!(result, "root=login");
     }

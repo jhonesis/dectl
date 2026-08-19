@@ -133,9 +133,11 @@ fn extract_git_actions(_project_root: &Path, summary: &mut SessionSummary) -> Re
                 .join(", ")
         );
         if modified.len() > 5 {
-            summary
-                .decisions
-                .push(format!("{} (and {} more)", file_summary, modified.len() - 5));
+            summary.decisions.push(format!(
+                "{} (and {} more)",
+                file_summary,
+                modified.len() - 5
+            ));
         } else {
             summary.decisions.push(file_summary);
         }
@@ -152,7 +154,8 @@ fn parse_pending_from_last_session(content: &str, summary: &mut SessionSummary) 
         let trimmed = line.trim();
 
         // Detect section headers (English generated output + Spanish legacy files)
-        if trimmed.starts_with("## What's pending") || trimmed.starts_with("## Qué quedó pendiente") {
+        if trimmed.starts_with("## What's pending") || trimmed.starts_with("## Qué quedó pendiente")
+        {
             in_pending = true;
             in_next_step = false;
             continue;

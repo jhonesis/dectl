@@ -290,8 +290,7 @@ impl Runner {
                                 let v = v.trim();
                                 if !k.is_empty()
                                     && !v.is_empty()
-                                    && k.chars()
-                                        .all(|c| c.is_alphanumeric() || c == '_')
+                                    && k.chars().all(|c| c.is_alphanumeric() || c == '_')
                                 {
                                     vars.entry(k.to_string()).or_insert_with(|| v.to_string());
                                 }
@@ -318,8 +317,9 @@ impl Runner {
                             .append(true)
                             .open(&interp_path)
                             .with_context(|| format!("Failed to open file: {}", interp_path))?;
-                        f.write_all(interp_content.as_bytes())
-                            .with_context(|| format!("Failed to append to file: {}", interp_path))?;
+                        f.write_all(interp_content.as_bytes()).with_context(|| {
+                            format!("Failed to append to file: {}", interp_path)
+                        })?;
                     } else {
                         fs::write(&interp_path, &interp_content)
                             .with_context(|| format!("Failed to write file: {}", interp_path))?;

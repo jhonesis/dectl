@@ -351,8 +351,7 @@ fn e2e_spec_add_module_agent_creates_specs() {
         !tmp.path().join("specs/auth").exists(),
         "dectl should not create specs/auth/ itself (AI agent does that)"
     );
-    let root_spec_before =
-        fs::read_to_string(tmp.path().join("specs/spec.md")).unwrap();
+    let root_spec_before = fs::read_to_string(tmp.path().join("specs/spec.md")).unwrap();
     assert!(
         !root_spec_before.contains("auth"),
         "dectl should not modify root specs/spec.md itself"
@@ -627,7 +626,13 @@ fn e2e_spec_init_from_then_spec_add_from() {
     // 9. Simulate the AI agent creating the module files following the skill
     let auth_dir = tmp.path().join("specs/auth");
     fs::create_dir_all(&auth_dir).unwrap();
-    for f in ["constitution.md", "spec.md", "requirements.md", "plan.md", "tasks.md"] {
+    for f in [
+        "constitution.md",
+        "spec.md",
+        "requirements.md",
+        "plan.md",
+        "tasks.md",
+    ] {
         fs::write(auth_dir.join(f), format!("# {}\n", f)).unwrap();
     }
     assert!(auth_dir.join("constitution.md").exists());
