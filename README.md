@@ -217,7 +217,7 @@ curl -fsSL https://raw.githubusercontent.com/jhonesis/dectl/main/scripts/install
 git clone https://github.com/jhonesis/dectl.git
 cd dectl
 cargo build --release
-cp target/release/dectl "$(which dectl | xargs dirname)"/
+cp target/release/dectl "$(which dectl | xargs dirname)"/.dectl.$$ && mv "$(which dectl | xargs dirname)"/.dectl.$$ "$(which dectl | xargs dirname)"/dectl
 ```
 
 

@@ -216,7 +216,7 @@ install_from_source() {
         mkdir -p "$INSTALL_DIR"
     fi
 
-    cp "target/release/dectl" "$INSTALL_DIR/dectl"
+    cp "target/release/dectl" "$INSTALL_DIR/.dectl.$$" && mv "$INSTALL_DIR/.dectl.$$" "$INSTALL_DIR/dectl"
     chmod +x "$INSTALL_DIR/dectl"
     rm -rf "$tmpdir"
 
@@ -269,7 +269,7 @@ main() {
         mkdir -p "$INSTALL_DIR"
     fi
 
-    cp "/tmp/dectl-${VERSION#v}-${target}/dectl" "$INSTALL_DIR/dectl"
+    cp "/tmp/dectl-${VERSION#v}-${target}/dectl" "$INSTALL_DIR/.dectl.$$" && mv "$INSTALL_DIR/.dectl.$$" "$INSTALL_DIR/dectl"
     chmod +x "$INSTALL_DIR/dectl"
     rm -rf "/tmp/$tarball" "/tmp/dectl-${VERSION#v}-${target}"
 

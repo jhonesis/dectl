@@ -12,6 +12,9 @@ test:
 build:
     cargo build --release
 
+install:
+    cargo build --release && dir="$(dirname "$(which dectl)")" && cp target/release/dectl "$dir/.dectl.$$" && mv "$dir/.dectl.$$" "$dir/dectl"
+
 build-fast:
     cargo build
 
@@ -27,6 +30,7 @@ help:
     @echo "  lint       - Run clippy with deny warnings"
     @echo "  test       - Run tests"
     @echo "  build      - Release build"
+    @echo "  install    - Release build + atomic install into bin dir"
     @echo "  build-fast - Debug build"
     @echo "  check      - Type check without building"
     @echo "  clean      - Remove build artifacts"
