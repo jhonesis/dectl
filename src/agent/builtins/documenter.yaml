@@ -78,7 +78,7 @@ steps:
           ```json
           { "id": "{{task_id}}", "status": "done", "description": "{{task}}" }
           ```
-       2. **Update tasks.md** (only if it exists AND lists {{task_id}}) — change `[ ]` to `[x]` for task {{task_id}} in the relevant `specs/*/tasks.md`; otherwise SKIP, not every task is tracked in specs
+       2. **Update tasks.md** (only if it exists AND lists {{task_id}}) — change `[ ]` to `[x]` for task {{task_id}} in the relevant `tasks.md`; otherwise SKIP
        3. **Add decision file** (if architectural) — write `.dec/decisions/{{task_id}}-<name>.md`
        4. **Update last_session.md** — add {{task_id}} to the completed tasks list
 
@@ -128,9 +128,9 @@ steps:
       ## CRITICAL: Update tasks.md checkbox
       Before the session ends:
 
-      1. Check whether a `tasks.md` exists under `specs/`:
-         run `find specs -name "tasks.md" -type f 2>/dev/null`
-      2. If NO tasks.md exists, SKIP this step — not all tasks are tracked in specs.
+      1. Check whether a `tasks.md` exists in the project:
+         run `find . -name "tasks.md" -type f 2>/dev/null | head -5`
+      2. If NO tasks.md exists, SKIP this step.
       3. If it exists, open it and find the line referencing task {{task_id}}.
       4. If the task IS listed there, change `- [ ]` to `- [x]` for that task and verify with:
             grep -n "\[x\]" <the tasks.md file>

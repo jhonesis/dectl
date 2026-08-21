@@ -68,7 +68,7 @@ steps:
          → Should show an entry with `id: "{{task_id}}"` and `status: "done"`, and `updated_at` updated.
       2. **last_session.md**: Read `.dec/state/last_session.md`
          → Should show {{task_id}} under the completed-tasks section.
-      3. **tasks.md (only if it exists)**: Run `find specs -name tasks.md -type f`
+       3. **tasks.md (only if it exists)**: Run `find . -name tasks.md -type f | head -5`
          → If a tasks.md exists AND it lists {{task_id}}, that task must be checked `[x]`.
          → If there is no tasks.md, or {{task_id}} is not listed there, this check is satisfied.
 
@@ -83,7 +83,7 @@ steps:
         P=.dec/state/progress.json; S=.dec/state/last_session.md; T='{{task_id}}'; ok=0
         grep -qiF "\"id\": \"$T\"" "$P" 2>/dev/null && grep -qi '"status": "done"' "$P" 2>/dev/null && ok=$((ok+1))
         grep -qiF "$T" "$S" 2>/dev/null && ok=$((ok+1))
-        TM=$(find specs -name tasks.md -type f 2>/dev/null)
+        TM=$(find . -name tasks.md -type f 2>/dev/null | head -5)
         if [ -z "$TM" ] || ! grep -qiF "$T" $TM 2>/dev/null; then
           ok=$((ok+1))
         elif grep -iF "$T" $TM 2>/dev/null | grep -q "\[x\]"; then
