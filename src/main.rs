@@ -67,6 +67,7 @@ enum Commands {
         #[arg(long)]
         dry_run: bool,
     },
+    Hello,
     Version,
 }
 
@@ -292,6 +293,9 @@ fn main() {
                 crate::migrate::engine::SCHEMA_VERSION
             );
             core::output::Output::print_success(&version, mode);
+        }
+        Some(Commands::Hello) => {
+            core::output::Output::print_success("hola mundo", mode);
         }
         Some(Commands::Doctor { fix }) => {
             if let Err(e) = doctor::run(*fix, mode) {

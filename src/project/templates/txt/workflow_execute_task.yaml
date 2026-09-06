@@ -84,9 +84,9 @@ steps:
         grep -qiF "\"id\": \"$T\"" "$P" 2>/dev/null && grep -qi '"status": "done"' "$P" 2>/dev/null && ok=$((ok+1))
         grep -qiF "$T" "$S" 2>/dev/null && ok=$((ok+1))
         TM=$(find . -name tasks.md -type f 2>/dev/null | head -5)
-        if [ -z "$TM" ] || ! grep -qiF "$T" $TM 2>/dev/null; then
+        if [ -z "$TM" ] || ! grep -qiF "[$T]" $TM 2>/dev/null; then
           ok=$((ok+1))
-        elif grep -iF "$T" $TM 2>/dev/null | grep -q "\[x\]"; then
+        elif grep -iF "[$T]" $TM 2>/dev/null | grep -q "\[x\]"; then
           ok=$((ok+1))
         fi
         if [ "$ok" -eq 3 ]; then echo STATE_OK; else echo STATE_MISSING; exit 1; fi

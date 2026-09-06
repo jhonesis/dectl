@@ -702,6 +702,135 @@ fn test_spec_add_feature_sequential_ids() {
     assert_eq!(task2, "003", "expected next_task=003");
 }
 
+/// T038: specs root WITH Build/Verify/Gate markers so the verifier BVG check passes.
+/// (The shared `create_specs_root` helper has no BVG markers on purpose.)
+fn create_specs_root_with_bvg(tmp: &TempDir) {
+    fs::create_dir_all(tmp.path().join("specs")).unwrap();
+    let spec_content = "# Master Spec\n\n## Functional Requirements\n\n### REQ-001: Existing Feature\n**User Story**:\n> As a user, I want an existing feature.\n\n---\n";
+    let tasks_content = "# Tasks\n\n## Phase 1\n\n- [ ] [T001] [Setup] Initial setup — S (REQ-001)\n  **Build**: `cargo build`\n  **Verify**: `cargo test`\n  **Gate**: must pass before the next task begins\n";
+    fs::write(tmp.path().join("specs/spec.md"), spec_content).unwrap();
+    fs::write(tmp.path().join("specs/tasks.md"), tasks_content).unwrap();
+}
+
+/// T038 REQ-006: verifier passes on a clean spec (technology-agnostic + BVG markers).
+/// `spec add` must emit SPEC_GATE_DETAIL_OK + BVG_OK + SPEC_GATE_OK and no SPEC_GATE_FAIL: line.
+#[test]
+fn test_verifier_clean_spec_passes() {
+    let tmp = TempDir::new().unwrap();
+    create_dec_base(&tmp);
+    create_specs_root_with_bvg(&tmp);
+
+    trust_agent("spec_writer", tmp.path());
+
+    let output = run_dectl(
+        &[
+            "spec",
+            "add",
+            "myfeat",
+            "--scope",
+            "feature",
+            "--non-interactive",
+        ],
+        tmp.path(),
+    );
+    assert!(
+        output.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("SPEC_GATE_DETAIL_OK"),
+        "clean spec should be technology-agnostic, got:\n{}",
+        stdout
+    );
+    assert!(
+        stdout.contains("BVG_OK"),
+        "tasks with Build/Verify/Gate should pass the BVG check, got:\n{}",
+        stdout
+    );
+    assert!(
+        stdout.contains("SPEC_GATE_OK:"),
+        "clean spec should emit SPEC_GATE_OK, got:\n{}",
+        stdout
+    );
+    // NOTE: the closing reminder prompt mentions SPEC_GATE_FAIL without a colon;
+    // only verifier lines use the 'SPEC_GATE_FAIL:' prefix.
+    assert!(
+        !stdout.contains("SPEC_GATE_FAIL:"),
+        "clean spec must not emit any verifier failure, got:\n{}",
+        stdout
+    );
+}
+
+/// T038 REQ-006: verifier fails on a spec containing a denylisted tech name.
+/// `spec add` still succeeds (verifier exits 0) but emits SPEC_GATE_FAIL: + the hit.
+#[test]
+fn test_verifier_tech_name_spec_fails() {
+    let tmp = TempDir::new().unwrap();
+    create_dec_base(&tmp);
+    create_specs_root_with_bvg(&tmp);
+
+    // Simulate the AI agent writing a tech-specific spec (WHAT-vs-HOW violation).
+    use std::io::Write;
+    let mut f = fs::OpenOptions::new()
+        .append(true)
+        .open(tmp.path().join("specs/spec.md"))
+        .unwrap();
+    writeln!(
+        f,
+        "\n### REQ-002: Dashboard\nBuilt with React for rendering.\n"
+    )
+    .unwrap();
+
+    trust_agent("spec_writer", tmp.path());
+
+    let output = run_dectl(
+        &[
+            "spec",
+            "add",
+            "myfeat",
+            "--scope",
+            "feature",
+            "--non-interactive",
+        ],
+        tmp.path(),
+    );
+    assert!(
+        output.status.success(),
+        "verifier must exit 0 even on failure. stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("SPEC_GATE_FAIL:"),
+        "tech-name spec should emit SPEC_GATE_FAIL, got:\n{}",
+        stdout
+    );
+    assert!(
+        stdout.contains("WHAT-vs-HOW"),
+        "failure should name the WHAT-vs-HOW violation, got:\n{}",
+        stdout
+    );
+    assert!(
+        stdout.contains("React"),
+        "failure should echo the offending hit, got:\n{}",
+        stdout
+    );
+    assert!(
+        !stdout.contains("BVG_OK"),
+        "tech-name spec must not emit BVG_OK, got:\n{}",
+        stdout
+    );
+    assert!(
+        !stdout.contains("SPEC_GATE_OK:"),
+        "tech-name spec must not emit SPEC_GATE_OK, got:\n{}",
+        stdout
+    );
+}
+
 /// T031 REQ-005: `spec add --auto` must skip the trust prompt even when the
 /// spec_writer agent is not trusted for the project.
 #[test]

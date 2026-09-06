@@ -170,7 +170,7 @@ steps work in mature SDD tooling: a check that runs *after* tasks exist and *bef
 
 **All projects:**
 - ✅ Spec is technology-agnostic
-- ✅ **spec.md has zero technology names** (grep for: React, Node, PostgreSQL, AWS, Docker, etc.)
+- ✅ **spec.md has zero technology names** (grep -iE for the global denylist in Gate rule below)
 - ✅ Every acceptance criterion in spec.md has at least one corresponding task in tasks.md
 - ✅ Every task has a unique ID (T001, T002…)
 - ✅ Tasks are independently implementable and testable
@@ -297,9 +297,16 @@ The single most important rule in SDD. Violating it is the most common cause of 
 
 ### Gate rule
 
+Global tech-name denylist (WHAT-vs-HOW) — single source of truth used by the automated verifier:
+`react|vue|angular|node|postgres|docker|aws|once_cell|bouncycastle|cipher|preauthorize` (case-insensitive).
+
 Before marking any document as complete, the **Verifier** role MUST check that:
-- `spec.md` contains **zero technology names** (grep for: React, Node, PostgreSQL, AWS, Docker, etc.)
+- `spec.md` contains **zero technology names** (grep -iE for the global denylist above)
 - `plan.md` contains **at least one technology decision per REQ**
+
+### Precedence rule
+
+In case of conflict between this SKILL and local conventions (existing specs, codebase patterns, prior REQs), the SKILL prevails — SKILL prevalece sobre convención local. Do not propagate a local violation by imitation; the skill corrects it.
 
 ---
 

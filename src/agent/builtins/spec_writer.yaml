@@ -22,19 +22,31 @@ steps:
     description: Check SDD skill file exists
     shell: true
     run_always: true
-    cmd: ["bash", "-c", "cat .dec/sdd/SKILL.md 2>/dev/null || echo 'NO_SDD_SKILL'"]
+    cmd: ["cat .dec/sdd/SKILL.md 2>/dev/null || echo 'NO_SDD_SKILL'"]
+
+  - type: action
+    description: Check SDD templates file exists
+    shell: true
+    run_always: true
+    cmd: ["cat .dec/sdd/references/templates.md 2>/dev/null || echo 'NO_SDD_TEMPLATES'"]
+
+  - type: action
+    description: Check SDD examples file exists
+    shell: true
+    run_always: true
+    cmd: ["cat .dec/sdd/references/examples.md 2>/dev/null || echo 'NO_SDD_EXAMPLES'"]
 
   - type: action
     description: List existing specs
     shell: true
     run_always: true
-    cmd: ["bash", "-c", "ls -la specs/ 2>/dev/null || echo 'No specs'"]
+    cmd: ["ls -la specs/ 2>/dev/null || echo 'No specs'"]
 
   - type: action
     description: Read existing spec files
     shell: true
     run_always: true
-    cmd: ["bash", "-c", "find specs/ -name '*.md' -exec head -20 {} \\; 2>/dev/null || echo 'No specs'"]
+    cmd: ["find specs/ -name '*.md' -exec head -20 {} \\; 2>/dev/null || echo 'No specs'"]
 
   - type: action
     description: Search memory
@@ -61,10 +73,12 @@ steps:
       using the SDD skill as the source and guide. dectl does not create these files
       for you — you must create them.
 
-      Read these files before writing:
-      - `.dec/sdd/SKILL.md` — SDD workflow (Steps 1–5) and document rules
-      - `.dec/sdd/references/templates.md` — full document templates
-      - `.dec/sdd/references/examples.md` — worked examples
+      {{#if from_content}}
+      [SOURCE FILE CONTENT — read first]
+      {{from_content}}
+      [/SOURCE FILE CONTENT]
+      Preserve the requirement IDs from the source file. Do NOT renumber them.
+      {{/if}}
 
       Create exactly these files under `specs/{{name}}/`, following the templates
       EXACTLY (keep every section; fill the placeholders with module-specific content):
@@ -78,15 +92,14 @@ steps:
       - Preserve every template section: Definition of Done, User Stories with SHALL
         acceptance criteria, Edge Case Catalog, Build/Verify/Gate per task, etc.
       - spec.md is technology-agnostic (WHAT); plan.md is technology-specific (HOW).
+      - Precedence: SKILL prevails over local convention (SKILL prevalece sobre convención local) — do not imitate existing specs if they conflict with the skill.
       - Use sequential IDs: `REQ-{{name}}-001`, ..., and `T001`, `T002`, ... in tasks.md.
       - Every task has **Build**: + **Verify**: + **Gate**:.
 
-      {{#if from_content}}
-      [SOURCE FILE CONTENT]
-      {{from_content}}
-      [/SOURCE FILE CONTENT]
-      Preserve the requirement IDs from the source file. Do NOT renumber them.
-      {{/if}}
+      READING CHECKLIST — BLOCKING (do not write any file until all three are read):
+      - `.dec/sdd/SKILL.md` — SDD workflow (Steps 1–5) and document rules
+      - `.dec/sdd/references/templates.md` — full document templates
+      - `.dec/sdd/references/examples.md` — worked examples
 
       When the 5 files are done, also append:
       - A reference REQ entry to root `specs/spec.md` pointing to `specs/{{name}}/`.
@@ -102,10 +115,12 @@ steps:
       "{{name}}" using the SDD skill as the source and guide. dectl does not update
       these files for you — you must do it.
 
-      Read these files before writing:
-      - `.dec/sdd/SKILL.md` — SDD workflow and document rules
-      - `.dec/sdd/references/templates.md` — full document templates
-      - `.dec/sdd/references/examples.md` — worked examples
+      {{#if from_content}}
+      [SOURCE FILE CONTENT — read first]
+      {{from_content}}
+      [/SOURCE FILE CONTENT]
+      Preserve the requirement IDs from the source file. Do NOT renumber them.
+      {{/if}}
 
       Do NOT create a `specs/{{name}}/` subdirectory. Instead:
 
@@ -116,12 +131,12 @@ steps:
          `T{{next_task}}`, each with **Build**: + **Verify**: + **Gate**:, and
          referencing `REQ-{{next_req}}`.
 
-      {{#if from_content}}
-      [SOURCE FILE CONTENT]
-      {{from_content}}
-      [/SOURCE FILE CONTENT]
-      Preserve the requirement IDs from the source file. Do NOT renumber them.
-      {{/if}}
+      Precedence: SKILL prevails over local convention (SKILL prevalece sobre convención local) — do not imitate existing specs if they conflict with the skill.
+
+      READING CHECKLIST — BLOCKING (do not write any file until all three are read):
+      - `.dec/sdd/SKILL.md` — SDD workflow and document rules
+      - `.dec/sdd/references/templates.md` — full document templates
+      - `.dec/sdd/references/examples.md` — worked examples
 
   - type: prompt
     description: Closing reminder
@@ -130,10 +145,22 @@ steps:
       ## Spec guidance complete — {{task}}
 
       Use the guidance above to create or update the spec documents, guided by
-      `.dec/sdd/SKILL.md` and `.dec/sdd/references/templates.md`.
+      the required reading list (same three files as in the guidance above):
+      - `.dec/sdd/SKILL.md` — SDD workflow and document rules
+      - `.dec/sdd/references/templates.md` — full document templates
+      - `.dec/sdd/references/examples.md` — worked examples
       - Module scope: create `specs/{{name}}/` with the 5 SDD documents.
       - Feature scope: update `specs/spec.md` and `specs/tasks.md` (no subdirectory).
 
       Before finishing, validate against SKILL.md Step 4: spec is technology-agnostic,
-      every task has Build/Verify/Gate, IDs are sequential. Then record the result:
+      every task has Build/Verify/Gate, IDs are sequential. Precedence: SKILL prevails
+      over local convention (SKILL prevalece sobre convención local). Then record the result:
       `dectl memory add "Specs written for {{name}}" --tags specs,{{scope}}`
+      The automated verifier step runs next — if it emits SPEC_GATE_FAIL, fix the
+      flagged tech-names / BVG gaps before considering the specs done.
+
+  - type: action
+    description: Verify spec is technology-agnostic + tasks carry Build/Verify/Gate (machine gate)
+    shell: true
+    run_always: true
+    cmd: ["bash", "-c", ": gate-init; FAIL=0; SPECS=\"\"; [ -f specs/spec.md ] && SPECS=\"$SPECS specs/spec.md\"; [ -f \"specs/{{name}}/spec.md\" ] && SPECS=\"$SPECS specs/{{name}}/spec.md\"; if [ -z \"$SPECS\" ]; then echo 'SPEC_GATE_SKIP: no spec.md found (agent has not written specs yet)'; else HITS=$(grep -iE 'react|vue|angular|node|postgres|docker|aws|once_cell|bouncycastle|cipher|preauthorize' $SPECS 2>/dev/null || true); if [ -n \"$HITS\" ]; then echo 'SPEC_GATE_FAIL: tech names in spec.md (WHAT-vs-HOW violation):'; echo \"$HITS\"; FAIL=1; else echo 'SPEC_GATE_DETAIL_OK: spec.md technology-agnostic (no denylist hits; only spec.md files scanned)'; fi; fi; TASKS=\"\"; [ -f specs/tasks.md ] && TASKS=\"$TASKS specs/tasks.md\"; [ -f \"specs/{{name}}/tasks.md\" ] && TASKS=\"$TASKS specs/{{name}}/tasks.md\"; if [ -z \"$TASKS\" ]; then echo 'BVG_SKIP: no tasks.md found'; else for f in $TASKS; do for m in Build Verify Gate; do grep -q \"$m\" \"$f\" 2>/dev/null || { echo \"SPEC_GATE_FAIL: $f missing $m markers\"; FAIL=1; }; done; done; [ \"$FAIL\" = 0 ] && echo 'BVG_OK: tasks carry Build/Verify/Gate'; fi; if [ \"$FAIL\" = 0 ]; then echo 'SPEC_GATE_OK: all checks pass'; else echo 'SPEC_GATE_FAIL: fix flagged items and re-run'; fi; exit 0"]
