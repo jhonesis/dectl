@@ -91,6 +91,12 @@ pub fn get_db() -> Result<&'static impl Storage> {
         }
         let conn = Connection::open(&db_path)
             .with_context(|| format!("Failed to open database at {:?}", db_path))?;
+        // Wait (instead of failing immediately) when another process holds
+        // the write lock: parallel `dectl` invocations — agents, tests, or
+        // two terminals — share this file. Without it, lock contention
+        // surfaces as intermittent SQLITE_BUSY errors.
+        conn.busy_timeout(std::time::Duration::from_secs(30))
+            .context("Failed to set SQLite busy timeout")?;
         let _ = conn.execute_batch("PRAGMA journal_mode=WAL;");
         run_migrations(&conn)?;
         Ok(RealStorage {
