@@ -1,0 +1,83 @@
+# .dec/rules/profiles/public_api.yaml — schema_version 2
+# Complete CANONICAL content, including 11.4 (WebSockets).
+
+version: 2
+profile_flag: public_api
+source_rule_ids:
+- '6.1'
+- '6.2'
+- '6.3'
+- '6.5'
+- '11.1'
+- '11.2'
+- '11.3'
+- '11.4'
+- '11.5'
+- '11.6'
+- '13.6'
+rules:
+- id: '11.3'
+  section: API Architecture
+  severity: SHOULD
+  primary_flag: public_api
+  requires:
+  - flag: public_api
+    equals: true
+  condition: you connect internal microservices with maximum speed and strict typing
+  action: use gRPC
+  why: null
+  exception: AVOID exposing it directly to browsers or as a public API without a translation proxy
+  tags:
+  - apis
+  - grpc
+- id: '11.4'
+  section: API Architecture
+  severity: SHOULD
+  primary_flag: public_api
+  requires:
+  - flag: public_api
+    equals: true
+  - flag: realtime
+    equals: true
+  condition: you need bidirectional real-time communication (chat, live notifications)
+  action: use WebSockets
+  why: null
+  exception: AVOID using them for one-off/sporadic reads (they waste sockets and memory)
+  tags:
+  - apis
+  - websockets
+  - realtime
+
+  cross_referenced_by:
+  - realtime
+- id: '11.6'
+  section: API Architecture
+  severity: MUST
+  primary_flag: public_api
+  requires:
+  - flag: public_api
+    equals: true
+  condition: you expose an endpoint with a POST method that creates a resource (e.g. a purchase)
+  action: prevent duplicate retries
+  why: null
+  exception: AVOID assuming retrying a POST is safe, since it can duplicate orders/charges
+  tags:
+  - apis
+  - idempotencia
+  - post
+
+
+---
+# .dec/rules/profiles/realtime.yaml — schema_version 2
+# Se materializa si realtime = true. NO duplica 11.4 (ver 11.4.cross_referenced_by).
+# Activation lives in 11.4.requires (AND of public_api + realtime), not in this
+# file — this is just physical grouping. The resolver never reads YAMLs from disk:
+# resuelve desde RULES_YAML embebido y deduplica por id.
+
+version: 2
+profile_flag: realtime
+source_rule_ids:
+- '11.4'
+rules:
+- ref: '11.4'
+  canonical_file: profiles/public_api.yaml

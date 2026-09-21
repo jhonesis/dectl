@@ -37,6 +37,15 @@ command = ""
 # Example: "cargo clippy" or "npx eslint ."
 command = ""
 
+[rules]
+# Rule IDs disabled for this project (e.g. ["14.5"]).
+# Unknown IDs fail with an error naming the ID (never silently ignored).
+disabled = []
+# Forced severities. Dotted keys go quoted (TOML).
+# Values are UPPERCASE (MUST | SHOULD | AVOID).
+[rules.severity_override]
+# "14.5" = "MUST"
+
 [session]
 # Workflow hooks to run at the end of each session.
 # Each entry is a workflow name from .dec/workflows/.

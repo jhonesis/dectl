@@ -32,6 +32,7 @@ pub fn run(agent_type: &str, mode: OutputMode) -> Result<()> {
             description: String,
             content: Option<String>,
             cmd: Option<Vec<String>>,
+            run_always: Option<bool>,
         }
         #[derive(Serialize)]
         struct AgentInfo {
@@ -72,6 +73,7 @@ pub fn run(agent_type: &str, mode: OutputMode) -> Result<()> {
                 description: s.description.clone(),
                 content: s.content.clone(),
                 cmd: s.cmd.clone(),
+                run_always: s.run_always,
             })
             .collect();
 

@@ -179,11 +179,24 @@ fn execute_agent_inner(
     let duration_ms = start.elapsed().as_millis() as i64;
 
     let agent_ok = if !execution_result.success {
+        // A failed `run_always` action step is a gate/verifier verdict, never
+        // collateral damage: it must fail the agent even when the main
+        // output (a `write` step) was produced. Tolerant checks keep their
+        // `|| echo` fallback and never reach this branch.
+        let failed_gate = execution_result.results.iter().any(|r| {
+            if r.success {
+                return false;
+            }
+            agent_def
+                .steps
+                .get(r.step_num.saturating_sub(1))
+                .is_some_and(|s| s.step_type == StepType::Action && s.run_always.unwrap_or(false))
+        });
         let any_write_ok = execution_result
             .results
             .iter()
             .any(|r| r.success && r.step_type == "write");
-        if any_write_ok {
+        if any_write_ok && !failed_gate {
             for failed in execution_result.results.iter().filter(|r| !r.success) {
                 eprintln!(
                     "  ⚠ Non-critical step {} ({}) failed — main output was produced",

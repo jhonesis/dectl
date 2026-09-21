@@ -42,6 +42,22 @@ steps:
     shell: true
     cmd: ["ls -1 .dec/decisions/ 2>/dev/null | head -20 || echo 'No decisions found'"]
 
+  - type: action
+    description: Get task-scoped rules context (stage task)
+    cmd: ["dectl", "rules", "context", "--stage", "task", "--task", "{{task}}", "--max-tokens", "2000"]
+
+  - type: write
+    description: Save task-scoped rules context
+    path: ".dec/agent-output/{{task_id}}-rules.md"
+    content: |
+      # Rules Context: {{task}}
+      ## Task ID: {{task_id}}
+
+      <!-- Stage: task, budget 2000 tokens. Source: `dectl rules context --stage task`. -->
+      <!-- If this file is absent, the coder continues with an absence marker (never aborts). -->
+
+      {{step_8_output}}
+
   - type: write
     description: Save comprehensive research context
     path: ".dec/agent-output/{{task_id}}-research.md"
@@ -81,6 +97,7 @@ steps:
       **Task ID**: {{task_id}}
 
       ### Context compiled to: `.dec/agent-output/{{task_id}}-research.md`
+      ### Rules compiled to: `.dec/agent-output/{{task_id}}-rules.md`
 
       ### Your analysis steps:
       1. Read `.dec/agent-output/{{task_id}}-research.md` — contains project tree,
@@ -89,6 +106,9 @@ steps:
       3. Read `.dec/decisions/` files listed above — respect prior architectural decisions
       4. If specs exist, read the relevant spec in `specs/` for this task's requirements
       5. Read `.dec/isa/project.isa.md` — project identity and architecture
+      6. Read `.dec/agent-output/{{task_id}}-rules.md` — task-scoped rules
+         (stage task, budget 2000); if absent, the coder continues with an
+         absence marker (never aborts)
 
       ### Deliverable:
       Summarize findings that the **coder agent** will need:

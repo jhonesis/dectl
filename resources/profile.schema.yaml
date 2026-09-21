@@ -1,0 +1,137 @@
+# .dec/rules/profile.schema.yaml
+#
+# Defines the question bank that `dectl spec init` renders in the terminal
+# when .dec/rules/profile.toml does not exist yet. It is the source of truth
+# both for the text the user sees and for which flag/rules each
+# answer activates. It holds no logic — the `dectl` binary interprets it.
+#
+# Supported type convention:
+#   boolean        -> yes/no question, true/false answer
+#   boolean_meta   -> same as boolean, but does not activate a profile file
+#                     of its own; it only writes the flag for downstream use
+#                     (e.g. spec tier, future gates)
+#
+# `depends_on` hides a question when it does not apply given the already
+# known context (e.g. do not ask about a public API if the user already said
+# the project is a single-use CLI script in the general SDD intake).
+
+version: 1
+title: "Project feature profile"
+description: >
+  These answers determine which rules from development-rules.md are
+  activated for this project. They are asked once; you can
+  update them later with `dectl rules profile update`.
+
+questions:
+
+  - id: q1
+    flag: handles_pii
+    type: boolean_meta
+    order: 1
+    prompt: "Does the app handle sensitive user data (PII, health, financial)?"
+    help: >
+      Includes names, emails, medical history, card data,
+      government ID, or any data regulated by GDPR/HIPAA/PCI-DSS.
+    default: false
+    on_true:
+      set_tier_hint: CRITICAL          # suggests the SDD skill generate threat-model.md
+      note: "Consider generating threat-model.md in the spec."
+    activates_profile: null            # meta-flag: loads no YAML of its own directly
+    rule_refs: []                      # the rules it would trigger are already covered
+                                       # by has_sql/has_web_ui/has_auth individually
+
+  - id: q2
+    flag: has_sql
+    type: boolean
+    order: 2
+    prompt: "Does the app touch a relational database (Postgres, MySQL, SQLite, etc.)?"
+    help: "Includes ORMs (Prisma, SQLAlchemy, Diesel, etc.), not just raw SQL."
+    default: false
+    activates_profile: "profiles/has_sql.yaml"
+    rule_refs: ["2.4", "8.3", "13.1"]
+
+  - id: q3
+    flag: public_api
+    type: boolean
+    order: 3
+    prompt: "Does the app expose an API (public, third-party, or consumed by another service)?"
+    help: "Includes REST, GraphQL, gRPC as well as outbound calls to external APIs."
+    default: false
+    activates_profile: "profiles/public_api.yaml"
+    rule_refs: ["6.1", "6.2", "6.3", "6.5", "11.1", "11.2", "11.3", "11.5", "11.6", "13.6"]
+
+  - id: q4
+    flag: has_web_ui
+    type: boolean
+    order: 4
+    prompt: "Does the app have a web UI that renders HTML with user data?"
+    help: "If it is a pure API with no frontend of its own, answer no."
+    default: false
+    activates_profile: "profiles/has_web_ui.yaml"
+    rule_refs: ["7.4", "13.2", "17.1", "17.2", "17.3", "17.4"]
+
+  - id: q5
+    flag: has_auth
+    type: boolean
+    order: 5
+    prompt: "Does the app require authentication or user session handling?"
+    help: "Includes own login, OAuth, user API keys, JWT, etc."
+    default: false
+    activates_profile: "profiles/has_auth.yaml"
+    rule_refs: ["13.4", "13.5", "13.7", "13.8", "13.9", "13.10"]
+    compound_with:
+      # 13.3 (CSRF) only activates when has_web_ui = true AS WELL.
+      # Informational: activation lives in 13.3.requires (the resolver reads
+      # neither this field nor any YAML from disk) — do not build logic on it.
+      - flag: has_web_ui
+        rule_ref: "13.3"
+
+  - id: q6
+    flag: realtime
+    type: boolean
+    order: 6
+    depends_on:
+      flag: public_api
+      equals: true
+    prompt: "Does the app need realtime communication (chat, live notifications, quotes)?"
+    help: "If you answered 'no' to the API question, this question is skipped."
+    default: false
+    activates_profile: "profiles/realtime.yaml"
+    rule_refs: ["11.4"]   # AND(public_api, realtime) activation; canonical content
+                          # in public_api.yaml, realtime.yaml only references by ID
+
+  - id: q7
+    flag: cpu_intensive
+    type: boolean
+    order: 7
+    prompt: "Does the app do CPU-intensive processing (images, AI, heavy computation)?"
+    help: "Think of tasks that would take seconds/minutes of pure compute, not network waiting."
+    default: false
+    activates_profile: "profiles/cpu_intensive.yaml"
+    rule_refs: ["6.4"]
+
+  - id: q8
+    flag: long_lived
+    type: boolean_meta
+    order: 8
+    prompt: "Will the project live longer than a few weeks and be maintained by a team?"
+    help: >
+      If it is a single-use script or a throwaway prototype, answer no.
+    default: true
+    activates_profile: null
+    rule_refs: []
+    note: >
+      Reserved for tech-debt, versioning and ADR rules not yet
+      written in development-rules.md (see section 6 of the
+      integration guide). Today only the flag is persisted, with no effect on rules.
+
+# Terminal render order: follows the `order` field, skipping
+# any question whose `depends_on` is not met by the answers
+# given so far (sequential evaluation, not all at once).
+
+output:
+  path: ".dec/rules/profile.toml"
+  format: toml
+  include_meta:
+    answered_at: true       # ISO-8601 timestamp
+    answered_via: true       # "spec_init" | "profile_update"

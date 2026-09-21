@@ -1,0 +1,56 @@
+# .dec/rules/profiles/has_sql.yaml — schema_version 2
+# Materializado por `dectl spec init` SOLO si has_sql = true.
+# Each rule's real activation lives in its own `requires` field
+# (not in this file name) — this is just physical grouping.
+
+version: 2
+profile_flag: has_sql
+source_rule_ids:
+- '2.4'
+- '8.3'
+- '13.1'
+rules:
+- id: '2.4'
+  section: Algorithmic Complexity
+  severity: MUST
+  primary_flag: has_sql
+  requires:
+  - flag: has_sql
+    equals: true
+  condition: a database query filters on a column without an index
+  action: suggest creating an index
+  why: turns an O(N) scan into O(log N)
+  exception: null
+  tags:
+  - big-o
+  - database
+  - indexes
+- id: '8.3'
+  section: Time Zones, Text & Git
+  severity: MUST
+  primary_flag: has_sql
+  requires:
+  - flag: has_sql
+    equals: true
+  condition: your MySQL database must support emojis
+  action: use the utf8mb4 encoding
+  why: null
+  exception: AVOID legacy utf8 (3 bytes max, truncates 4-byte emojis)
+  tags:
+  - mysql
+  - encoding
+- id: '13.1'
+  section: Security
+  severity: MUST
+  primary_flag: has_sql
+  requires:
+  - flag: has_sql
+    equals: true
+  condition: you build a SQL query with user input
+  action: use parameterized queries (Prepared Statements)
+  why: prevents SQL Injection
+  exception: AVOID concatenating strings, even in an ORM's raw queries
+  tags:
+  - owasp
+  - sql-injection
+  - security

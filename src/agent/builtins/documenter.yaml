@@ -137,6 +137,26 @@ steps:
       5. If the task is NOT listed there, SKIP — the task lives outside the specs index (different nomenclature or scope).
 
   - type: prompt
+    description: Register accepted rules violations in decisions/
+    run_always: true
+    content: |
+      ## Register rules exceptions: {{task}}
+      **Task ID**: {{task_id}}
+
+      If the reviewer reported a blocking-set violation (REQ-rules-007) that the
+      user EXPLICITLY accepted as a justified exception, record it as a decision
+      file — otherwise SKIP this step (never invent exceptions):
+
+      1. Check the review report `.dec/agent-output/{{task_id}}-review.md` for a
+         `RULES_GATE: FAIL` closed as accepted, or a user message accepting it.
+      2. If accepted, write `.dec/decisions/{{task_id}}-rules-exception.md`:
+         - Which rule ID was violated (e.g. `13.1`) and where (files/lines)
+         - The justification given by the user (verbatim when possible)
+         - Why the gate verdict is overruled for this task only
+      3. If no violation was accepted, do nothing — an empty `decisions/`
+         entry is worse than none.
+
+  - type: prompt
     description: Pipeline completion notice
     run_always: true
     content: |

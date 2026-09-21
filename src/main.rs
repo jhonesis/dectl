@@ -8,13 +8,14 @@ mod memory;
 mod migrate;
 mod project;
 mod protocol;
+mod rules;
 mod session;
 mod spec;
 mod workflow;
 
 #[derive(Parser)]
 #[command(name = "dectl")]
-#[command(version = "0.1.0 (schema 1.0)")]
+#[command(version = "1.1.0 (schema 1.0)")]
 #[command(about = "Dev Environment Control", long_about = None)]
 struct Cli {
     #[arg(long, global = true)]
@@ -58,6 +59,10 @@ enum Commands {
     Spec {
         #[command(subcommand)]
         command: Option<SpecCommands>,
+    },
+    Rules {
+        #[command(subcommand)]
+        command: Option<RulesCommands>,
     },
     Doctor {
         #[arg(long)]
@@ -254,6 +259,57 @@ enum SpecCommands {
         #[arg(long)]
         auto: bool,
     },
+}
+
+#[derive(Subcommand)]
+enum RulesCommands {
+    /// Browse the embedded catalog, optionally filtered
+    List {
+        /// Filter by section name (e.g. "Security")
+        #[arg(long)]
+        category: Option<String>,
+
+        /// Filter by severity
+        #[arg(long, value_parser = ["must", "should", "avoid"])]
+        severity: Option<String>,
+    },
+    /// Full-text search over the embedded catalog
+    Search {
+        /// Case-insensitive text matched against id, section, condition, action and tags
+        query: String,
+    },
+    /// Recompute and print the active ruleset (embedded catalog + profile + [rules])
+    Resolve,
+    /// Stage-aware context slice with a token budget (default 2000)
+    Context {
+        /// Consumer stage: spec (metadata only), plan, task or review
+        #[arg(long, default_value = "task")]
+        stage: String,
+
+        /// Files in scope; repeatable, accepts spaces, commas and newlines
+        #[arg(long)]
+        files: Vec<String>,
+
+        /// Token budget (words x 1.3 estimator); truncated with an omitted footer
+        #[arg(long, default_value_t = crate::rules::context::DEFAULT_BUDGET)]
+        max_tokens: usize,
+
+        /// Task description used to rank rules by relevance
+        #[arg(long)]
+        task: Option<String>,
+    },
+    Profile {
+        #[command(subcommand)]
+        command: Option<RulesProfileCommands>,
+    },
+    /// Regenerate every on-disk YAML from the embedded catalog
+    Resync,
+}
+
+#[derive(Subcommand)]
+enum RulesProfileCommands {
+    /// Re-run the questionnaire, update profile.toml and regenerate everything
+    Update,
 }
 
 #[derive(Subcommand)]
@@ -560,6 +616,60 @@ fn main() {
             }
             None => {
                 core::output::Output::print_success("dectl spec - Spec-Driven Development", mode);
+            }
+        },
+        Some(Commands::Rules { command }) => match command {
+            Some(RulesCommands::List { category, severity }) => {
+                if let Err(e) = rules::cli::run_list(category.clone(), severity.clone(), mode) {
+                    core::error::exit_for_error(e, mode);
+                }
+            }
+            Some(RulesCommands::Search { query }) => {
+                if let Err(e) = rules::cli::run_search(query.clone(), mode) {
+                    core::error::exit_for_error(e, mode);
+                }
+            }
+            Some(RulesCommands::Resolve) => {
+                if let Err(e) = rules::cli::run_resolve(mode) {
+                    core::error::exit_for_error(e, mode);
+                }
+            }
+            Some(RulesCommands::Context {
+                stage,
+                files,
+                max_tokens,
+                task,
+            }) => {
+                if let Err(e) = rules::cli::run_context(
+                    stage.clone(),
+                    files.clone(),
+                    *max_tokens,
+                    task.clone(),
+                    mode,
+                ) {
+                    core::error::exit_for_error(e, mode);
+                }
+            }
+            Some(RulesCommands::Profile { command }) => match command {
+                Some(RulesProfileCommands::Update) => {
+                    if let Err(e) = rules::cli::run_profile_update(cli.non_interactive, mode) {
+                        core::error::exit_for_error(e, mode);
+                    }
+                }
+                None => {
+                    core::output::Output::print_success(
+                        "dectl rules profile - use `dectl rules profile update`",
+                        mode,
+                    );
+                }
+            },
+            Some(RulesCommands::Resync) => {
+                if let Err(e) = rules::cli::run_resync(mode) {
+                    core::error::exit_for_error(e, mode);
+                }
+            }
+            None => {
+                core::output::Output::print_success("dectl rules - Development rules", mode);
             }
         },
         Some(Commands::ExecFromFile { path }) => {

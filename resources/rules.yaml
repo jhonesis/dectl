@@ -1,0 +1,1407 @@
+# rules.yaml — schema_version: 2
+#
+# MACHINE-READABLE source of truth for the development rules compendium.
+# Generated from development-rules.md (the HUMAN-READABLE source).
+#
+# SCHEMA CHANGES relative to schema_version 1 (external technical review):
+#
+#   1. `profile` was REMOVED from the root. Every activation condition goes
+#      through `requires` (an AND list): empty = transversal, one entry =
+#      simple profile, two or more = composite condition (e.g. "13.3" needs
+#      has_auth AND has_web_ui). A single evaluation path in the resolver.
+#
+#   2. `primary_flag` is NEW metadata, organization-only — it does NOT take
+#      part in activation logic (that lives 100% in `requires`). It tells
+#      `dectl spec init` which .dec/rules/profiles/{flag}.yaml file to
+#      materialize the rule into. null = goes in transversal.yaml.
+#
+#   3. `action` and `exception` now ALWAYS mean the same thing, regardless
+#      of `severity`:
+#        - action    = what SHOULD be done (the recommended practice)
+#        - exception = the antipattern to avoid, when one is relevant
+#      Before, in the 9 rules with severity: AVOID, `action` described the
+#      bad practice instead of the good one — inconsistent with the
+#      MUST/SHOULD rules. Fixed in the 9 affected rules.
+#
+#   4. Severity-to-reviewer-behavior mapping (documented here, no parser
+#      effect; see rules-integration-guide.md section 7):
+#        MUST   -> blocks the pipeline when `action` is not met (error)
+#        SHOULD -> non-blocking warning when `action` is not met
+#        AVOID  -> blocks when the `exception` pattern is found in the diff
+#
+# Fields per rule:
+#   id            -> section.index, positional, matches development-rules.md
+#   section       -> human-readable category name
+#   severity      -> MUST | SHOULD | AVOID (enforcement level, see above)
+#   primary_flag  -> null | flag name, ONLY for file organization
+#   requires      -> list of {flag, equals} in AND; empty = always active
+#   condition     -> the IF, in plain text
+#   action        -> the THEN — ALWAYS the recommended practice
+#   why           -> brief justification, or null
+#   exception     -> the antipattern to avoid, or null
+#   tags          -> keywords for `dectl rules search`
+#   cross_referenced_by -> other profiles pointing at this rule without duplicating it
+
+version: 1
+source: development-rules.md
+generated_by: manual transcription — v1
+total_rules: 106
+rules:
+- id: '1.1'
+  section: Data Structures
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: you need frequent indexed reads with few mid-list insertions/deletions
+  action: use an Array
+  why: O(1) access
+  exception: null
+  tags:
+  - array
+  - data-structures
+- id: '1.2'
+  section: Data Structures
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: you constantly insert/delete in middle positions without shifting memory
+  action: use a Linked List instead of an Array
+  why: avoids O(N) shifting
+  exception: null
+  tags:
+  - linked-list
+  - data-structures
+- id: '1.3'
+  section: Data Structures
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: the flow is LIFO (undo, navigation history, parenthesis matching)
+  action: use a Stack limited to push/pop
+  why: null
+  exception: null
+  tags:
+  - stack
+  - data-structures
+- id: '1.4'
+  section: Data Structures
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: the flow is FIFO (message queues, printing, async processing)
+  action: use a Queue, enqueue at the end and dequeue from the front
+  why: null
+  exception: null
+  tags:
+  - queue
+  - data-structures
+- id: '1.5'
+  section: Data Structures
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: you need near-constant-time lookup/insertion/deletion by key
+  action: use a Hash Table
+  why: null
+  exception: AVOID assuming guaranteed O(1); heavy collisions degrade to O(N)
+  tags:
+  - hash-table
+  - data-structures
+- id: '1.6'
+  section: Data Structures
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: you need ordered data with efficient search/insertion/deletion
+  action: use a Binary Search Tree
+  why: O(log N) vs O(N) sequential search
+  exception: null
+  tags:
+  - bst
+  - data-structures
+- id: '1.7'
+  section: Data Structures
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: you must always serve the highest/lowest-priority element first
+  action: use a Heap instead of re-sorting the whole list on every insertion
+  why: null
+  exception: null
+  tags:
+  - heap
+  - data-structures
+- id: '1.8'
+  section: Data Structures
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: you model complex relationships (networks, routes, recommendations)
+  action: use a Graph, and use BFS when you need the shortest path in unweighted graphs
+  why: null
+  exception: null
+  tags:
+  - graph
+  - bfs
+  - data-structures
+- id: '2.1'
+  section: Algorithmic Complexity
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: you are about to choose an algorithm or data structure
+  action: stay within O(1), O(log N) or O(N)
+  why: null
+  exception: AVOID O(N²) and O(2^N) without explicit justification
+  tags:
+  - big-o
+  - performance
+- id: '2.2'
+  section: Algorithmic Complexity
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: you spot nested loops iterating over the same collection
+  action: flag it as an O(N²) risk
+  why: it works on small test inputs and degrades in production
+  exception: null
+  tags:
+  - big-o
+  - performance
+- id: '2.3'
+  section: Algorithmic Complexity
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: a search requires the data to be sorted first
+  action: consider binary search (O(log N)) instead of linear search
+  why: null
+  exception: null
+  tags:
+  - big-o
+  - binary-search
+- id: '2.4'
+  section: Algorithmic Complexity
+  severity: MUST
+  primary_flag: has_sql
+  requires:
+  - flag: has_sql
+    equals: true
+  condition: a database query filters on a column without an index
+  action: suggest creating an index
+  why: turns an O(N) scan into O(log N)
+  exception: null
+  tags:
+  - big-o
+  - database
+  - indexes
+- id: '3.1'
+  section: Design Patterns
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: an object must notify multiple modules of a state change without knowing them
+  action: use Observer
+  why: null
+  exception: null
+  tags:
+  - patterns
+  - observer
+- id: '3.2'
+  section: Design Patterns
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: there are multiple interchangeable algorithms for the same task (e.g. payment methods)
+  action: use Strategy instead of a growing if/switch block
+  why: null
+  exception: null
+  tags:
+  - patterns
+  - strategy
+- id: '3.3'
+  section: Design Patterns
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: an object's behavior changes radically with its internal state
+  action: use State
+  why: null
+  exception: AVOID nested conditionals; give each state its own class
+  tags:
+  - patterns
+  - state
+- id: '3.4'
+  section: Design Patterns
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: an algorithm has fixed steps but some vary per subclass (e.g. export to PDF/CSV/Excel)
+  action: use Template Method
+  why: null
+  exception: null
+  tags:
+  - patterns
+  - template-method
+- id: '3.5'
+  section: Design Patterns
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: a request must pass through independent validators/handlers in a chain (e.g. middlewares)
+  action: use Chain of Responsibility
+  why: null
+  exception: null
+  tags:
+  - patterns
+  - chain-of-responsibility
+- id: '3.6'
+  section: Design Patterns
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: a group of objects communicates all-to-all, creating high coupling
+  action: introduce a central Mediator
+  why: null
+  exception: null
+  tags:
+  - patterns
+  - mediator
+- id: '3.7'
+  section: Design Patterns
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: a single global instance is required (DB connection, logs, config)
+  action: use a Singleton with a private constructor and get_instance()
+  why: null
+  exception: null
+  tags:
+  - patterns
+  - singleton
+- id: '3.8'
+  section: Design Patterns
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: object creation shares an interface but differs greatly in internal construction
+  action: use a Factory
+  why: null
+  exception: null
+  tags:
+  - patterns
+  - factory
+- id: '3.9'
+  section: Design Patterns
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: you need to add optional behaviors recursively without touching the base class
+  action: use a Decorator
+  why: null
+  exception: null
+  tags:
+  - patterns
+  - decorator
+- id: '3.10'
+  section: Design Patterns
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: an object requires many optional/conditional parameters
+  action: use a Builder
+  why: null
+  exception: AVOID constructors with multiple null arguments
+  tags:
+  - patterns
+  - builder
+- id: '3.11'
+  section: Design Patterns
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: leaves and containers (file/folder) must share the same interface
+  action: use a Composite
+  why: removes what-type-is-this conditionals
+  exception: null
+  tags:
+  - patterns
+  - composite
+- id: '4.1'
+  section: SOLID Principles
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: a class/file has more than one reason to change
+  action: split it (SRP)
+  why: null
+  exception: null
+  tags:
+  - solid
+  - srp
+- id: '4.2'
+  section: SOLID Principles
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: adding a new feature requires modifying existing working code
+  action: refactor toward interfaces/extension (OCP)
+  why: null
+  exception: null
+  tags:
+  - solid
+  - ocp
+- id: '4.3'
+  section: SOLID Principles
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: a subclass throws or breaks the parent's expected behavior
+  action: fix the hierarchy or split interfaces (LSP)
+  why: null
+  exception: AVOID forcing an inappropriate inheritance
+  tags:
+  - solid
+  - lsp
+- id: '4.4'
+  section: SOLID Principles
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: an interface forces a class to implement methods it will never use
+  action: split it into smaller interfaces (ISP)
+  why: null
+  exception: null
+  tags:
+  - solid
+  - isp
+- id: '4.5'
+  section: SOLID Principles
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: your core logic depends directly on a concrete external library/tool
+  action: depend on an abstraction (interface) and inject the concrete implementation (DIP)
+  why: null
+  exception: null
+  tags:
+  - solid
+  - dip
+- id: '4.6'
+  section: SOLID Principles
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: the same business rule (e.g. tax percentage) appears copied in several places
+  action: unify it in a single source of truth (DRY)
+  why: null
+  exception: AVOID abstracting before the 3rd real repetition (Rule of Three)
+  tags:
+  - dry
+  - maintainability
+- id: '4.7'
+  section: SOLID Principles
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: you have two solutions and one is simpler while working just as well
+  action: choose the simpler one (KISS)
+  why: null
+  exception: AVOID over-engineering not required by the current problem
+  tags:
+  - kiss
+  - simplicity
+- id: '4.8'
+  section: SOLID Principles
+  severity: AVOID
+  primary_flag: null
+  requires: []
+  condition: you are about to build something for a speculative future need
+  action: defer development until the need is real (YAGNI)
+  why: null
+  exception: AVOID building speculative functionality based on unconfirmed future needs
+  tags:
+  - yagni
+- id: '4.9'
+  section: SOLID Principles
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: a module mixes unrelated responsibilities, or two modules are tightly coupled to each other
+  action: refactor toward high cohesion and low coupling
+  why: null
+  exception: null
+  tags:
+  - cohesion
+  - coupling
+- id: '5.1'
+  section: Testing
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: you are about to write tests for an isolated function/class
+  action: make it a Unit Test (70-80% of the suite)
+  why: null
+  exception: AVOID touching a real DB, network or filesystem there
+  tags:
+  - testing
+  - unit-test
+- id: '5.2'
+  section: Testing
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: you need to verify that several real components work together (e.g. endpoint + test DB)
+  action: write an Integration Test (15-25% of the suite)
+  why: null
+  exception: null
+  tags:
+  - testing
+  - integration-test
+- id: '5.3'
+  section: Testing
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: you are about to test a complete end-to-end flow
+  action: reserve it for critical business flows only (login, signup, payment)
+  why: null
+  exception: AVOID overusing E2E; they are slow and fragile
+  tags:
+  - testing
+  - e2e
+- id: '5.4'
+  section: Testing
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: you write any test
+  action: structure it as Arrange-Act-Assert
+  why: null
+  exception: null
+  tags:
+  - testing
+  - aaa
+- id: '5.5'
+  section: Testing
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: a unit test depends on an expensive external DB or API
+  action: use a mock/test double instead of the real dependency
+  why: null
+  exception: null
+  tags:
+  - testing
+  - mocks
+- id: '5.6'
+  section: Testing
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: you are asked to set a coverage goal
+  action: aim for 70-85% on business logic
+  why: null
+  exception: AVOID chasing 100%
+  tags:
+  - testing
+  - coverage
+- id: '5.7'
+  section: Testing
+  severity: AVOID
+  primary_flag: null
+  requires: []
+  condition: the code is a throwaway prototype, a one-off script, or a trivial getter/setter
+  action: prioritize tests where they add real business value
+  why: it adds no value
+  exception: AVOID writing tests for throwaway prototypes, one-off scripts, or trivial getters/setters
+  tags:
+  - testing
+  - scope
+- id: '6.1'
+  section: Async Programming
+  severity: MUST
+  primary_flag: public_api
+  requires:
+  - flag: public_api
+    equals: true
+  condition: an async function needs to wait on I/O (DB, API, file)
+  action: use await with the async alternative
+  why: null
+  exception: AVOID blocking sync calls (time.sleep(), requests) inside async code, since they freeze the whole event loop
+  tags:
+  - async
+  - io
+- id: '6.2'
+  section: Async Programming
+  severity: MUST
+  primary_flag: public_api
+  requires:
+  - flag: public_api
+    equals: true
+  condition: you need to make multiple HTTP calls
+  action: reuse a single async HTTP client
+  why: null
+  exception: AVOID creating a new client per request
+  tags:
+  - async
+  - http-client
+- id: '6.3'
+  section: Async Programming
+  severity: SHOULD
+  primary_flag: public_api
+  requires:
+  - flag: public_api
+    equals: true
+  condition: the task is I/O-bound (DB, network, sockets)
+  action: use async/event loop
+  why: null
+  exception: null
+  tags:
+  - async
+  - io
+- id: '6.4'
+  section: Async Programming
+  severity: MUST
+  primary_flag: cpu_intensive
+  requires:
+  - flag: cpu_intensive
+    equals: true
+  condition: the task is CPU-bound (image processing, heavy computation, AI)
+  action: use multiprocessing/threads instead of async
+  why: the event loop does not speed up CPU work
+  exception: null
+  tags:
+  - async
+  - cpu
+  - multiprocessing
+- id: '6.5'
+  section: Async Programming
+  severity: MUST
+  primary_flag: public_api
+  requires:
+  - flag: public_api
+    equals: true
+  condition: you run concurrent tasks with asyncio.gather() (or equivalent)
+  action: handle exceptions inside each coroutine
+  why: null
+  exception: AVOID letting a single failure take down the whole group
+  tags:
+  - async
+  - exceptions
+  - concurrency
+- id: '7.1'
+  section: Memory Management
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: you implement recursion
+  action: guarantee a base case
+  why: null
+  exception: AVOID infinite recursion (Stack Overflow)
+  tags:
+  - memory
+  - recursion
+- id: '7.2'
+  section: Memory Management
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: you create closures inside a for loop sharing one variable
+  action: use let (or the per-iteration equivalent)
+  why: null
+  exception: AVOID having every closure point at the last iteration's value
+  tags:
+  - memory
+  - closures
+- id: '7.3'
+  section: Memory Management
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: you keep an in-memory cache/map
+  action: define a size limit and an expiration policy (TTL/LRU)
+  why: null
+  exception: AVOID unbounded caches
+  tags:
+  - memory
+  - cache
+- id: '7.4'
+  section: Memory Management
+  severity: MUST
+  primary_flag: has_web_ui
+  requires:
+  - flag: has_web_ui
+    equals: true
+  condition: you register a listener/observer on a global or DOM event
+  action: unregister it when no longer needed
+  why: null
+  exception: AVOID memory leaks from orphaned listeners
+  tags:
+  - memory
+  - dom
+  - listeners
+- id: '7.5'
+  section: Memory Management
+  severity: AVOID
+  primary_flag: null
+  requires: []
+  condition: you use class-level static variables to accumulate data
+  action: limit or avoid using static variables to accumulate unbounded data
+  why: they live for the whole process lifetime and grow indefinitely
+  exception: AVOID using them without a limit, since they live for the whole process lifetime and grow indefinitely
+  tags:
+  - memory
+  - static-variables
+- id: '8.1'
+  section: Time Zones, Text & Git
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: you store an event that already happened (past)
+  action: store it in UTC and convert to local time only in the UI
+  why: null
+  exception: null
+  tags:
+  - timezones
+  - utc
+- id: '8.2'
+  section: Time Zones, Text & Git
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: you store a future event (e.g. a scheduled meeting)
+  action: store local time + time zone name (e.g. America/New_York)
+  why: null
+  exception: AVOID storing only a fixed numeric offset (-05:00)
+  tags:
+  - timezones
+- id: '8.3'
+  section: Time Zones, Text & Git
+  severity: MUST
+  primary_flag: has_sql
+  requires:
+  - flag: has_sql
+    equals: true
+  condition: your MySQL database must support emojis
+  action: use the utf8mb4 encoding
+  why: null
+  exception: AVOID legacy utf8 (3 bytes max, truncates 4-byte emojis)
+  tags:
+  - mysql
+  - encoding
+- id: '8.4'
+  section: Time Zones, Text & Git
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: you ran git reset --hard by mistake and lost commits
+  action: use git reflog to recover the previous pointer
+  why: null
+  exception: AVOID re-cloning the repo or panicking
+  tags:
+  - git
+  - recovery
+- id: '9.1'
+  section: Object-Oriented Programming
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: an object's internal data could lead to an invalid business state if freely modified (e.g. bank balance)
+  action: encapsulate it as private and expose controlled methods (deposit(), withdraw())
+  why: null
+  exception: null
+  tags:
+  - oop
+  - encapsulation
+- id: '9.2'
+  section: Object-Oriented Programming
+  severity: AVOID
+  primary_flag: null
+  requires: []
+  condition: you are about to inherit from a class just to reuse functions, with no real is-a relationship
+  action: use composition ('has' instead of 'is') when there is no real semantic relationship
+  why: null
+  exception: AVOID inheriting from a class just to reuse functions without a real 'is-a' relationship
+  tags:
+  - oop
+  - inheritance
+  - composition
+- id: '9.3'
+  section: Object-Oriented Programming
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: client code repeatedly asks what type of object this is with if/switch
+  action: use polymorphism (shared method, per-class behavior)
+  why: null
+  exception: null
+  tags:
+  - oop
+  - polymorphism
+- id: '9.4'
+  section: Object-Oriented Programming
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: you want client code to depend only on the contract, not on internals
+  action: use abstraction (interface) and hide the how behind the what
+  why: null
+  exception: null
+  tags:
+  - oop
+  - abstraction
+- id: '10.1'
+  section: Functional Programming
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: you write a function with no external state dependencies and no side effects
+  action: keep it pure
+  why: it is the easiest to test (same input gives same output)
+  exception: null
+  tags:
+  - functional
+  - purity
+- id: '10.2'
+  section: Functional Programming
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: you need to modify an existing list/object
+  action: prefer returning a new copy (immutability) over mutating the original
+  why: null
+  exception: null
+  tags:
+  - functional
+  - immutability
+- id: '10.3'
+  section: Functional Programming
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: you transform every element of a collection
+  action: use map instead of a manual for loop
+  why: null
+  exception: null
+  tags:
+  - functional
+  - map
+- id: '10.4'
+  section: Functional Programming
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: you filter a collection's elements by a condition
+  action: use filter instead of a manual for loop with if
+  why: null
+  exception: null
+  tags:
+  - functional
+  - filter
+- id: '10.5'
+  section: Functional Programming
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: you fold a collection's elements into a single value
+  action: use reduce with an explicit initial value
+  why: null
+  exception: AVOID omitting it, since it throws a fatal error on an empty list
+  tags:
+  - functional
+  - reduce
+- id: '10.6'
+  section: Functional Programming
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: you need to inject a specific behavior/rule instead of just a value
+  action: use a higher-order function (take or return functions as parameters/results) instead of duplicating nearly identical logic
+  why: null
+  exception: null
+  tags:
+  - functional
+  - higher-order-functions
+- id: '10.7'
+  section: Functional Programming
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: you use map/filter in Python or streams in Java
+  action: remember they are lazy
+  why: null
+  exception: AVOID assuming they already ran; in Python wrap them in list() to materialize, in Java invoke a terminal operation (.collect(), .reduce())
+  tags:
+  - functional
+  - lazy-evaluation
+- id: '11.1'
+  section: API Architecture
+  severity: SHOULD
+  primary_flag: public_api
+  requires:
+  - flag: public_api
+    equals: true
+  condition: you build a resource-oriented public API that needs HTTP caching and simple horizontal scaling
+  action: use REST
+  why: null
+  exception: AVOID this design when clients need highly variable data shapes (over/under-fetching risk)
+  tags:
+  - apis
+  - rest
+- id: '11.2'
+  section: API Architecture
+  severity: SHOULD
+  primary_flag: public_api
+  requires:
+  - flag: public_api
+    equals: true
+  condition: different clients need very different data shapes from the same resources
+  action: use GraphQL
+  why: null
+  exception: MUST limit query depth to prevent abusive nested queries
+  tags:
+  - apis
+  - graphql
+- id: '11.3'
+  section: API Architecture
+  severity: SHOULD
+  primary_flag: public_api
+  requires:
+  - flag: public_api
+    equals: true
+  condition: you connect internal microservices with maximum speed and strict typing
+  action: use gRPC
+  why: null
+  exception: AVOID exposing it directly to browsers or as a public API without a translation proxy
+  tags:
+  - apis
+  - grpc
+- id: '11.4'
+  section: API Architecture
+  severity: SHOULD
+  primary_flag: public_api
+  requires:
+  - flag: public_api
+    equals: true
+  - flag: realtime
+    equals: true
+  condition: you need bidirectional real-time communication (chat, live notifications)
+  action: use WebSockets
+  why: null
+  exception: AVOID using them for one-off/sporadic reads (they waste sockets and memory)
+  tags:
+  - apis
+  - websockets
+  - realtime
+  cross_referenced_by:
+  - realtime
+- id: '11.5'
+  section: API Architecture
+  severity: SHOULD
+  primary_flag: public_api
+  requires:
+  - flag: public_api
+    equals: true
+  condition: you expose an endpoint with a PUT or DELETE method
+  action: guarantee idempotency
+  why: null
+  exception: null
+  tags:
+  - apis
+  - idempotencia
+- id: '11.6'
+  section: API Architecture
+  severity: MUST
+  primary_flag: public_api
+  requires:
+  - flag: public_api
+    equals: true
+  condition: you expose an endpoint with a POST method that creates a resource (e.g. a purchase)
+  action: prevent duplicate retries
+  why: null
+  exception: AVOID assuming retrying a POST is safe, since it can duplicate orders/charges
+  tags:
+  - apis
+  - idempotencia
+  - post
+- id: '12.1'
+  section: Error Handling
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: you are in a low-level utility function and detect a failure
+  action: throw the error
+  why: null
+  exception: AVOID handling it right there; delegate to upper layers
+  tags:
+  - errors
+  - throw
+- id: '12.2'
+  section: Error Handling
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: you rethrow a business error derived from an intermediate one
+  action: attach the original error as the cause
+  why: preserves the stack trace for debugging
+  exception: null
+  tags:
+  - errors
+  - cause
+- id: '12.3'
+  section: Error Handling
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: you catch an exception
+  action: log it, report it to observability (e.g. Sentry), or rethrow it
+  why: null
+  exception: AVOID empty catch blocks
+  tags:
+  - errors
+  - logging
+- id: '12.4'
+  section: Error Handling
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: you are about to catch an exception
+  action: catch the most specific type possible
+  why: null
+  exception: AVOID generic catch (Exception e), since it hides real bugs
+  tags:
+  - errors
+  - types
+- id: '12.5'
+  section: Error Handling
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: you open a resource that must always be closed (DB connection, file, socket, lock)
+  action: 'release it in finally (or the language equivalent: try-with-resources, using, with, defer)'
+  why: an uncaught return/exception can skip the catch, leaving the resource open
+  exception: null
+  tags:
+  - errors
+  - finally
+  - resources
+- id: '12.6'
+  section: Error Handling
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: the language offers automatic resource management (try-with-resources in Java, using in C#, with in Python, defer in Go)
+  action: prefer it over a manual finally
+  why: reduces the risk of forgetting to close the resource
+  exception: null
+  tags:
+  - errors
+  - resources
+- id: '12.7'
+  section: Error Handling
+  severity: AVOID
+  primary_flag: null
+  requires: []
+  condition: you write a return inside a finally block
+  action: let the return value or exception propagate from the try/catch undisturbed
+  why: it silently overwrites any return value or exception coming from the try/catch, hiding the real error
+  exception: 'AVOID writing a return inside a finally block: it silently overwrites any prior value or exception'
+  tags:
+  - errors
+  - finally
+  - common-bug
+- id: '12.8'
+  section: Error Handling
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: the code inside finally can throw its own exception
+  action: handle it right there (nested try/catch)
+  why: null
+  exception: AVOID letting a finally exception replace and hide the try's original exception
+  tags:
+  - errors
+  - finally
+- id: '12.9'
+  section: Error Handling
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: you need to run cleanup without catching or handling the error
+  action: use a try/finally block without catch
+  why: lets the exception propagate intact while guaranteeing resource release
+  exception: null
+  tags:
+  - errors
+  - finally
+- id: '12.10'
+  section: Error Handling
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: different failure types need different handling (validation vs. network vs. business)
+  action: define custom error classes (ValidationError, NetworkError, etc.)
+  why: lets the catch above discriminate by type instead of parsing text messages
+  exception: null
+  tags:
+  - errors
+  - custom-errors
+- id: '12.11'
+  section: Error Handling
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: you program in Go or Rust
+  action: treat the error as an explicit return value (if err != nil, Result<T, E>)
+  why: null
+  exception: AVOID assuming other languages' exception model; every failure point must be checked explicitly
+  tags:
+  - errors
+  - go
+  - rust
+- id: '13.1'
+  section: Security
+  severity: MUST
+  primary_flag: has_sql
+  requires:
+  - flag: has_sql
+    equals: true
+  condition: you build a SQL query with user input
+  action: use parameterized queries (Prepared Statements)
+  why: prevents SQL Injection
+  exception: AVOID concatenating strings, even in an ORM's raw queries
+  tags:
+  - owasp
+  - sql-injection
+  - security
+- id: '13.2'
+  section: Security
+  severity: MUST
+  primary_flag: has_web_ui
+  requires:
+  - flag: has_web_ui
+    equals: true
+  condition: you render user-provided text in the browser
+  action: escape HTML (or let the framework do it)
+  why: null
+  exception: AVOID dangerouslySetInnerHTML/v-html without sanitizing (e.g. DOMPurify) and without CSP
+  tags:
+  - owasp
+  - xss
+  - security
+- id: '13.3'
+  section: Security
+  severity: MUST
+  primary_flag: has_auth
+  requires:
+  - flag: has_auth
+    equals: true
+  - flag: has_web_ui
+    equals: true
+  condition: a backend action mutates data and relies on session cookies
+  action: use SameSite=Strict/Lax + anti-CSRF tokens
+  why: null
+  exception: null
+  tags:
+  - owasp
+  - csrf
+  - security
+- id: '13.4'
+  section: Security
+  severity: MUST
+  primary_flag: has_auth
+  requires:
+  - flag: has_auth
+    equals: true
+  condition: you look up a resource by an ID from the URL/request
+  action: also filter by the current session's owner
+  why: null
+  exception: AVOID trusting the ID alone (IDOR)
+  tags:
+  - owasp
+  - idor
+  - security
+- id: '13.5'
+  section: Security
+  severity: SHOULD
+  primary_flag: has_auth
+  requires:
+  - flag: has_auth
+    equals: true
+  condition: the resource does not belong to the authenticated user
+  action: return 404 instead of 403
+  why: does not confirm to the attacker that the resource exists
+  exception: null
+  tags:
+  - owasp
+  - authorization
+- id: '13.6'
+  section: Security
+  severity: MUST
+  primary_flag: public_api
+  requires:
+  - flag: public_api
+    equals: true
+  condition: an endpoint accepts a POST/PUT body
+  action: use a field safelist
+  why: null
+  exception: 'AVOID mass assignment that could inject role: admin'
+  tags:
+  - owasp
+  - mass-assignment
+  - security
+- id: '13.7'
+  section: Security
+  severity: MUST
+  primary_flag: has_auth
+  requires:
+  - flag: has_auth
+    equals: true
+  condition: you store passwords
+  action: use Bcrypt or Argon2 with salt
+  why: null
+  exception: AVOID MD5/SHA-256 without salt or plain text
+  tags:
+  - owasp
+  - passwords
+  - hashing
+- id: '13.8'
+  section: Security
+  severity: MUST
+  primary_flag: has_auth
+  requires:
+  - flag: has_auth
+    equals: true
+  condition: you expose a login endpoint
+  action: limit attempts per IP and over time (rate limiting)
+  why: null
+  exception: AVOID allowing unlimited attempts that enable brute force
+  tags:
+  - owasp
+  - rate-limiting
+  - security
+- id: '13.9'
+  section: Security
+  severity: SHOULD
+  primary_flag: has_auth
+  requires:
+  - flag: has_auth
+    equals: true
+  condition: you manage session tokens
+  action: use short-lived tokens with renewal (refresh token)
+  why: null
+  exception: AVOID sessions that never expire
+  tags:
+  - owasp
+  - sessions
+  - tokens
+- id: '13.10'
+  section: Security
+  severity: SHOULD
+  primary_flag: has_auth
+  requires:
+  - flag: has_auth
+    equals: true
+  condition: the account guards a critical action (payments, sensitive data, admin permissions)
+  action: require MFA (a second factor) in addition to the password
+  why: null
+  exception: null
+  tags:
+  - owasp
+  - mfa
+  - security
+- id: '14.1'
+  section: Sorting Algorithms
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: you need guaranteed O(N log N) sorting with stability and spare memory
+  action: use Merge Sort
+  why: null
+  exception: null
+  tags:
+  - sorting
+  - merge-sort
+- id: '14.2'
+  section: Sorting Algorithms
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: you need the fastest average speed in place
+  action: use Quicksort with a random pivot or median-of-three
+  why: null
+  exception: AVOID a fixed pivot on nearly sorted lists (degenerates to O(N²))
+  tags:
+  - sorting
+  - quicksort
+- id: '14.3'
+  section: Sorting Algorithms
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: the order among equal elements matters (e.g. sorting by date after sorting by name)
+  action: use a stable algorithm (Merge Sort, Timsort)
+  why: null
+  exception: AVOID standard Quicksort
+  tags:
+  - sorting
+  - stability
+- id: '14.4'
+  section: Sorting Algorithms
+  severity: AVOID
+  primary_flag: null
+  requires: []
+  condition: you are in production
+  action: use the language's native sort (Timsort, Introsort, etc.)
+  why: null
+  exception: AVOID using Bubble Sort in production
+  tags:
+  - sorting
+  - production
+- id: '14.5'
+  section: Sorting Algorithms
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: you sort a small list (under ~30-40 elements) or nearly sorted data
+  action: use Insertion Sort
+  why: nearly O(N) linear in that scenario and simpler than a full Merge/Quicksort
+  exception: null
+  tags:
+  - sorting
+  - insertion-sort
+- id: '16.1'
+  section: Test Coverage
+  severity: AVOID
+  primary_flag: null
+  requires: []
+  condition: you are about to set a strict coverage goal (80-90%)
+  action: treat coverage as one indicator among several, not as the single goal
+  why: Goodhart's Law; it encourages filler tests without assertions
+  exception: AVOID setting a strict coverage goal (80-90%) as the single target (Goodhart's Law encourages filler tests without assertions)
+  tags:
+  - testing
+  - coverage
+- id: '16.2'
+  section: Test Coverage
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: you review a coverage report
+  action: use it as a heat map (what is at 0%), not as a grade
+  why: null
+  exception: null
+  tags:
+  - testing
+  - coverage
+- id: '16.3'
+  section: Test Coverage
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: you want to validate a test suite's real quality
+  action: apply mutation testing
+  why: null
+  exception: null
+  tags:
+  - testing
+  - mutation-testing
+- id: '17.1'
+  section: HTTP Caching
+  severity: SHOULD
+  primary_flag: has_web_ui
+  requires:
+  - flag: has_web_ui
+    equals: true
+  condition: you need a middle ground before investing in name hashing
+  action: use fingerprint validation (ETag)
+  why: the browser asks the server whether the resource changed before reusing the local copy; it saves transfer but still pays the network round-trip
+  exception: null
+  tags:
+  - cache
+  - http
+  - etag
+- id: '17.2'
+  section: HTTP Caching
+  severity: MUST
+  primary_flag: has_web_ui
+  requires:
+  - flag: has_web_ui
+    equals: true
+  condition: you serve static files (JS/CSS)
+  action: include a content hash in the file name and cache them for 1 year
+  why: null
+  exception: null
+  tags:
+  - cache
+  - http
+  - assets
+- id: '17.3'
+  section: HTTP Caching
+  severity: AVOID
+  primary_flag: has_web_ui
+  requires:
+  - flag: has_web_ui
+    equals: true
+  condition: you serve the main HTML
+  action: leave the main HTML uncached (or with a very short cache) so it always points at the current hashed assets
+  why: it is what points at the updated hashed names
+  exception: AVOID caching the main HTML
+  tags:
+  - cache
+  - http
+  - html
+- id: '17.4'
+  section: HTTP Caching
+  severity: AVOID
+  primary_flag: has_web_ui
+  requires:
+  - flag: has_web_ui
+    equals: true
+  condition: a user reports not seeing your changes in production
+  action: fix the server's cache strategy
+  why: null
+  exception: AVOID assuming a local Ctrl+F5 fixes a cache problem reported by another user in production
+  tags:
+  - cache
+  - http
+  - debugging
+- id: '18.1'
+  section: Secrets Management
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: you spot an API key, password or secret in source code
+  action: move it to environment variables or a secrets manager
+  why: null
+  exception: AVOID hardcoding it, even in unreviewed ignored files
+  tags:
+  - secrets
+  - security
+- id: '18.2'
+  section: Secrets Management
+  severity: MUST
+  primary_flag: null
+  requires: []
+  condition: a credential leaked into a repository (even for seconds)
+  action: 'in this order: (1) rotate/revoke the key, (2) audit accesses and logs, (3) clean the Git history'
+  why: null
+  exception: AVOID cleaning history first, since it is merely cosmetic once bots already downloaded it
+  tags:
+  - secrets
+  - incidents
+  - security
+- id: '18.3'
+  section: Secrets Management
+  severity: SHOULD
+  primary_flag: null
+  requires: []
+  condition: you set up a new repository
+  action: keep the platform's secret scanning enabled
+  why: null
+  exception: null
+  tags:
+  - secrets
+  - ci
+schema_version: 2

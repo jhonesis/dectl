@@ -34,6 +34,41 @@ steps:
     cmd: ["cmd=$(grep -A1 '\\[lint\\]' .dec/config/project.toml 2>/dev/null | grep 'command' | cut -d'\"' -f2); if [ -n \"$cmd\" ]; then eval \"$cmd\" 2>&1; elif [ -f Cargo.toml ]; then cargo clippy 2>&1; elif [ -f package.json ]; then npx eslint . 2>&1; else echo 'NO_LINT_COMMAND'; fi"]
 
   - type: action
+    description: Rules pre-triage on added diff lines (suspects only, never blocks)
+    shell: true
+    cmd:
+      - |
+        ADDED=$(git diff --no-color -U0 2>/dev/null | grep -E '^\+[^+]' | sed 's/^\+//' || true)
+        if [ -z "$ADDED" ]; then
+          echo 'RULES_SUSPECT: none (no added lines to triage)'
+          exit 0
+        fi
+        FOUND=0
+        SQL_HITS=$(printf '%s\n' "$ADDED" | grep -iE '(^|[^A-Za-z0-9_])(SELECT|INSERT[[:space:]]+INTO|UPDATE|DELETE[[:space:]]+FROM)([^A-Za-z0-9_]|$).*\+' || true)
+        if [ -n "$SQL_HITS" ]; then
+          printf '%s\n' "$SQL_HITS" | cut -c1-160 | sed 's/^/RULES_SUSPECT: 13.1 concatenated-sql /'
+          FOUND=1
+        fi
+        CATCH_HITS=$(printf '%s\n' "$ADDED" | grep -E 'catch[[:space:]]*\(?[^)]*\)?[[:space:]]*\{[[:space:]]*\}|except.*:[[:space:]]*pass([^A-Za-z0-9_]|$)' || true)
+        if [ -n "$CATCH_HITS" ]; then
+          printf '%s\n' "$CATCH_HITS" | cut -c1-160 | sed 's/^/RULES_SUSPECT: 12.x empty-catch /'
+          FOUND=1
+        fi
+        SECRET_HITS=$(printf '%s\n' "$ADDED" | grep -iE "(password|passwd|secret|api[_-]?key)[[:space:]]*=[[:space:]]*['\"]" || true)
+        if [ -n "$SECRET_HITS" ]; then
+          printf '%s\n' "$SECRET_HITS" | cut -c1-160 | sed 's/^/RULES_SUSPECT: 18.x hardcoded-secret /'
+          FOUND=1
+        fi
+        if [ "$FOUND" -eq 0 ]; then
+          echo 'RULES_SUSPECT: none (3 patterns scanned, no hits)'
+        fi
+        exit 0
+
+  - type: action
+    description: Get review-stage blocking ruleset (§7.1 MUST + AVOID)
+    cmd: ["dectl", "rules", "context", "--stage", "review", "--max-tokens", "2000"]
+
+  - type: action
     description: Show detailed changes
     shell: true
     cmd: ["git diff --stat --no-color 2>/dev/null || echo 'No git repository - skipping diff'"]
@@ -72,14 +107,20 @@ steps:
       ### Lint
       {{step_4_output}}
 
-      ### Change Summary
+      ### Rules Pre-triage (suspects, never a verdict)
       {{step_5_output}}
 
-      ### Change Stats
+      ### Review Ruleset (§7.1 blocking MUST + AVOID)
+      {{step_6_output}}
+
+      ### Change Summary
       {{step_7_output}}
 
+      ### Change Stats
+      {{step_9_output}}
+
       ### Untracked Files
-      {{step_8_output}}
+      {{step_10_output}}
 
   - type: action
     description: Record review in memory
@@ -121,10 +162,83 @@ steps:
 
       ### Diff (first 500 lines):
       ```
+      {{step_8_output}}
+      ```
+
+      ### Rules gate (REQ-rules-007 — blocking only on real risk)
+      Pre-triage suspects (step 5 output):
+      ```
+      {{step_5_output}}
+      ```
+      Active blocking set, stage review (step 6 output):
+      ```
       {{step_6_output}}
       ```
+
+      Your rules tasks:
+      1. **Confirm or discard each `RULES_SUSPECT` with a written motive.**
+         A suspect alone never fails the pipeline.
+      2. **Blocking set (§7.1)**: MUST in `Security`, `Secrets
+         Management` or `Error Handling`, evaluated over the active set
+         (profile + `[rules] disabled` / `severity_override`). A CONFIRMED
+         blocking-set violation — or a CONFIRMED literal AVOID antipattern
+         in the diff — closes with `RULES_GATE: FAIL (ids: ...)`.
+      3. **Design advice** (MUST outside §7.1, SHOULD): warn only, close
+         with `RULES_WARN: <ids> <motive>` and `RULES_GATE: PASS`.
+      4. **No `.dec/rules/`**: the gate is omitted — close with
+         `RULES_GATE: SKIP` and pass.
+      5. A user-accepted blocking violation (explicit exception) is recorded
+         by the documenter in `decisions/` with the rule ID and justification.
+
+      Note: the automated gate step runs next and enforces FAIL on its own
+      when concatenated SQL meets an active 13.1 (has_sql, not disabled or
+      demoted) — the deterministic recall backstop for the model verdict above.
 
       ### Verdict:
       - PASS (spec compliant): `dectl agent run documenter --task "{{task}}" --var task_id={{task_id}}`
       - PASS (ad-hoc, no spec): `dectl agent run documenter --task "{{task}}" --var task_id={{task_id}}`
       - FAIL: Fix issues and re-run: `dectl agent run reviewer --task "{{task}}" --var task_id={{task_id}}`
+
+  - type: action
+    description: Rules gate verdict (FAIL exits 1 like a broken test)
+    shell: true
+    run_always: true
+    cmd:
+      - |
+        if [ ! -d .dec/rules ]; then
+          echo 'RULES_GATE: SKIP (no .dec/rules/ — rules gate omitted, passing)'
+          exit 0
+        fi
+        ADDED=$(git diff --no-color -U0 2>/dev/null | grep -E '^\+[^+]' | sed 's/^\+//' || true)
+        if [ -z "$ADDED" ]; then
+          echo 'RULES_GATE: PASS (no added lines)'
+          exit 0
+        fi
+        SQL_HITS=$(printf '%s\n' "$ADDED" | grep -iE '(^|[^A-Za-z0-9_])(SELECT|INSERT[[:space:]]+INTO|UPDATE|DELETE[[:space:]]+FROM)([^A-Za-z0-9_]|$).*\+' || true)
+        if [ -z "$SQL_HITS" ]; then
+          echo 'RULES_GATE: PASS (no blocking-set suspects in added lines; see review prompt for RULES_WARN)'
+          exit 0
+        fi
+        if grep -Eq '^has_sql[[:space:]]*=[[:space:]]*true([[:space:]]*(#.*)?)?$' .dec/rules/profile.toml 2>/dev/null; then
+          ACTIVE=1
+        else
+          ACTIVE=0
+        fi
+        if [ "$ACTIVE" -eq 0 ]; then
+          echo 'RULES_WARN: SQL-concat suspect but 13.1 not in the active set (has_sql is not true)'
+          echo 'RULES_GATE: PASS (suspect outside the active blocking set)'
+          exit 0
+        fi
+        if sed -n '/disabled[[:space:]]*=/,/]/p' .dec/config/project.toml 2>/dev/null | grep -q '13\.1'; then
+          echo 'RULES_WARN: 13.1 disabled for this project ([rules] disabled)'
+          echo 'RULES_GATE: PASS (13.1 disabled)'
+          exit 0
+        fi
+        OVR=$(grep -E '"13\.1"[[:space:]]*=' .dec/config/project.toml 2>/dev/null || true)
+        if [ -n "$OVR" ] && ! printf '%s' "$OVR" | grep -q 'MUST'; then
+          echo 'RULES_WARN: 13.1 severity overridden (not MUST)'
+          echo 'RULES_GATE: PASS (13.1 demoted by severity_override)'
+          exit 0
+        fi
+        echo 'RULES_GATE: FAIL (ids: 13.1 — concatenated SQL in diff, 13.1 is MUST/Security and active via has_sql)'
+        exit 1

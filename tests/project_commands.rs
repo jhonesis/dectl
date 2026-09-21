@@ -509,4 +509,35 @@ fn test_project_init_standard_creates_sdd_with_bridge() {
         tmp.path().join("AGENTS.md").exists(),
         "AGENTS.md should exist at project root after project init --standard"
     );
+
+    // T005 (REQ-rules-001, REQ-rules-005): universal rules only.
+    let rules_dir = tmp.path().join(".dec/rules");
+    assert!(
+        rules_dir.join("transversal.yaml").is_file(),
+        ".dec/rules/transversal.yaml must exist after project init --standard"
+    );
+    assert!(
+        rules_dir.join("profile.schema.yaml").is_file(),
+        ".dec/rules/profile.schema.yaml must exist after project init --standard"
+    );
+    assert!(
+        !rules_dir.join("profiles").exists(),
+        ".dec/rules/profiles/ must NOT exist after project init --standard"
+    );
+    let transversal = fs::read_to_string(rules_dir.join("transversal.yaml")).unwrap();
+    let doc: serde_yaml::Value = serde_yaml::from_str(&transversal).unwrap();
+    assert_eq!(doc.get("version").and_then(|v| v.as_u64()), Some(2));
+    assert_eq!(
+        doc.get("rules")
+            .and_then(|v| v.as_sequence())
+            .map(|s| s.len()),
+        Some(78),
+        "transversal.yaml must hold the 78 universal rules"
+    );
+
+    // T005: [rules] section in the project.toml template.
+    assert!(
+        toml_content.contains("[rules]"),
+        "project.toml missing [rules] section"
+    );
 }

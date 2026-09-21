@@ -197,6 +197,28 @@ dectl workflow run execute_task --var task_id=T001 --var description="test" --au
 - Updates `.dec/config/project.toml` and `.dec/isa/project.isa.md`
 - Signals the AI model to interview you and generate `specs/` documents
 
+### Development Rules (`rules/`)
+
+Each project gets a set of development rules activated by the app's real
+characteristics (database, API, web UI, auth, realtime, CPU-intensive). The
+catalog (106 rules) ships embedded in the binary — no network or external
+files needed. `project init --standard` writes the universal rules to
+`.dec/rules/`; `spec init` asks 8 yes/no questions once, saves
+`.dec/rules/profile.toml`, and materializes one mirror file per active flag
+plus a readable `active-ruleset.md`. Per-project tweaks live in
+`project.toml` (`[rules] disabled`, `[rules.severity_override]`) with
+explicit errors for unknown IDs.
+
+Agents consume the rules as budgeted context and as a blocking review gate:
+advice warns, only confirmed safety/correctness risk fails. Query a slice
+for any pipeline stage (default budget 2000 tokens):
+
+```bash
+dectl rules list --severity must
+dectl rules context --stage task --files "src/db.rs" --max-tokens 2000
+dectl rules context --stage review --files "src/db.rs"
+```
+
 ## Installation
 
 ### Quick Install (curl)

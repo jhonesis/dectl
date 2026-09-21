@@ -60,6 +60,15 @@ pub fn run(level: InitLevel, project_type: ProjectType, _interactive: bool) -> R
         }
     }
 
+    // Rules subsystem (REQ-rules-001, REQ-rules-005): universal set only.
+    // Direct-write style like the SDD bridge above — `files_for_level`
+    // returns `&'static str` and cannot hold the dynamic transversal output.
+    if matches!(level, InitLevel::Level2 | InitLevel::Level3) {
+        if let Err(e) = crate::rules::materialize::write_project_init_rules(Path::new(".")) {
+            eprintln!("Warning: failed to write rules in .dec/rules/: {}", e);
+        }
+    }
+
     if is_project_empty() {
         if std::io::stdout().is_terminal() {
             handle_empty_project()?;

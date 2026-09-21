@@ -19,6 +19,11 @@ steps:
     cmd: ["cat .dec/agent-output/{{task_id}}-research.md 2>/dev/null || echo 'NO_RESEARCH_CONTEXT'"]
 
   - type: action
+    description: Check task rules context exists
+    shell: true
+    cmd: ["cat .dec/agent-output/{{task_id}}-rules.md 2>/dev/null || echo 'RULES_CONTEXT_MISSING: no task rules context — continue with an absence marker (never abort)'"]
+
+  - type: action
     description: Search memory for implementation patterns
     cmd: ["dectl", "memory", "search", "--json", "{{task}}"]
 
@@ -42,14 +47,17 @@ steps:
       ### Research Context
       {{step_1_output}}
 
-      ### Memory Patterns
+      ### Task Rules Context
       {{step_2_output}}
 
-      ### Project Conventions
+      ### Memory Patterns
       {{step_3_output}}
 
-      ### Recent Git Changes
+      ### Project Conventions
       {{step_4_output}}
+
+      ### Recent Git Changes
+      {{step_5_output}}
 
   - type: prompt
     description: Implementation brief
@@ -60,7 +68,9 @@ steps:
       ### Before coding, read:
       1. `.dec/agent-output/{{task_id}}-coder-context.md` — full implementation context
       2. `.dec/agent-output/{{task_id}}-research.md` — research findings (if exists)
-      3. `.dec/config/project.toml` — stack, build command, conventions
+      3. `.dec/agent-output/{{task_id}}-rules.md` — task rules context (REQ-rules-008);
+         if absent, continue with a `RULES_CONTEXT_MISSING` marker (never abort)
+      4. `.dec/config/project.toml` — stack, build command, conventions
 
       ### Implementation rules:
       - Follow existing code patterns found in the research context
