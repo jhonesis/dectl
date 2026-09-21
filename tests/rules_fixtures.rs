@@ -5,8 +5,11 @@
 //!   samples `project init --standard` output; the other three sample what
 //!   `spec init` materializes for those flags (never `project init`, which
 //!   never touches `profiles/`).
-//! - `rules/profiles/` holds the full reference output of
-//!   `rules/partition_rules.py` (= materialization with an all-true profile).
+//! - `tests/fixtures/rules/reference/` holds a committed copy of the full
+//!   reference output of `rules/partition_rules.py` (= materialization with
+//!   an all-true profile). It lives in-repo (not in `../rules/profiles`,
+//!   which only exists in the outer big-project layout) so CI sees it.
+//!   Regenerate with the script and copy over when the catalog changes.
 //!   These tests validate that reference the same way `--check` does:
 //!   78 + 3 + 6 + 7 + 11 + 1 = 106 canonical rules, 0 duplicated IDs, and
 //!   `realtime` as reference-only (`11.4` lives in `public_api.yaml`).
@@ -24,13 +27,10 @@ fn fixtures_dir() -> PathBuf {
     crate_dir().join("tests").join("fixtures").join("rules")
 }
 
-/// `<repo>/rules/profiles/` — full reference output of `partition_rules.py`.
+/// `tests/fixtures/rules/reference/` — committed copy of the full
+/// partition output (in-repo so CI and fresh clones see it).
 fn reference_profiles_dir() -> PathBuf {
-    crate_dir()
-        .parent()
-        .expect("dectl/ must have a parent (repo root)")
-        .join("rules")
-        .join("profiles")
+    fixtures_dir().join("reference")
 }
 
 fn parse_yaml_docs(path: &std::path::Path) -> Vec<serde_yaml::Value> {
