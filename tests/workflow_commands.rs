@@ -256,9 +256,13 @@ fn execute_task_workflow_has_run_always_on_steps_4_and_5() {
 
 #[test]
 fn execute_task_implementation_prompt_matches_embedded_template() {
+    let tmp = TempDir::new().unwrap();
+    init_project(&tmp);
+    let workflow_path = tmp.path().join(".dec/workflows/execute_task.yaml");
+    let project_content = std::fs::read_to_string(&workflow_path)
+        .unwrap_or_else(|e| panic!("Failed to read {}: {}", workflow_path.display(), e));
     let project_workflow: Workflow =
-        serde_yaml::from_str(include_str!("../../.dec/workflows/execute_task.yaml"))
-            .expect("project workflow should be valid YAML");
+        serde_yaml::from_str(&project_content).expect("project workflow should be valid YAML");
     let embedded_template: Workflow = serde_yaml::from_str(include_str!(
         "../src/project/templates/txt/workflow_execute_task.yaml"
     ))

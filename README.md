@@ -2,9 +2,6 @@
 
 > A model-agnostic developer life OS that gives any AI coding environment persistent memory, executable workflows, and structured project context.
 
-> **The anchor moment**: Open a legacy project you haven't touched in months,
-> run `dectl project init --standard`, open your AI, and the model already
-> understands the project's architecture. No explanations. No setup.
 
 ```bash
 # 1. Install dectl (macOS, Linux, WSL)
@@ -22,9 +19,6 @@ dectl project init --standard
 # → The model already has all the context. It responds without you explaining anything.
 ```
 
-<div style="text-align:center">
-  <img src="output.gif" alt="dectl in action" width="700">
-</div>
 
 *No external APIs. No telemetry. No manual configuration.*
 
