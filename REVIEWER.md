@@ -1,163 +1,78 @@
-# dectl — Reviewers Guide
+# dectl — Reviewer Guide
 
-Thanks for checking out dectl! This guide helps you record a review in under 30 minutes.
+This guide is for an independent, hands-on review of dectl's agent-led project workflow. Please report what you observe, including friction or failures; no particular verdict is expected.
 
----
+## What You Will Review
 
-## What is dectl?
+The demo follows one small project from a developer brief to reviewed implementation:
 
-dectl is a **model-agnostic developer life OS**. A single 4.5MB Rust binary that gives any AI coding environment three things:
+1. The AI agent completes a project specification from a brief and asks clarifying questions.
+2. The agent creates specs using the project's SDD skill, templates, examples, and rules.
+3. The developer reviews and approves the specs and task list.
+4. The agent implements one approved task through dectl's task workflow.
+5. Build, tests, lint, review output, task state, and a local preview make the result inspectable.
 
-- **Persistent memory** — SQLite with WAL mode, tag-based search, per-project filtering
-- **Executable workflows** — YAML-defined pipelines with variables, dry-run, and step recovery
-- **Structured project context** — the `.dec/` directory system that any AI model reads instantly
+The developer supplies information and approves decisions. The agent drafts specs and code. dectl prepares project context, coordinates workflow steps, runs configured checks, and records workflow artifacts.
 
-No proprietary API. No telemetry. Zero network dependencies for core functionality. MIT license.
+## Requirements
 
----
+- `dectl` installed and available on `PATH`
+- Node.js 18 or newer and npm
+- Network access to the npm registry for the sample app dependencies
+- An AI coding environment that can read and edit workspace files and run terminal commands
 
-## Why it's unique
+## Prepare the Demo
 
-- **Model-agnostic**: works with Claude, Gemini, ChatGPT, Ollama, Qwen, Phi — or a human in a terminal
-- **Local-first**: zero cloud dependencies, no vendor lock-in, no data leaves your machine
-- **4 built-in agents**: researcher → coder → reviewer → documenter pipeline with `next_step_hint`
-- **Session management**: `dectl session end` captures git changes, decisions, config diffs in one command
-- **SDD Spec Generator**: generates 5 artifacts (constitution, spec, requirements, research, tasks) from one command
-- **Auto-detect stack**: scans any project directory and auto-fills `.dec/` context on init
-- **One static binary**: ~4.5MB, no Electron, no runtime dependencies, no JS
-- **AI-first by design**: when opened in a conversational IDE (like opencode, Claude Code, Gemini CLI), the model runs `dectl project info --json` automatically and understands the full project — stack, architecture, decisions, next steps — without any manual context loading
-
----
-
-## Preparation (before recording)
+Use a new, disposable folder. The script creates the project beside itself, so do not run it from a real project or a directory with existing demo files.
 
 ```bash
-# 1. Install dectl
-curl -fsSL https://raw.githubusercontent.com/jhonesis/dectl/main/scripts/install.sh | bash
-
-# 2. Verify it works
+mkdir -p ~/dectl-review-demo
+cd ~/dectl-review-demo
+curl -fsSL https://raw.githubusercontent.com/jhonesis/dectl/main/scripts/dectl-demo.sh -o dectl-demo.sh
+chmod +x dectl-demo.sh
 dectl --version
-
-# 3. (Optional) Run the auto-demo script
-bash <(curl -fsSL https://raw.githubusercontent.com/jhonesis/dectl/scripts/dectl-demo.sh)
 ```
 
-You'll also want a non-empty project to demo `project init --standard`. Any Rust, TypeScript, Python, or Go project works — dectl auto-detects the stack.
-
----
-
-## 3 Demos for your video
-
-### Demo 1 — Quick start (2 minutes)
-
-Show how fast a new developer gets started:
+Open `~/dectl-review-demo` as the workspace in your AI coding environment. Run the bootstrap and activate the isolated dectl home in its integrated terminal:
 
 ```bash
-# Init a project with full context
-dectl project init --full
-
-# See what was created
-ls -la .dec/
-
-# Show project summary
-dectl project info --json
+./dectl-demo.sh
+source ./.dectl-demo-env.sh
 ```
 
-**What to highlight**: The `.dec/` directory structure is created in milliseconds. The AI auto-fills framework detection, language stack, and project description. Compare this to manually writing context files.
+The script runs `dectl project init --standard`, creates a React/Vite starter with Tailwind and shadcn/ui conventions, installs npm dependencies, and writes `.dectl-demo-guide.md`. The guide leads the agent through the rest of the walkthrough in the same workspace. `.dectl-demo-home/` keeps this demo's dectl database and trust settings separate from your normal home directory.
 
-### Demo 2 — Memory in action (3 minutes)
+Ask your agent to read and follow `.dectl-demo-guide.md`. It will complete `specifications.md` from `brief.md`, ask questions, and show you the completed specification. **Review and approve that file before the agent runs `dectl spec init`.** Review and approve `specs/tasks.md` before implementation.
 
-Show persistent memory across sessions:
+## What to Observe
 
-```bash
-# Add context
-dectl memory add "This project uses Rust with Axum for HTTP and SQLite for storage" --tags architecture
+- Does the agent ask for missing portfolio details instead of inventing personal or client information?
+- Is the completed `specifications.md` presented for approval before spec generation?
+- Are the generated specs and task breakdown clear enough to review and approve?
+- Does `execute_task` keep implementation focused on the approved task and prepare understandable context?
+- Do the configured `npm run build`, `npm test`, and `npm run lint` checks actually pass? Note the output; do not infer success from a summary alone.
+- Does the final page show a responsive navbar, hero, portfolio/work section, About Us section, and footer? Is it readable and usable on mobile and desktop?
+- Does the task state agree with the actual review result?
 
-# Add decision
-dectl memory add "Chose Axum over Actix for simpler middleware" --tags decisions
+After a passing review, the guide starts the preview server. Open `http://localhost:5173` in the environment's browser or preview and inspect the rendered page.
 
-# Search later
-dectl memory search "architecture"
+## Feedback
 
-# Show all memories
-dectl memory list --limit 10
-```
+Please include:
 
-**What to highlight**: The anchor moment — open a project months later, run `dectl memory search`, and the AI already understands architecture decisions. No re-explaining.
+- AI environment/model and operating system
+- Setup time and any installation or workspace friction
+- Which step was clearest and which was confusing
+- Whether the brief, specs, and approved task matched your expectations
+- Build, test, lint, and reviewer results, including errors
+- What you thought of the generated page at desktop and mobile widths
+- Whether you would use this workflow on another project, and what would make it unsuitable
 
-### Demo 3 — Workflow + Agents (4 minutes)
-
-Show the automation pipeline:
-
-```bash
-# List available workflows
-dectl workflow list
-
-# Run a workflow in dry-run mode (safe preview)
-dectl workflow run execute_task --var task_id=42 --dry-run
-
-# List built-in agents
-dectl agent list
-
-# Run an agent in dry-run mode
-dectl agent run researcher --task "Analyze project structure" --dry-run
-
-# Run the full SDD pipeline
-dectl workflow run execute_task --var task_id=42 --description="Add user authentication" --auto
-```
-
-**What to highlight**: The trust system (auto-prompt on first action step), `--dry-run` for safe previews, and how `--auto` enables CI/CD pipelines. The runner shows exactly which step is executing and what comes next.
-
-### Demo 4 — AI reads context automatically (2 minutes)
-
-This is the **key differentiator**. Show how the AI model understands the project without any manual explanation:
-
-```bash
-# After dectl project init, open the project in any conversational IDE
-# The AI model runs this automatically:
-dectl project info --json
-
-# The model sees: stack, frameworks, description, decisions, next steps
-# No need to tell the AI "this is a Rust project with Axum" — it already knows
-```
-
-**What to highlight**: This is the "invisible integration" — the AI reads `.dec/` context automatically via `project info --json` at session start. The developer doesn't upload files, doesn't write system prompts, doesn't re-explain. Open the project and the model already understands everything.
-
----
-
-## What to highlight in your review
-
-| Angle | Hook | Why it works |
-|-------|------|-------------|
-| **"It's just files and a binary"** | Model-agnostic philosophy | Devs are tired of vendor lock-in |
-| **The anchor moment** | Open a legacy project months later | Relatable pain: lost context |
-| **Session automation** | `session end` saves hours | Manual bookkeeping is a universal pain |
-| **4.5MB vs Electron** | No runtime, no JS, no bloat | Performance-conscious devs |
-| **SDD workflow** | From idea to documentation in one command | Resonates with builders |
-
----
-
-## Target audience for your video
-
-Your viewers will love dectl if they:
-
-- Code with AI assistants and re-explain context each session
-- Maintain multiple projects and lose track of decisions
-- Care about local-first, privacy-preserving tools
-- Appreciate well-crafted CLI tools in Rust
-- Want reproducible dev environments without Docker
-
----
+Do not add personal memory entries to your normal environment for this review; the demo's `.dectl-demo-home/` is isolated. Keep or remove the whole disposable folder when finished. Stop the local preview server before cleanup.
 
 ## Resources
 
-- **Landing**: https://dectl.dev
-- **GitHub**: https://github.com/jhonesis/dectl
-- **Documentation**: https://deepwiki.com/jhonesis/dectl
-- **Install script**: `curl -fsSL https://raw.githubusercontent.com/jhonesis/dectl/scripts/install.sh | bash`
-- **Auto-demo script**: `bash <(curl -fsSL https://raw.githubusercontent.com/jhonesis/dectl/scripts/dectl-demo.sh)`
-- **Contact**: jhonesis@proton.me (questions, early access, collab)
-
----
-
-*Questions? Feedback? Found a bug? Open an issue on GitHub or email directly. Happy to jump on a quick call if you need clarifications for your review.*
+- Landing page: https://dectl.4udev.download
+- GitHub: https://github.com/jhonesis/dectl
+- Documentation: https://deepwiki.com/jhonesis/dectl
+- Contact: contact@4udev.download

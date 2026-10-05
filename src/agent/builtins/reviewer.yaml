@@ -195,9 +195,11 @@ steps:
       demoted) — the deterministic recall backstop for the model verdict above.
 
       ### Verdict:
-      - PASS (spec compliant): `dectl agent run documenter --task "{{task}}" --var task_id={{task_id}}`
-      - PASS (ad-hoc, no spec): `dectl agent run documenter --task "{{task}}" --var task_id={{task_id}}`
-      - FAIL: Fix issues and re-run: `dectl agent run reviewer --task "{{task}}" --var task_id={{task_id}}`
+      State an explicit `REVIEW_VERDICT: PASS` only when spec review, build, tests,
+      lint, and rules checks pass with no unresolved blocker. Otherwise state
+      `REVIEW_VERDICT: FAIL`, identify the blocker, and request correction/re-review.
+      The task workflow records this verdict before the state hard gate; do not
+      instruct the documenter to complete a failed task.
 
   - type: action
     description: Rules gate verdict (FAIL exits 1 like a broken test)

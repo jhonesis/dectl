@@ -7,6 +7,10 @@ inputs:
   - name: description
     description: "Task description"
     required: true
+  - name: step_4_output
+    description: "Reviewer agent execution result (populated by the workflow)"
+    required: false
+    default: ""
 steps:
   - type: agent
     description: "Investigate context and relevant memory for the task"
@@ -62,31 +66,74 @@ steps:
     description: "Final verification - check state files are synced"
     run_always: true
     content: |
-      ## FINAL VERIFICATION — Do these 3 checks NOW:
+      ## FINAL REVIEW AND STATE VERIFICATION
 
-      1. **progress.json**: Read `.dec/state/progress.json`
-         → Should show an entry with `id: "{{task_id}}"` and `status: "done"`, and `updated_at` updated.
-      2. **last_session.md**: Read `.dec/state/last_session.md`
-         → Should show {{task_id}} under the completed-tasks section.
-       3. **tasks.md (only if it exists)**: Run `find . -name tasks.md -type f | head -5`
-         → If a tasks.md exists AND it lists {{task_id}}, that task must be checked `[x]`.
-         → If there is no tasks.md, or {{task_id}} is not listed there, this check is satisfied.
+      Review the reviewer analysis and command results from this workflow. The
+      documenter must have written `.dec/agent-output/{{task_id}}-review-status.txt`
+      with exactly `PASS` or `FAIL` on its first line. Missing or ambiguous status
+      is `FAIL`.
 
-      If ANY check fails, fix it before ending the session.
+      Reviewer agent execution result from step 4:
+      ```
+      {{step_4_output}}
+      ```
+      If step 4 reports an agent failure or timeout, the verdict MUST be `FAIL`,
+      even if no review report was produced. A successful documenter does not
+      override a failed reviewer.
+
+      - `PASS` only when spec review, build, tests, lint, and the rules gate all
+        pass (a rules gate `SKIP` is acceptable when no rules are configured).
+      - `FAIL` if any required check fails, the reviewer identifies an unresolved
+        blocker, or the verdict is uncertain.
+
+      For `PASS`, ensure `progress.json` is `done`, `last_session.md` records the
+      task as completed, and the matching `tasks.md` checkbox is `[x]` when listed.
+      Add a completion memory entry.
+
+      For `FAIL`, ensure `progress.json` is `in_progress`, `last_session.md`
+      records an attempt and its review failure, and the matching `tasks.md`
+      checkbox remains `[ ]` when listed. Preserve the review report and attempt
+      artifacts. Do not add a completion memory entry.
+
+      After the status file and state agree, resume the workflow to run its hard
+      gate:
+        dectl workflow run execute_task --var task_id={{task_id}} --var description="{{description}}" --from-step 7 --auto
 
   - type: action
-    description: "Hard gate: verify state files are synced"
+    description: "Hard gate: verify review verdict and state agree"
     shell: true
     run_always: true
     cmd:
       - |
-        P=.dec/state/progress.json; S=.dec/state/last_session.md; T='{{task_id}}'; ok=0
-        grep -qiF "\"id\": \"$T\"" "$P" 2>/dev/null && grep -qi '"status": "done"' "$P" 2>/dev/null && ok=$((ok+1))
-        grep -qiF "$T" "$S" 2>/dev/null && ok=$((ok+1))
-        TM=$(find . -name tasks.md -type f 2>/dev/null | head -5)
-        if [ -z "$TM" ] || ! grep -qiF "[$T]" $TM 2>/dev/null; then
-          ok=$((ok+1))
-        elif grep -iF "[$T]" $TM 2>/dev/null | grep -q "\[x\]"; then
-          ok=$((ok+1))
+        P=.dec/state/progress.json; S=.dec/state/last_session.md; T='{{task_id}}'
+        R=".dec/agent-output/${T}-review-status.txt"
+        REVIEW_STATUS=$(sed -n '1p' "$R" 2>/dev/null || true)
+        PROGRESS_STATUS=$(awk -v id="$T" 'BEGIN { RS="}" } $0 ~ ("\"id\"[[:space:]]*:[[:space:]]*\"" id "\"") { if ($0 ~ /"status"[[:space:]]*:[[:space:]]*"done"/) print "done"; else if ($0 ~ /"status"[[:space:]]*:[[:space:]]*"in_progress"/) print "in_progress"; else print "other"; exit }' "$P" 2>/dev/null)
+        TM=$(find . -name tasks.md -type f -not -path '*/node_modules/*' -not -path '*/target/*' -not -path '*/.git/*' 2>/dev/null | head -5)
+        TASK_STATE=not_listed
+        for F in $TM; do
+          LINE=$(grep -E "^[[:space:]]*- \[[ x]\] \[$T\]" "$F" 2>/dev/null | head -1 || true)
+          if [ -n "$LINE" ]; then
+            case "$LINE" in *"- [x]"*) TASK_STATE=done ;; *"- [ ]"*) TASK_STATE=pending ;; esac
+            break
+          fi
+        done
+
+        if [ "$REVIEW_STATUS" = "PASS" ]; then
+          [ "$PROGRESS_STATUS" = "done" ] || { echo STATE_MISSING: progress is not done; exit 1; }
+          grep -qiF "$T" "$S" 2>/dev/null || { echo STATE_MISSING: session entry; exit 1; }
+          [ "$TASK_STATE" != "pending" ] || { echo STATE_MISSING: task checkbox; exit 1; }
+          echo STATE_OK
+          exit 0
         fi
-        if [ "$ok" -eq 3 ]; then echo STATE_OK; else echo STATE_MISSING; exit 1; fi
+
+        if [ "$REVIEW_STATUS" = "FAIL" ]; then
+          [ "$PROGRESS_STATUS" = "in_progress" ] || { echo STATE_MISMATCH: failed task must remain in_progress; exit 1; }
+          grep -qiF "$T" "$S" 2>/dev/null || { echo STATE_MISSING: attempt entry; exit 1; }
+          [ "$TASK_STATE" != "done" ] || { echo STATE_MISMATCH: failed task is checked; exit 1; }
+          echo REVIEW_FAIL_TASK_PENDING
+          exit 1
+        fi
+
+        echo REVIEW_STATUS_MISSING_OR_INVALID
+        exit 1

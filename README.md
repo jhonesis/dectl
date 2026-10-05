@@ -38,6 +38,82 @@ Every AI coding assistant (Claude Code, Gemini CLI, Qwen CLI, Ollama, or a human
 
 **dectl** solves this by creating a structured `.dec/` directory that persists project knowledge between sessions—without requiring any specific AI model or provider.
 
+## Try the Reviewer Demo
+
+Run the demo from a new folder dedicated to this test. Open that folder in your
+AI coding environment and keep the demo, agent, and project in the same workspace.
+The script creates the sample project beside itself and keeps dectl's database,
+trust settings, and config in `.dectl-demo-home/` inside the test folder. The
+demo also installs its React/Tailwind dependencies, so Node.js 18+, npm, and
+network access to the npm registry are required.
+
+```bash
+mkdir -p ~/dectl-review-demo
+cd ~/dectl-review-demo
+curl -fsSL https://raw.githubusercontent.com/jhonesis/dectl/main/scripts/dectl-demo.sh -o dectl-demo.sh
+chmod +x dectl-demo.sh
+```
+
+Open `~/dectl-review-demo` as the workspace in your AI coding environment. In
+its integrated terminal, run:
+
+```bash
+./dectl-demo.sh
+source ./.dectl-demo-env.sh
+```
+
+Then ask the agent to read and follow `.dectl-demo-guide.md`. It guides the agent
+through specs, your review of the task list, one task implementation, and workflow
+review in this same workspace. Use a fresh folder for each run; the script stops
+without overwriting demo files from an earlier run.
+
+## Daily development cycle
+
+Most days with dectl follow the same loop: you describe the work, the AI agent
+turns it into reviewed specs, then implements one small task at a time with
+verification. Three actors share the work — **you** decide, the **AI agent**
+drafts and codes, and **dectl** executes, verifies, and remembers.
+
+| # | Actor | What happens | Command |
+|---|-------|--------------|---------|
+| 1 | **You** | Describe the project in `specifications.md` (template generated at the project root) | Fill in `specifications.md` |
+| 2 | **AI agent + dectl** | Agent asks clarifying questions, then creates `specs/` (constitution, spec, requirements, plan, tasks) | `dectl spec init --from specifications.md` |
+| 3 | **You** | Review `specs/tasks.md`, approve or reorder the task list | Read `specs/tasks.md` |
+| 4 | **AI agent + dectl** | Agent researches, you implement at the pause, dectl reviews (build + test + lint + spec compliance) and documents | `dectl workflow run execute_task --var task_id=T001 --var description="..." --auto` |
+| 5 | **dectl** | Progress, session notes, and decisions persist for the next session | `dectl session end` |
+
+Concrete walkthrough (isolated scratch project, nothing touches your real memory):
+
+```bash
+# You: start an isolated project and describe the work
+mkdir /tmp/dectl-demo && cd /tmp/dectl-demo
+dectl project init --standard
+# → writes .dec/ + specifications.md template at the root
+# Fill in specifications.md with your project brief.
+
+# AI agent + dectl: agent clarifies open questions, then writes specs/
+dectl spec init --from specifications.md
+# → specs/ with constitution, spec (REQ-00X), requirements, plan, tasks
+
+# You: review the task list before any code is written
+cat specs/tasks.md
+# → approve, reorder, or drop tasks
+
+# AI agent + dectl: implement and review one task through the pipeline
+dectl workflow run execute_task --var task_id=T001 --var description="First task from tasks.md" --auto
+# → researcher gathers context, coder prepares the brief, then PAUSES
+# You implement the change with your editing tools, then resume:
+dectl workflow run execute_task --var task_id=T001 --var description="First task from tasks.md" --from-step 4 --auto
+# → reviewer builds, tests, lints, checks spec compliance; documenter records the outcome
+```
+
+Outcome of one loop: one task from `tasks.md` implemented, reviewed against its
+acceptance criteria, and recorded in memory and progress state — ready for the
+next session to continue without re-explanation.
+
+Everything below — the full capability inventory and command reference — stays
+discoverable when you need a specific command.
+
 ## Features
 
 ### Persistent Memory with Structured Types
@@ -185,7 +261,7 @@ dectl workflow run execute_task --var task_id=T001 --var description="test" --au
 - Auto-creates 3 embedded templates:
   - **SKILL.md** — SDD workflow: 8 interview questions, clarification phase, adversarial agent pattern (Coordinator/Implementer/Verifier), model tiering, WHAT vs HOW enforcement, memory integration
   - **templates.md** — 9 document templates per project type (spec, architecture, tasks, API, data, auth, deployment, testing, monitoring), edge case catalog, purity boundaries, drift detection
-  - **examples.md** — 5 reference implementations (CLI logsnap, API SnippetVault, brownfield LegacyPay, EDA EventStream, Next.js 14 HabitStack)
+  - **examples.md** — 2 worked examples: TaskFlow (STANDARD tier, base 9-document flow) and LedgerPay funds transfer (CRITICAL tier, threat-model, compliance-matrix, risk-register)
 - `dectl spec add <name> [--scope feature|module] [--from <path>]` — **add features and modules to existing specs** via the `spec_writer` agent:
   - **feature mode**: appends requirements and tasks to root `specs/spec.md` and `specs/tasks.md`
   - **module mode**: creates `specs/<name>/` with 6 SDD documents (constitution, spec, requirements, research, plan, tasks)
@@ -518,7 +594,7 @@ CLOSE
     syncs config, reports agent activity)
 ```
 
-### Architecture v2 — Foundation (Phase 1) ✅
+### Architecture — Foundation (Phase 1) ✅
 
 The first architectural improvement phase introduces four infrastructure upgrades that improve performance, debuggability, and extensibility:
 
@@ -529,7 +605,7 @@ The first architectural improvement phase introduces four infrastructure upgrade
 | **Output trait pattern** | `OutputFormat` trait with `HumanFormat`/`JsonFormat` strategies | New output formats require zero changes to command code; single envelope format across all commands |
 | **Thread pool with timeout** | Bounded pool (size = `available_parallelism`) with `with_timeout()` | Prevents unlimited thread spawning; deterministic timeout kills hung agents and logs the failure |
 
-### Architecture v2 — Code Quality (Phase 2) ✅
+### Architecture — Code Quality (Phase 2) ✅
 
 Phase 2 eliminates inconsistency layers that accumulated across 14 modules and makes every error actionable:
 
@@ -540,7 +616,7 @@ Phase 2 eliminates inconsistency layers that accumulated across 14 modules and m
 | **Storage trait (DI)** | `Storage` trait with `RealStorage` (SQLite) and `InMemoryStorage` (HashMap) implementations | Tests run 3x faster for memory logic; production behavior is identical |
 | **Actionable error hints** | Every user-facing error includes a next-step hint | In human mode: `Error: Workflow 'foo' not found (Run \`dectl workflow list\` to see available workflows)`. In `--json`: the `hint` field appears in the error envelope — the AI model receives the corrective action directly |
 
-### Architecture v2 — Agent & Workflow (Phase 3) ✅
+### Architecture — Agent & Workflow (Phase 3) ✅
 
 Phase 3 upgrades workflow orchestration with a proper template engine, step-level diagnostics, conditional execution, and configurable timeouts:
 
@@ -551,7 +627,7 @@ Phase 3 upgrades workflow orchestration with a proper template engine, step-leve
 | **Conditional steps** | `skip_if: "{{expression}}"` skips execution when truthy (`true`/`1`/`yes`) | One workflow handles multiple scenarios: `skip_if: "{{#if no_code}}true{{/if}}"` skips the coder step when no code changes are needed |
 | **Per-step timeout** | `timeout_secs: N` per step via bounded thread pool with `with_timeout()` | Hung commands (infinite loops, network waits) are killed automatically — no more blocked workflows |
 
-### Architecture v2 — New Features (Phase 4) ✅
+### Architecture — New Features (Phase 4) ✅
 
 Phase 4 adds five missing features that fill critical gaps in the developer workflow — diagnostics, automation, data safety, portability, and live monitoring:
 
@@ -563,7 +639,7 @@ Phase 4 adds five missing features that fill critical gaps in the developer work
 | **Memory export/import** | `dectl memory export <path> [--format json|jsonl]` and `dectl memory import <path>` with automatic dedup (by content + timestamp) | Backup your knowledge base, migrate between projects, share context with teammates |
 | **Project watch** | `dectl project watch [--interval N]` polls and diffs the file tree every N seconds | See file changes in real time without re-running `scan` — ideal for long sessions |
 
-### Architecture v2 — UX/DX Polish (Phase 5) ✅
+### Architecture — UX/DX Polish (Phase 5) ✅
 
 Phase 5 transforms dectl from purely functional to delightful — visual feedback, interactive selection, editor resilience, consistent styling, and immediate input validation:
 
@@ -753,15 +829,12 @@ If a command is not applicable to your project, leave it empty or omit the secti
 
 ```bash
 cd dectl
-cargo test        # Run all tests (163 passing)
+cargo test        # Run all tests (250+ passing)
 cargo fmt         # Format code
 cargo clippy      # Lint clean (0 warnings)
-cargo build --release  # Build binary (~5.8MB)
+cargo build --release  # Build binary (~6.1MB)
 ```
 
-## Contributing
-
-See `specs/` for architecture and implementation details.
 
 ## License
 

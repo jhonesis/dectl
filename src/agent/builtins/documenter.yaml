@@ -11,7 +11,7 @@ requires:
 context_files:
   - ".dec/config/project.toml"
   - ".dec/state/progress.json"
-next_step_hint: "Task cycle complete. Verify: dectl memory search {{task_id}} --json"
+next_step_hint: "Review the workflow verdict for {{task_id}}; only a PASS closes the task."
 steps:
   - type: action
     description: Read review results
@@ -29,20 +29,20 @@ steps:
     cmd: ["date -u '+%Y-%m-%dT%H:%M:%SZ'"]
 
   - type: action
-    description: Save implementation record to memory
-    cmd: ["dectl", "memory", "add", "Task {{task_id}} completed: {{task}}", "--tags", "implementation,completed,{{task_id}}"]
+    description: Save task attempt to memory before review verdict
+    cmd: ["dectl", "memory", "add", "Task attempt {{task_id}}: {{task}} — final review verdict pending; see .dec/agent-output/{{task_id}}-*", "--tags", "implementation,attempt,{{task_id}}"]
 
   - type: action
-    description: Save technical decisions to memory
-    cmd: ["dectl", "memory", "add", "Decision for {{task_id}}: Implementation approach for {{task}} — see .dec/agent-output/{{task_id}}-* for details", "--tags", "decision,{{task_id}}"]
+    description: Save implementation notes for the task attempt
+    cmd: ["dectl", "memory", "add", "Implementation notes for attempt {{task_id}}: {{task}} — see .dec/agent-output/{{task_id}}-*", "--tags", "implementation,attempt,{{task_id}}"]
 
   - type: write
     description: Write task completion summary
     path: ".dec/agent-output/{{task_id}}-summary.md"
     content: |
-      # Task Completion: {{task_id}}
+      # Task Cycle Attempt: {{task_id}}
       ## Description: {{task}}
-      ## Completed: {{step_3_output}}
+      ## Recorded: {{step_3_output}}
 
       ### Review Results
       {{step_1_output}}
@@ -73,14 +73,24 @@ steps:
       - Memory updated with technical decisions
       - Task summary written to `.dec/agent-output/{{task_id}}-summary.md`
 
-       ### Your documentation tasks:
-       1. **Update progress.json** — mark this task as `done` in `.dec/state/progress.json`
-          ```json
-          { "id": "{{task_id}}", "status": "done", "description": "{{task}}" }
-          ```
-       2. **Update tasks.md** (only if it exists AND lists {{task_id}}) — change `[ ]` to `[x]` for task {{task_id}} in the relevant `tasks.md`; otherwise SKIP
-       3. **Add decision file** (if architectural) — write `.dec/decisions/{{task_id}}-<name>.md`
-       4. **Update last_session.md** — add {{task_id}} to the completed tasks list
+       ### Required verdict file
+       Review the reviewer analysis, spec findings, build/test/lint outputs, and rules gate.
+       Write `.dec/agent-output/{{task_id}}-review-status.txt` with exactly `PASS` or
+       `FAIL` on its first line; include a brief reason on following lines.
+       Use `PASS` only if all required checks pass and no blocker remains. Any failed
+       check, unresolved blocker, or uncertainty is `FAIL`.
+
+       ### Documentation tasks for PASS
+       1. Update/add the progress entry as `done` and refresh `updated_at`.
+       2. Mark the matching task `[x]` if it exists in `tasks.md`.
+       3. Add a completion entry to `last_session.md` and a completion memory entry.
+       4. Add a decision file only when the implementation made an architectural decision.
+
+       ### Documentation tasks for FAIL
+       1. Keep/add the progress entry as `in_progress`; never leave it `done`.
+       2. Keep the matching `tasks.md` checkbox `[ ]` if it exists; never check it.
+       3. Record the failed attempt and reason in `last_session.md` and memory, without
+         saying the task completed. Preserve the review report and all attempt artifacts.
 
       ### Task artifacts for reference:
       {{step_7_output}}
@@ -93,16 +103,20 @@ steps:
     description: Update progress.json
     run_always: true
     content: |
-      ## CRITICAL: Update progress.json
-      You MUST update the project progress state in `.dec/state/progress.json`:
+      ## Update progress.json according to the recorded review verdict
+
+      Read `.dec/agent-output/{{task_id}}-review-status.txt` first.
+      - For `PASS`, set the task status to `done`.
+      - For `FAIL`, set it to `in_progress`; never mark it `done`.
+      In either case, preserve other entries and update the global `updated_at`.
 
       1. Read the current file.
       2. For task {{task_id}}:
-         - If an entry with this `id` already exists in the `features` array, update its `status` to `"done"`.
+         - If an entry with this `id` already exists in the `features` array, update its status according to the verdict.
          - If it does NOT exist, add a new entry to the `features` array with:
            - `id`: "{{task_id}}"
-           - `description`: a short summary of the completed task ({{task}})
-           - `status`: "done"
+           - `description`: a short summary of the task attempt ({{task}})
+           - `status`: `"done"` for PASS or `"in_progress"` for FAIL
       3. Update the global `updated_at` timestamp to the current time (ISO 8601 UTC).
       4. Preserve the `_comment`, `schema_version`, and ALL other existing entries exactly as they are.
       5. Verify the file is valid JSON after your edit.
@@ -111,13 +125,17 @@ steps:
     description: Update last_session.md
     run_always: true
     content: |
-      ## CRITICAL: Update last_session.md
-      You MUST record the completion of this task in `.dec/state/last_session.md`:
+      ## Update last_session.md according to the review verdict
+
+      Read `.dec/agent-output/{{task_id}}-review-status.txt`. For PASS, record
+      completion. For FAIL, record an attempted task and the review failure; do
+      not list it among completed tasks.
 
       1. Read the current session log.
       2. Update the session date at the top to the current time.
-      3. Append a new bullet under the "What was done" (or "Completed") section:
-         - "- {{task_id}} completed: {{task}}"
+      3. Append a bullet under "What was done" that accurately reflects PASS or FAIL:
+        - PASS: "- {{task_id}} completed: {{task}}"
+        - FAIL: "- {{task_id}} attempted; review failed: {{task}}"
       4. Do NOT overwrite the entire file. Preserve the history of ALL other tasks completed in this session.
       5. If relevant, update the "What's pending" and "Recommended next step" sections.
 
@@ -125,8 +143,10 @@ steps:
     description: Update tasks.md checkbox
     run_always: true
     content: |
-      ## CRITICAL: Update tasks.md checkbox
-      Before the session ends:
+      ## Update tasks.md checkbox according to the review verdict
+
+      Read `.dec/agent-output/{{task_id}}-review-status.txt`. Mark `[x]` only for
+      PASS. For FAIL, leave or restore `[ ]`; the loop must not advance this task.
 
       1. Check whether a `tasks.md` exists in the project:
          run `find . -name "tasks.md" -type f 2>/dev/null | head -5`
@@ -161,11 +181,12 @@ steps:
     run_always: true
     content: |
       ---
-      ## SDD Pipeline Complete for {{task_id}}
+      ## SDD Task Cycle for {{task_id}}
 
       Pipeline: researcher -> coder -> reviewer -> documenter
 
-      All artifacts saved to `.dec/agent-output/{{task_id}}-*`
-      Memory entries tagged with `{{task_id}}`
+      Review verdict: read `.dec/agent-output/{{task_id}}-review-status.txt`.
+      PASS means the task is complete. FAIL means the attempt is recorded and the
+      task remains open for correction. All artifacts are in `.dec/agent-output/{{task_id}}-*`.
 
-      To end the session: `dectl session end`
+      To finish the workflow state gate, resume from step 7 as instructed.
