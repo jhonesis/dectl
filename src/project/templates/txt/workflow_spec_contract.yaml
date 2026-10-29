@@ -1,0 +1,168 @@
+name: spec_contract
+description: "Mechanical spec-contract audit: map every element through the checklist, record non-fit items with origin and destination, then implement them with the required pattern"
+inputs:
+  - name: name
+    description: "Feature or module name whose contract is audited"
+    required: true
+  - name: source
+    description: "Path to the source instructions to audit (optional)"
+    required: false
+    default: ""
+  - name: profile
+    description: "Content profile that declares the contract"
+    required: false
+    default: "core"
+steps:
+  - type: action
+    description: "Read the source instructions"
+    shell: true
+    run_always: true
+    cmd:
+      - |
+        if [ -n "{{source}}" ] && [ -f "{{source}}" ]; then
+          cat "{{source}}"
+        else
+          echo 'NO_SOURCE: pass --var source=<path> to audit a source file'
+        fi
+
+  - type: action
+    description: "Read the generated contract documents"
+    shell: true
+    run_always: true
+    cmd:
+      - |
+        for f in specs/spec.md specs/data-model.md specs/interface-contracts/cli.md; do
+          echo "--- $f"
+          cat "$f" 2>/dev/null || echo 'MISSING'
+        done
+
+  - type: prompt
+    description: "Walk the contract checklist one row at a time"
+    content: |
+      ## Spec Contract Checklist — {{name}}
+      Content profile: {{profile}}
+
+      This flow is repeatable: run it after every generation, exactly like
+      `execute_task`. Walk the rows in order and do not skip one.
+
+      1. Read the source instructions from step 1 completely. If it reports
+         NO_SOURCE, stop and ask for the source path; the audit needs an origin.
+      2. Entity row: for every source entity, tick `entity -> specs/data-model.md`
+         only when the entity has a table with the declared columns
+         Field / Type / Required / Indexes / Description.
+      3. Endpoint row: tick `endpoint -> specs/interface-contracts/cli.md` only when
+         every source endpoint has a `### <METHOD> /<path>` heading.
+      4. Rule row: tick `rule -> specs/data-model.md ('### Rule')` only when every
+         business rule has a `### Rule` entry with its condition and declared error.
+      5. Access row: tick `access -> specs/data-model.md ('### Access')` only when
+         every access requirement has an `### Access` entry naming role and operation.
+      6. Everything else: add one non-fit item per element. An element without a
+         tick and without a non-fit item is a dropped requirement — fix it now.
+
+      Report the checklist with `[x]` for mapped rows, the count of non-fit items,
+      and the destination file of each row. Do not mark a row `[x]` without
+      inspecting its destination.
+
+  - type: prompt
+    description: "Cross-validate every non-fit item origin and destination"
+    content: |
+      ## Non-fit Cross-validation — {{name}}
+
+      For every non-fit item, verify and record all fields of the schema declared
+      by the emitting system (id, reason, origin, suggested_location, test). Do not
+      rename, add a parallel file, or define a local format.
+
+      - `id`: stable across regenerations, used to reference the item.
+      - `reason`: why the element does not map directly to a declarative entry.
+      - `origin`: the section of the source instructions (heading, or line range).
+      - `suggested_location`: the code location where the implementation belongs.
+      - `test`: the test that must be written (the destination).
+
+      Reject any item missing `origin` or `test`: the traceability chain
+      origin -> work -> test is mandatory. Keep the list in the emitter's file
+      (`no-fit.yaml`); do not maintain a parallel proposal record.
+
+  - type: prompt
+    description: "Non-fit implementation guide"
+    content: |
+      ## Non-fit Implementation Guide — {{name}}
+
+      Required pattern (do not deviate):
+      - assert validation at the business-rule level with the declared error
+        catalog (for example a BusinessException from the ERR-* catalog);
+      - never edit generated files; place the work at `suggested_location`.
+
+      Mandatory test battery for every non-fit item:
+      - at least one test per rule;
+      - concurrency;
+      - idempotency;
+      - 90% coverage in the domain layer (instructions.md §11).
+
+      Definition of done per item: code at `suggested_location` + `test` present
+      + `origin` cited. Anything less keeps the item open.
+
+  - type: action
+    description: "Contract checklist gate"
+    shell: true
+    run_always: true
+    cmd:
+      - |
+        MISSING=0
+        for f in specs/spec.md specs/data-model.md specs/interface-contracts/cli.md; do
+          if [ -f "$f" ]; then
+            echo "CONTRACT_DOC_OK: $f"
+          else
+            echo "CONTRACT_DOC_MISSING: $f"
+            MISSING=1
+          fi
+        done
+        if [ "$MISSING" = 1 ]; then
+          echo 'CONTRACT_GATE_SKIP: contract documents not generated yet'
+          exit 0
+        fi
+        SECTIONS=$(grep -cE '^### ' specs/data-model.md 2>/dev/null || true)
+        RULES=$(grep -cE '^### Rule' specs/data-model.md 2>/dev/null || true)
+        ACCESS=$(grep -cE '^### Access' specs/data-model.md 2>/dev/null || true)
+        ENDPOINTS=$(grep -cE '^### (GET|POST|PUT|PATCH|DELETE) /' specs/interface-contracts/cli.md 2>/dev/null || true)
+        echo "CONTRACT_GATE_OK: sections=${SECTIONS:-0} rules=${RULES:-0} access=${ACCESS:-0} endpoints=${ENDPOINTS:-0}"
+        if [ -f no-fit.yaml ]; then
+          echo 'NON_FIT_OK: no-fit.yaml present (emitter schema)'
+        else
+          echo 'NON_FIT_NONE: no no-fit.yaml (everything mapped)'
+        fi
+        exit 0
+
+  - type: prompt
+    description: "Record the audit result"
+    run_always: true
+    content: |
+      ## Contract audit complete — {{name}}
+
+      Record the result so it survives the session and the project:
+        dectl memory add "Spec contract {{name}}: <N> mapped, <M> non-fit" --tags specs,contract,non-fit
+
+      Register every generator defect, non-fit item and decision per project:
+        dectl spec feedback --kind non-fit --id <id> --origin <section> --content "<reason>"
+        dectl spec feedback --kind defect --content "<what the generator got wrong>"
+        dectl spec feedback --kind decision --content "<decision and why>"
+
+      Then continue with the non-fit items one by one using the implementation
+      guide above. Each item closes only when its code, test and origin are present.
+
+  - type: prompt
+    description: "Feed recurring non-fit items to the proposal pipeline"
+    run_always: true
+    content: |
+      ## Continuous-improvement loop — {{name}}
+
+      Evaluate the generator with the reusable pass/fail template at
+      `.dec/sdd/generator-evaluation.md`: compiles and starts is the promise,
+      business-rule gaps are outside the promise. Reuse the template unchanged.
+
+      Then check recurrence:
+        dectl spec feedback --report
+
+      Every non-fit item present in at least two independent projects MUST be fed
+      as evidence to the emitting system's proposal pipeline. dectl keeps no local
+      changelog and no parallel proposal record: the evidence block printed by the
+      report is the hand-off.

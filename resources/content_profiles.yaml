@@ -1,0 +1,149 @@
+# Content profiles for spec generation (REQ-012).
+#
+# A profile declares the exact document set a consuming system reads, the shape
+# each document must have for that consumer, and the documents deliberately left
+# out together with the reason. A document without a declared consumer cannot be
+# part of a profile: every `includes` entry requires `consumer`.
+#
+# Profiles are embedded in the binary (src/spec/content_profile.rs) so
+# `dectl spec init --profile <name>` and `dectl spec add --profile <name>` work
+# offline. Without a profile the complete document suite is generated.
+version: 1
+
+profiles:
+  - name: core
+    description: >-
+      Minimal auditable spec set consumed verbatim by the geneia-cli specs
+      reader. Process documents stay out of the path the generator reads.
+    consumer:
+      system: geneia-cli
+      entry_point: src/specs_reader/mod.rs
+      reads:
+        - specs/spec.md
+        - specs/data-model.md
+        - specs/interface-contracts/cli.md
+    scopes:
+      - feature
+      - module
+    includes:
+      - path: specs/spec.md
+        consumer: "geneia-cli — project identity (first level-1 heading) and feature intent"
+        shape: "the first '# ' line is the project name; the remaining content states intent and acceptance criteria"
+      - path: specs/data-model.md
+        consumer: "geneia-cli — entities, attributes, relationships, rules and access"
+        shape: "entity tables use exactly the columns Field / Type / Required / Indexes / Description; optional ### Rule and ### Access tables live in this file"
+      - path: specs/interface-contracts/cli.md
+        consumer: "geneia-cli — services and operations"
+        shape: "every endpoint is a '### <METHOD> /<path>' heading"
+    excludes:
+      - path: constitution.md
+        reason: process document; the consumer never reads governing principles
+      - path: requirements.md
+        reason: validation checklist for humans; the consumer reads the spec directly
+      - path: research.md
+        reason: decision log for humans; no machine-readable consumer
+      - path: plan.md
+        reason: architecture notes for manual implementers; the consumer derives structure from data-model and contracts
+      - path: tasks.md
+        reason: execution tracking consumed by dectl workflows, not by the generator
+      - path: threat-model.md
+        reason: CRITICAL-tier security analysis; not consumed by the generator
+      - path: compliance-matrix.md
+        reason: CRITICAL-tier audit artifact; not consumed by the generator
+      - path: risk-register.md
+        reason: CRITICAL-tier risk tracking; not consumed by the generator
+      - path: access-control-matrix.md
+        reason: CRITICAL-tier role and approval audit; access rules the generator needs are declared in data-model.md
+      - path: disaster-recovery-plan.md
+        reason: CRITICAL-tier operational runbook; not consumed by the generator
+      - path: vendor-risk-assessment.md
+        reason: CRITICAL-tier third-party due diligence; not consumed by the generator
+      - path: CLAUDE.md
+        reason: agent context file for the spec-writing session only; the consumer never reads it (AI.md is the same document under another name)
+    contract:
+      description: >-
+        Mechanical, auditable checklist for the contract this profile produces.
+        One row per mapped element; everything that does not map directly is
+        recorded in the non-fit list declared by the emitting system.
+      checklist:
+        - item: entity
+          destination: specs/data-model.md
+          check: "every source entity has a table with the declared Field / Type / Required / Indexes / Description columns"
+        - item: endpoint
+          destination: specs/interface-contracts/cli.md
+          check: "every source endpoint has a '### <METHOD> /<path>' heading"
+        - item: rule
+          destination: "specs/data-model.md ('### Rule')"
+          check: "every business rule has a '### Rule' entry with its condition and declared error"
+        - item: access
+          destination: "specs/data-model.md ('### Access')"
+          check: "every access requirement has a '### Access' entry naming role and operation"
+      non_fit:
+        owner: geneia-cli
+        schema_ref: "plangenecli.md A2.1"
+        file: no-fit.yaml
+        fields:
+          - name: id
+            meaning: "stable identifier that survives regeneration; used to reference the item"
+          - name: reason
+            meaning: "why the element does not map directly to a declarative spec entry"
+          - name: origin
+            meaning: "section of the source instructions the item comes from"
+          - name: suggested_location
+            meaning: "code location suggested for the implementation"
+          - name: test
+            meaning: "test that must be written for the item (destination)"
+      implementation_guide:
+        pattern: "assert validation at the business-rule level with the declared error catalog (for example a BusinessException from the ERR-* catalog); never edit generated files"
+        mandatory_tests:
+          - "at least one test per rule"
+          - "concurrency"
+          - "idempotency"
+        coverage: "90% in the domain layer (instructions.md §11)"
+
+# Continuous-improvement loop (REQ-012).
+#
+# The loop has three pieces and no local changelog: dectl records evidence in
+# project memory, evaluates the generator with a reusable pass/fail template,
+# and hands recurring non-fit items to the proposal pipeline of the emitting
+# system. The contracts below are consumed by `dectl spec feedback`.
+feedback:
+  memory:
+    command: "dectl memory add"
+    scope: project
+    tags:
+      defect: generator-defect
+      non_fit: generator-non-fit
+      decision: generator-decision
+    records:
+      - kind: defect
+        content: "Generator defect: <what the generator produced wrong> (origin: <spec section or project>)"
+      - kind: non_fit
+        content: "Structured non-fit record (JSON) with id, reason and origin; written by `dectl spec feedback --kind non-fit`"
+      - kind: decision
+        content: "Generator decision: <what was decided about the generator and why>"
+  evaluation:
+    name: generator-pass-fail
+    version: 1
+    promise: "The generator promises a project that compiles and starts. Anything beyond that promise is a gap, not a broken promise."
+    criteria:
+      - id: compiles
+        promise: inside
+        check: "the generated project compiles"
+      - id: starts
+        promise: inside
+        check: "the generated project starts"
+      - id: business_rule
+        promise: outside
+        check: "business-rule gaps: missing or wrong rules and uncovered edge cases"
+    reuse: "Reuse this template unchanged for every evaluation; add no local criteria per project."
+  proposals:
+    owner: geneia-cli
+    schema_ref: "plangenecli.md A2.3"
+    recurrence_threshold: 2
+    evidence_fields:
+      - id
+      - reason
+      - origin
+      - projects
+    own_changelog: false

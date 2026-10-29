@@ -121,6 +121,50 @@ fn test_execute_task_workflow_describe() {
 }
 
 #[test]
+fn test_spec_contract_workflow_is_generated_and_runnable() {
+    let tmp = TempDir::new().unwrap();
+    init_project(&tmp);
+
+    let workflow_path = tmp.path().join(".dec/workflows/spec_contract.yaml");
+    assert!(
+        workflow_path.exists(),
+        "spec_contract.yaml should exist after init --standard"
+    );
+
+    let describe = run_dectl(&["workflow", "describe", "spec_contract"], tmp.path());
+    assert!(
+        describe.status.success(),
+        "describe failed: {}",
+        String::from_utf8_lossy(&describe.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&describe.stdout);
+    assert!(stdout.contains("spec_contract"));
+    assert!(stdout.contains("checklist"));
+
+    let run = run_dectl(
+        &[
+            "workflow",
+            "run",
+            "spec_contract",
+            "--dry-run",
+            "--auto",
+            "--var",
+            "name=transfers",
+        ],
+        tmp.path(),
+    );
+    assert!(
+        run.status.success(),
+        "dry-run failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&run.stdout);
+    assert!(stdout.contains("Spec Contract Checklist"));
+    assert!(stdout.contains("Non-fit Cross-validation"));
+    assert!(stdout.contains("Non-fit Implementation Guide"));
+}
+
+#[test]
 fn test_workflow_run_auto_flag() {
     let tmp = TempDir::new().unwrap();
     init_project(&tmp);

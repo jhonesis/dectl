@@ -16,6 +16,7 @@ pub struct SpecAddArgs {
     pub name: String,
     pub scope: Option<Scope>,
     pub from: Option<PathBuf>,
+    pub profile: Option<String>,
     pub json: bool,
     pub non_interactive: bool,
     pub auto: bool,
@@ -125,12 +126,25 @@ fn dispatch_to_spec_writer(
         Scope::Module => "module",
     };
 
+    // Content profile (REQ-012): explicit option > source-file header > full
+    // suite. The full suite leaves the guidance unchanged.
+    let content_profile =
+        crate::spec::content_profile::resolve(args.profile.as_deref(), from_content.as_deref())?;
+
     let mut vars: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     vars.insert("scope".to_string(), scope_str.to_string());
     vars.insert("name".to_string(), name.to_string());
     vars.insert(
         "task_id".to_string(),
         format!("spec-{}", name.replace(' ', "-").to_lowercase()),
+    );
+    vars.insert(
+        "profile".to_string(),
+        content_profile.name().unwrap_or("").to_string(),
+    );
+    vars.insert(
+        "profile_marker".to_string(),
+        content_profile.marker().unwrap_or_default(),
     );
 
     if let Some(ref content) = from_content {
@@ -142,6 +156,9 @@ fn dispatch_to_spec_writer(
     if !args.json {
         println!("Dispatching to spec_writer agent...");
         println!("   Scope: {}", scope_str);
+        if let Some(name) = content_profile.name() {
+            println!("   Content profile: {}", name);
+        }
         if let Some(path) = from_path {
             println!("   Source: {}", path.display());
         }

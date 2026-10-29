@@ -242,6 +242,10 @@ enum SpecCommands {
         /// Path to a .md file to use as input for creating specs
         #[arg(long)]
         from: Option<PathBuf>,
+
+        /// Content profile: generate only the documents it declares (e.g. core)
+        #[arg(long)]
+        profile: Option<String>,
     },
     Add {
         /// Name of the feature or module (e.g., "biometric-auth", "auth")
@@ -255,9 +259,35 @@ enum SpecCommands {
         #[arg(long)]
         from: Option<PathBuf>,
 
+        /// Content profile: generate only the documents it declares (e.g. core)
+        #[arg(long)]
+        profile: Option<String>,
+
         /// Skip the trust prompt and run non-interactively
         #[arg(long)]
         auto: bool,
+    },
+    /// Record generator feedback, print the loop contract, or report recurrence
+    Feedback {
+        /// Kind of feedback to record: defect, non-fit or decision
+        #[arg(long, value_parser = ["defect", "non-fit", "decision"])]
+        kind: Option<String>,
+
+        /// Content for defect/decision, or the reason for a non-fit item
+        #[arg(long)]
+        content: Option<String>,
+
+        /// Stable non-fit id (required with --kind non-fit)
+        #[arg(long)]
+        id: Option<String>,
+
+        /// Source section of the non-fit item (required with --kind non-fit)
+        #[arg(long)]
+        origin: Option<String>,
+
+        /// Print the recurrence report and the proposal evidence block
+        #[arg(long)]
+        report: bool,
     },
 }
 
@@ -588,8 +618,13 @@ fn main() {
             }
         },
         Some(Commands::Spec { command }) => match command {
-            Some(SpecCommands::Init { from }) => {
-                if let Err(e) = spec::init::run(cli.json, cli.non_interactive, from.as_deref()) {
+            Some(SpecCommands::Init { from, profile }) => {
+                if let Err(e) = spec::init::run(
+                    cli.json,
+                    cli.non_interactive,
+                    from.as_deref(),
+                    profile.as_deref(),
+                ) {
                     core::error::exit_for_error(e, mode);
                 }
             }
@@ -597,6 +632,7 @@ fn main() {
                 ref name,
                 ref scope,
                 ref from,
+                ref profile,
                 auto,
             }) => {
                 let args = spec::add::SpecAddArgs {
@@ -606,11 +642,34 @@ fn main() {
                         _ => spec::add::Scope::Feature,
                     }),
                     from: from.clone(),
+                    profile: profile.clone(),
                     json: cli.json,
                     non_interactive: cli.non_interactive,
                     auto: *auto,
                 };
                 if let Err(e) = spec::add::run(args) {
+                    core::error::exit_for_error(e, mode);
+                }
+            }
+            Some(SpecCommands::Feedback {
+                kind,
+                content,
+                id,
+                origin,
+                report,
+            }) => {
+                let kind = kind
+                    .as_deref()
+                    .and_then(spec::feedback::FeedbackKind::parse);
+                let args = spec::feedback::FeedbackArgs {
+                    kind,
+                    content: content.clone(),
+                    id: id.clone(),
+                    origin: origin.clone(),
+                    report: *report,
+                    json: cli.json,
+                };
+                if let Err(e) = spec::feedback::run(args) {
                     core::error::exit_for_error(e, mode);
                 }
             }

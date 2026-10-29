@@ -831,6 +831,85 @@ fn test_verifier_tech_name_spec_fails() {
     );
 }
 
+#[test]
+fn test_spec_add_profile_marks_guidance() {
+    let tmp = TempDir::new().unwrap();
+    create_dec_base(&tmp);
+    create_specs_root(&tmp);
+
+    // --auto skips the trust prompt, so no trust entry is needed.
+    let output = run_dectl(
+        &[
+            "spec",
+            "add",
+            "biometric-auth",
+            "--scope",
+            "feature",
+            "--profile",
+            "core",
+            "--auto",
+        ],
+        tmp.path(),
+    );
+    assert!(
+        output.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("CONTENT PROFILE: core"),
+        "spec add --profile should mark the guidance, got:\n{}",
+        stdout
+    );
+    assert!(
+        stdout.contains("FEATURE SPEC GUIDANCE"),
+        "profile must not replace the normal guidance, got:\n{}",
+        stdout
+    );
+}
+
+#[test]
+fn test_spec_add_profile_from_source_header() {
+    let tmp = TempDir::new().unwrap();
+    create_dec_base(&tmp);
+    create_specs_root(&tmp);
+
+    let reqs_path = tmp.path().join("req.md");
+    fs::write(
+        &reqs_path,
+        "---\nprofile: core\n---\n# Auth\n\n### REQ-AUTH-001: Login\n**User Story**:\n> As a user, I want to log in.\n",
+    )
+    .unwrap();
+
+    let output = run_dectl(
+        &[
+            "spec",
+            "add",
+            "biometric-auth",
+            "--scope",
+            "feature",
+            "--from",
+            reqs_path.to_str().unwrap(),
+            "--auto",
+        ],
+        tmp.path(),
+    );
+    assert!(
+        output.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("CONTENT PROFILE: core"),
+        "source header should select the profile, got:\n{}",
+        stdout
+    );
+}
+
 /// T031 REQ-005: `spec add --auto` must skip the trust prompt even when the
 /// spec_writer agent is not trusted for the project.
 #[test]

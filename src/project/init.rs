@@ -69,6 +69,17 @@ pub fn run(level: InitLevel, project_type: ProjectType, _interactive: bool) -> R
         }
     }
 
+    // Reusable generator evaluation template (REQ-012): every future
+    // evaluation reuses it unchanged.
+    if matches!(level, InitLevel::Level2 | InitLevel::Level3) {
+        if let Err(e) = crate::spec::feedback::write_evaluation_template(Path::new(".")) {
+            eprintln!(
+                "Warning: failed to write .dec/sdd/generator-evaluation.md: {}",
+                e
+            );
+        }
+    }
+
     if is_project_empty() {
         if std::io::stdout().is_terminal() {
             handle_empty_project()?;

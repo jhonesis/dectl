@@ -16,6 +16,14 @@ inputs:
     description: "Content from source file (--from flag)"
     required: false
     default: ""
+  - name: profile
+    description: "Content profile selected with --profile (empty = complete suite)"
+    required: false
+    default: ""
+  - name: profile_marker
+    description: "Pre-rendered content-profile marker (empty = complete suite)"
+    required: false
+    default: ""
 next_step_hint: "After guidance, the AI agent creates/updates the specs. Verify: ls specs/"
 steps:
   - type: action
@@ -67,7 +75,7 @@ steps:
     description: Module spec guidance
     skip_if: "{{#if_eq scope \"feature\"}}true{{/if_eq}}"
     content: |
-      ## MODULE SPEC GUIDANCE — create specs/{{name}}/
+      ## MODULE SPEC GUIDANCE
 
       You are the spec_writer. Generate the SDD document suite for the module "{{name}}"
       using the SDD skill as the source and guide. dectl does not create these files
@@ -80,6 +88,12 @@ steps:
       Preserve the requirement IDs from the source file. Do NOT renumber them.
       {{/if}}
 
+      {{#if profile}}
+      A content profile is selected, so it REPLACES the default document list:
+      do NOT create `specs/{{name}}/` and do NOT generate the default five documents.
+      Create only the documents listed in the content-profile block at the end of this
+      message, at the project specs root, and report the excluded ones with their reason.
+      {{else}}
       Create exactly these files under `specs/{{name}}/`, following the templates
       EXACTLY (keep every section; fill the placeholders with module-specific content):
       1. constitution.md
@@ -87,29 +101,52 @@ steps:
       3. requirements.md
       4. plan.md
       5. tasks.md
+      {{/if}}
 
       Rules:
+      {{#if profile}}
+      - Preserve the template sections of the documents you generate: User Stories with
+        SHALL acceptance criteria, declared shapes, etc.
+      - spec.md is technology-agnostic (WHAT); any technology decision belongs in code, not in the generated set.
+      - Precedence: SKILL prevails over local convention (SKILL prevalece sobre convención local) — do not imitate existing specs if they conflict with the skill.
+      - Use sequential IDs: `REQ-{{name}}-001`, ... for the generated requirements.
+      - Shapes are mandatory: a document that does not match its declared shape is not consumable.
+      {{else}}
       - Preserve every template section: Definition of Done, User Stories with SHALL
         acceptance criteria, Edge Case Catalog, Build/Verify/Gate per task, etc.
       - spec.md is technology-agnostic (WHAT); plan.md is technology-specific (HOW).
       - Precedence: SKILL prevails over local convention (SKILL prevalece sobre convención local) — do not imitate existing specs if they conflict with the skill.
       - Use sequential IDs: `REQ-{{name}}-001`, ..., and `T001`, `T002`, ... in tasks.md.
       - Every task has **Build**: + **Verify**: + **Gate**:.
+      {{/if}}
 
       READING CHECKLIST — BLOCKING (do not write any file until all three are read):
       - `.dec/sdd/SKILL.md` — SDD workflow (Steps 1–5) and document rules
       - `.dec/sdd/references/templates.md` — full document templates
       - `.dec/sdd/references/examples.md` — worked examples
 
+      {{#if profile}}
+      When the documents listed by the content profile are done, also append a reference
+      REQ entry to root `specs/spec.md` pointing to the generated set.
+
+      CONTRACT CHECKLIST — BLOCKING after writing: walk the checklist in the
+      content-profile block below one row at a time. Every entity, endpoint, rule and
+      access requirement from the source must appear at its declared destination.
+      Record every element that does not map directly in the non-fit list using the
+      schema declared by the emitting system; never drop it. For the repeatable audit:
+        dectl workflow run spec_contract --var name={{name}}
+      {{else}}
       When the 5 files are done, also append:
       - A reference REQ entry to root `specs/spec.md` pointing to `specs/{{name}}/`.
       - A module task to root `specs/tasks.md` (with Build/Verify/Gate).
+      {{/if}}
+      {{profile_marker}}
 
   - type: prompt
     description: Feature spec guidance
     skip_if: "{{#if_eq scope \"module\"}}true{{/if_eq}}"
     content: |
-      ## FEATURE SPEC GUIDANCE — update specs/spec.md + specs/tasks.md
+      ## FEATURE SPEC GUIDANCE
 
       You are the spec_writer. Update the existing project specs for the feature
       "{{name}}" using the SDD skill as the source and guide. dectl does not update
@@ -122,6 +159,24 @@ steps:
       Preserve the requirement IDs from the source file. Do NOT renumber them.
       {{/if}}
 
+      {{#if profile}}
+      Do NOT create a `specs/{{name}}/` subdirectory. A content profile is selected,
+      so it decides which documents are generated:
+
+      1. `specs/spec.md` — append a new requirement block `REQ-{{next_req}}` for the
+         feature {{name}}, following the spec.md template (User Story, Acceptance
+         Criteria with SHALL, Implementation Notes).
+      2. Create or update the remaining documents listed in the content-profile block
+         at the end of this message, honouring the declared shape. Do NOT create any
+         document the profile excludes (for example `specs/tasks.md` may be excluded).
+
+      CONTRACT CHECKLIST — BLOCKING after writing: walk the checklist in the
+      content-profile block below one row at a time. Every entity, endpoint, rule and
+      access requirement from the source must appear at its declared destination.
+      Record every element that does not map directly in the non-fit list using the
+      schema declared by the emitting system; never drop it. For the repeatable audit:
+        dectl workflow run spec_contract --var name={{name}}
+      {{else}}
       Do NOT create a `specs/{{name}}/` subdirectory. Instead:
 
       1. `specs/spec.md` — append a new requirement block `REQ-{{next_req}}` for the
@@ -130,6 +185,7 @@ steps:
       2. `specs/tasks.md` — append atomic tasks for the feature starting at
          `T{{next_task}}`, each with **Build**: + **Verify**: + **Gate**:, and
          referencing `REQ-{{next_req}}`.
+      {{/if}}
 
       Precedence: SKILL prevails over local convention (SKILL prevalece sobre convención local) — do not imitate existing specs if they conflict with the skill.
 
@@ -137,6 +193,7 @@ steps:
       - `.dec/sdd/SKILL.md` — SDD workflow and document rules
       - `.dec/sdd/references/templates.md` — full document templates
       - `.dec/sdd/references/examples.md` — worked examples
+      {{profile_marker}}
 
   - type: prompt
     description: Closing reminder
@@ -149,12 +206,24 @@ steps:
       - `.dec/sdd/SKILL.md` — SDD workflow and document rules
       - `.dec/sdd/references/templates.md` — full document templates
       - `.dec/sdd/references/examples.md` — worked examples
+      {{#if profile}}
+      - A content profile is selected: create ONLY the documents it lists, at the
+        project specs root. The excluded documents must stay absent and be reported
+        with their reason.
+      - Walk the contract checklist, keep the non-fit list in the emitter's format,
+        and cite origin + destination for every non-fit item.
+      {{else}}
       - Module scope: create `specs/{{name}}/` with the 5 SDD documents.
       - Feature scope: update `specs/spec.md` and `specs/tasks.md` (no subdirectory).
+      {{/if}}
 
       Before finishing, validate against SKILL.md Step 4: spec is technology-agnostic,
-      every task has Build/Verify/Gate, IDs are sequential. Precedence: SKILL prevails
-      over local convention (SKILL prevalece sobre convención local). Then record the result:
+      {{#if profile}}
+      every generated document matches the shape declared by the content profile.
+      {{else}}
+      every task has Build/Verify/Gate, IDs are sequential.
+      {{/if}}
+      Precedence: SKILL prevails over local convention (SKILL prevalece sobre convención local). Then record the result:
       `dectl memory add "Specs written for {{name}}" --tags specs,{{scope}}`
       The automated verifier step runs next — if it emits SPEC_GATE_FAIL, fix the
       flagged tech-names / BVG gaps before considering the specs done.

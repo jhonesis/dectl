@@ -80,6 +80,10 @@ impl Templates {
                 include_str!("txt/workflow_execute_task.yaml"),
             ),
             (
+                ".dec/workflows/spec_contract.yaml",
+                include_str!("txt/workflow_spec_contract.yaml"),
+            ),
+            (
                 ".dec/prompts/system/base.md",
                 include_str!("txt/system_base.md"),
             ),

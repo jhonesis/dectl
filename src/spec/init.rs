@@ -3,10 +3,17 @@ use anyhow::{Context, Result};
 use std::path::Path;
 
 use super::bridge;
+use super::content_profile;
+use super::feedback;
 use super::templates;
 use crate::rules::{materialize, profile};
 
-pub fn run(json: bool, non_interactive: bool, from: Option<&Path>) -> Result<()> {
+pub fn run(
+    json: bool,
+    non_interactive: bool,
+    from: Option<&Path>,
+    content_profile_name: Option<&str>,
+) -> Result<()> {
     let project_dir = Path::new(".");
 
     let dec_exists = project_dir.join(".dec").exists();
@@ -18,6 +25,7 @@ pub fn run(json: bool, non_interactive: bool, from: Option<&Path>) -> Result<()>
     }
 
     templates::ensure_sdd_dir(project_dir)?;
+    feedback::write_evaluation_template(project_dir)?;
 
     bridge::update_project_toml(project_dir)?;
     bridge::update_project_isa(project_dir)?;
@@ -41,6 +49,10 @@ pub fn run(json: bool, non_interactive: bool, from: Option<&Path>) -> Result<()>
     } else {
         None
     };
+
+    // Content profile (REQ-012): explicit option > source-file header > full
+    // suite. The full suite keeps the guidance byte-identical to before.
+    let content_profile = content_profile::resolve(content_profile_name, from_content.as_deref())?;
 
     // Rules profile, once-only (REQ-rules-002): ask the 8 flags on stdin the
     // first time, skip without TTY (warning, rules pending), never re-ask.
@@ -109,6 +121,10 @@ Agent: interview the user and create specs/ with real content
         ));
     }
 
+    if let Some(marker) = content_profile.marker() {
+        message.push_str(&marker);
+    }
+
     if json {
         let envelope = serde_json::json!({
             "status": "ok",
@@ -128,6 +144,7 @@ Agent: interview the user and create specs/ with real content
                     serde_json::json!({ "summary": s })
                 }),
                 "profile_pending": profile_pending_warning,
+                "content_profile": content_profile.name(),
                 "next": "Interview the user and create specs/ with SDD documents",
                 "from_file": from.map(|p| p.display().to_string())
             }

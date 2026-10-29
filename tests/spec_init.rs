@@ -309,3 +309,99 @@ fn test_spec_init_from_empty_file() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("empty"));
 }
+
+#[test]
+fn test_spec_init_without_profile_keeps_full_suite_guidance() {
+    let tmp = TempDir::new().unwrap();
+    create_dec_base(&tmp);
+
+    let output = run_dectl(&["spec", "init"], tmp.path());
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        !stdout.contains("[CONTENT PROFILE:"),
+        "default run must not mark a content profile, got:\n{}",
+        stdout
+    );
+}
+
+#[test]
+fn test_spec_init_profile_option_marks_guidance() {
+    let tmp = TempDir::new().unwrap();
+    create_dec_base(&tmp);
+
+    let output = run_dectl(&["spec", "init", "--profile", "core"], tmp.path());
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("[CONTENT PROFILE: core]"),
+        "explicit profile should mark the guidance, got:\n{}",
+        stdout
+    );
+}
+
+#[test]
+fn test_spec_init_profile_from_source_header() {
+    let tmp = TempDir::new().unwrap();
+    create_dec_base(&tmp);
+
+    fs::write(
+        tmp.path().join("reqs.md"),
+        "---\nprofile: core\n---\n# Requirements\n\nREQ-001: Login\n",
+    )
+    .unwrap();
+
+    let output = run_dectl(&["spec", "init", "--from", "reqs.md"], tmp.path());
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("[CONTENT PROFILE: core]"),
+        "source header should select the profile, got:\n{}",
+        stdout
+    );
+}
+
+#[test]
+fn test_spec_init_profile_option_overrides_source_header() {
+    let tmp = TempDir::new().unwrap();
+    create_dec_base(&tmp);
+
+    fs::write(
+        tmp.path().join("reqs.md"),
+        "---\nprofile: core\n---\n# Requirements\n\nREQ-001: Login\n",
+    )
+    .unwrap();
+
+    let output = run_dectl(
+        &["spec", "init", "--from", "reqs.md", "--profile", "lean"],
+        tmp.path(),
+    );
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("[CONTENT PROFILE: lean]"),
+        "explicit option must win over the source header, got:\n{}",
+        stdout
+    );
+    assert!(
+        !stdout.contains("[CONTENT PROFILE: core]"),
+        "source header must not win over the explicit option, got:\n{}",
+        stdout
+    );
+}
